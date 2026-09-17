@@ -1,0 +1,15 @@
+[package]
+name = "mdwire-bench"
+description = "Benchmark rig for mdwire — allocation counts and throughput."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "mdwire-bench"
+path = "src/main.rs"
+
+# 계측 리그는 코어가 아니다. 그래도 의존은 두지 않는다 — std 로 충분하다.
+[dependencies]
