@@ -1,0 +1,14 @@
+[package]
+name = "mdwire-cli"
+description = "CLI for mdwire — stdin to stdout, one channel per invocation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "mdwire"
+path = "src/main.rs"
+
+[dependencies]
+mdwire-core = { path = "../mdwire-core" }

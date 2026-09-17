@@ -1,0 +1,10 @@
+[package]
+name = "mdwire-core"
+description = "Streaming Markdown normalizer and channel renderer. No dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# 의존성은 여기에 늘리지 않는다. 이 crate 는 std 만 쓴다.
+[dependencies]
