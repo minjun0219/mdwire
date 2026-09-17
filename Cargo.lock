@@ -16,3 +16,10 @@ dependencies = [
 [[package]]
 name = "mdwire-core"
 version = "0.0.0"
+
+[[package]]
+name = "mdwire-harness"
+version = "0.0.0"
+dependencies = [
+ "mdwire-core",
+]

@@ -1,0 +1,20 @@
+[package]
+name = "mdwire-harness"
+description = "Corpus runner and implementation-neutral scorer for mdwire."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "mdwire_harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mdwire-check"
+path = "src/main.rs"
+
+# 채점기도 의존을 두지 않는다. 외부 구현은 프로세스 경계로 붙인다(adapter::Command).
+[dependencies]
+mdwire-core = { path = "../mdwire-core" }

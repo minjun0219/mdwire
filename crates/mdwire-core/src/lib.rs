@@ -17,6 +17,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod width;
+
 /// 내보낼 채널. 받는 문법이 채널마다 다르고, **출력이 좁은 쪽이 파싱 범위를 정한다**.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -35,6 +37,35 @@ pub enum Channel {
 }
 
 impl Channel {
+    /// 코퍼스 디렉토리와 CLI 인자에서 쓰는 이름. 채널을 문자열로 다루는 곳의 정본이다.
+    pub fn name(self) -> &'static str {
+        match self {
+            Channel::TelegramHtml => "telegram-html",
+            Channel::TelegramMarkdownV2 => "telegram-markdown-v2",
+            Channel::SlackMarkdown => "slack-markdown",
+            Channel::SlackMrkdwn => "slack-mrkdwn",
+            Channel::Plain => "plain",
+        }
+    }
+
+    /// v0.1 이 실제로 내보낼 수 있는 채널. 나머지는 `SPEC.md` 11절에서 미뤄 뒀다.
+    pub fn v0_1() -> [Channel; 3] {
+        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::Plain]
+    }
+
+    /// 이름으로 채널을 찾는다.
+    pub fn parse(name: &str) -> Option<Channel> {
+        [
+            Channel::TelegramHtml,
+            Channel::TelegramMarkdownV2,
+            Channel::SlackMarkdown,
+            Channel::SlackMrkdwn,
+            Channel::Plain,
+        ]
+        .into_iter()
+        .find(|c| c.name() == name)
+    }
+
     /// 이 채널의 메시지 길이 한도(문자 수). 분할의 기준이다.
     pub fn limit(self) -> usize {
         match self {
