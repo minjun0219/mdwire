@@ -133,12 +133,14 @@ impl Inline {
                 continue;
             }
 
-            let run = run_len(line, i, c);
-            let take = run.min(2);
+            // 런은 통째로 소비한다. `***강조***` 에서 2 개만 집으면 별표 하나가
+            // 출력에 남고, 남은 마커는 곧 실패다. 중첩 강조를 살리는 것보다
+            // 마커를 안 남기는 것이 먼저다 — 실측에서 중첩 강조는 나오지 않았다.
+            let take = run_len(line, i, c);
             let emph = match (c, take) {
                 ('~', _) => Emph::Strike,
-                (_, 2) => Emph::Bold,
-                _ => Emph::Italic,
+                (_, 1) => Emph::Italic,
+                _ => Emph::Bold,
             };
             let prev = self.prev_char(line, i);
             let next = line.get(i + take).copied();

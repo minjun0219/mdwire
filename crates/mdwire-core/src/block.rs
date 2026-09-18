@@ -95,6 +95,8 @@ impl Engine {
         for seg in chunk.split_inclusive('\n') {
             match seg.strip_suffix('\n') {
                 Some(rest) => {
+                    // CRLF 입력. `\r` 를 남겨 보내면 채널에 그대로 박힌다.
+                    let rest = rest.strip_suffix('\r').unwrap_or(rest);
                     self.pending.extend(rest.chars());
                     self.progress(true, sink);
                 }

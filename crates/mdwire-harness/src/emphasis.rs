@@ -120,7 +120,7 @@ fn blocks(src: &str) -> Vec<String> {
             flush(&mut cur, &mut out);
             continue;
         }
-        if trimmed.is_empty() || is_heading(trimmed) {
+        if trimmed.is_empty() || is_heading(trimmed) || is_rule(trimmed) {
             // 헤딩을 건너뛰는 것은 **중립성 때문**이다. 헤딩 구문이 없는 채널은 줄 전체를
             // 굵게 내보내고, 그러면 헤딩 안의 강조 범위가 줄 전체로 커진다. 구현마다
             // 다른 이 선택을 고장으로 신고하지 않으려고 양쪽에서 똑같이 뺀다.
@@ -193,6 +193,15 @@ fn strip_block_marker(line: &str) -> &str {
     t
 }
 
+/// 구분선인가. `***` 는 강조가 아니다 — 이걸 안 거르면 구분선을 굵게 만든 줄 알고
+/// 정상 출력을 고장으로 신고한다.
+pub(crate) fn is_rule(trimmed: &str) -> bool {
+    let t = trimmed.trim_end();
+    ['-', '*', '_'].iter().any(|&ch| {
+        t.chars().filter(|&c| c == ch).count() >= 3 && t.chars().all(|c| c == ch || c == ' ')
+    })
+}
+
 /// ATX 헤딩인가.
 pub(crate) fn is_heading(trimmed: &str) -> bool {
     let hashes = trimmed.chars().take_while(|&c| c == '#').count();
@@ -253,12 +262,12 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             continue;
         }
 
-        let run = run_len(&ch, i, c);
-        let take = run.min(2);
+        // 런은 통째로 소비한다. 규칙은 코어와 같다 — 구현만 따로다.
+        let take = run_len(&ch, i, c);
         let kind = match (c, take) {
             ('~', _) => Kind::Strike,
-            (_, 2) => Kind::Bold,
-            _ => Kind::Italic,
+            (_, 1) => Kind::Italic,
+            _ => Kind::Bold,
         };
         let marker: String = ch[i..i + take].iter().collect();
         let prev = if i > 0 { Some(ch[i - 1]) } else { None };

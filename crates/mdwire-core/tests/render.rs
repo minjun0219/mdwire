@@ -69,6 +69,27 @@ fn no_emphasis_marker_survives_into_tag_channels() {
     }
 }
 
+#[test]
+fn a_run_of_three_markers_leaves_nothing_behind() {
+    // `***x***` 에서 두 개만 집으면 별표 하나가 출력에 남는다. 남은 마커는 실패다.
+    assert_eq!(tg("***세 개 별표***"), "<b>세 개 별표</b>");
+    assert_eq!(tg("***여는 쪽만 셋**"), "<b>여는 쪽만 셋</b>");
+    assert_eq!(tg("**닫는 쪽만 셋***"), "<b>닫는 쪽만 셋</b>");
+}
+
+#[test]
+fn crlf_input_does_not_leak_carriage_returns() {
+    let out = tg("윈도우 줄바꿈\r\n**굵게**\r\n");
+    assert!(!out.contains('\r'), "{out:?}");
+    assert_eq!(out, "윈도우 줄바꿈\n<b>굵게</b>");
+}
+
+/// `SPEC.md` 6절 — 각색은 하지 않는다. 체크박스를 ✅/⬜ 로 바꾸지 않는다.
+#[test]
+fn checkboxes_are_not_dressed_up() {
+    assert_eq!(tg("- [ ] 안 한 일\n- [x] 한 일"), "• [ ] 안 한 일\n• [x] 한 일");
+}
+
 // ── 블록 매핑 (SPEC 8절) ────────────────────────────────────────────────
 
 #[test]
