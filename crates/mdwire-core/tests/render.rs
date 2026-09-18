@@ -92,6 +92,45 @@ fn a_marker_after_whitespace_still_never_closes() {
     assert_eq!(tg("앞말 **강조**"), "앞말 <b>강조</b>");
 }
 
+/// 줄 넘는 강조는 **불릿 안에서도** 일어난다. 80열 wrap 은 항목이라고 봐주지 않는다.
+/// 항목을 줄마다 끊으면 이 라이브러리의 첫 고장이 리스트 안에서만 그대로 남는다.
+#[test]
+fn emphasis_spans_a_wrapped_list_item() {
+    assert_eq!(
+        tg("- 앞말 **굵은 것이\n  다음 줄로 이어진다** 끝\n- 다음 항목"),
+        "• 앞말 <b>굵은 것이\n  다음 줄로 이어진다</b> 끝\n• 다음 항목"
+    );
+    // 그래도 강조가 항목을 넘지는 않는다.
+    assert_eq!(
+        tg("- 열고 **안 닫음\n- 새 항목"),
+        "• 열고 <b>안 닫음</b>\n• 새 항목"
+    );
+}
+
+/// 물결표는 한국어에서 근사값과 범위에 늘 쓰인다. 취소선은 `~~` 여야 한다.
+#[test]
+fn a_lone_tilde_is_text_not_strikethrough() {
+    assert_eq!(tg("주행 ~40km 까지 ~22km 부족하다"), "주행 ~40km 까지 ~22km 부족하다");
+    assert_eq!(tg("충전은 5~6월이다"), "충전은 5~6월이다");
+    assert_eq!(tg("~~진짜 취소선~~ 이다"), "<s>진짜 취소선</s> 이다");
+}
+
+/// 한도를 넘는 코드펜스를 쪼갤 때, 조각마다 `<pre><code class=…>` 가 제대로 닫히고
+/// 다시 열려야 한다. 태그가 단어 경계에 걸려 추적을 놓치면 조각 하나가 통째로 깨진다.
+#[test]
+fn an_oversized_fence_keeps_its_tags_across_parts() {
+    let body = (0..400).map(|i| format!("줄 {i} 내용이 길게 이어진다\n")).collect::<String>();
+    let input = format!("```markdown\n{body}```\n");
+    let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+    assert!(parts.len() > 1);
+    for part in &parts {
+        assert!(part.chars().count() <= Channel::TelegramHtml.limit(), "{}자", part.chars().count());
+        // balanced 는 여닫는 순서까지 본다 — `</pre>` 가 `</code>` 보다 먼저 오면 잡힌다.
+        assert!(balanced(part), "조각이 깨졌다");
+        assert!(part.starts_with("<pre>"), "이어지는 조각은 펜스를 다시 열어야 한다");
+    }
+}
+
 #[test]
 fn a_run_of_three_markers_leaves_nothing_behind() {
     // `***x***` 에서 두 개만 집으면 별표 하나가 출력에 남는다. 남은 마커는 실패다.

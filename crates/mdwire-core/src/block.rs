@@ -261,6 +261,16 @@ impl Engine {
     /// 접두사가 정해졌다. 블록을 열고 접두사를 내보낸다.
     fn open_line<S: Sink>(&mut self, kind: LineKind, prefix: usize, sink: &mut S) {
         match kind {
+            LineKind::Para if self.state == State::List => {
+                // **리스트 항목이 다음 줄로 이어진다.** 항목은 아직 끝나지 않았다.
+                // 여기서 항목을 끊으면 줄을 넘는 강조가 항목 안에서만 안 잡힌다 —
+                // 80열 wrap 은 불릿 안에서도 똑같이 일어나므로 그건 고장이다.
+                self.out.push('\n');
+                self.inline.end_line();
+                for _ in 0..prefix.min(8) {
+                    self.out.push(' ');
+                }
+            }
             LineKind::Para => {
                 if self.state != State::Para {
                     self.close_block(sink);
@@ -296,6 +306,10 @@ impl Engine {
                 if self.state != State::List {
                     self.close_block(sink);
                     self.state = State::List;
+                } else {
+                    // 같은 리스트의 다음 항목. 여기서 앞 항목의 인라인을 확정한다 —
+                    // 강조는 항목을 넘지 않는다.
+                    self.inline.finish_block(&mut self.out, &self.v);
                 }
                 self.start_line();
                 for _ in 0..indent.min(8) {
@@ -321,11 +335,11 @@ impl Engine {
         match self.kind {
             // 헤딩은 한 줄짜리 블록이다.
             LineKind::Heading(_) => self.close_block(sink),
-            // 항목 하나가 끝나면 강조도 끝난다. 항목을 넘어 굵어지는 강조는 없다.
-            LineKind::Bullet(_) | LineKind::Ordered(..) => {
-                self.inline.finish_block(&mut self.out, &self.v);
+            // 항목은 줄 하나로 끝나지 않는다. 이어지는 줄이 올 수 있으니 강조는 열어 둔다.
+            // 확정은 다음 항목이 시작되거나 리스트가 끝날 때다.
+            LineKind::Bullet(_) | LineKind::Ordered(..) | LineKind::Para | LineKind::Quote => {
+                self.inline.end_line()
             }
-            LineKind::Para | LineKind::Quote => self.inline.end_line(),
         }
         self.line_open = false;
     }

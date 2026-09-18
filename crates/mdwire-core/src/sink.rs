@@ -117,10 +117,15 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
         for word in line.split_inclusive(' ') {
             let mut rest = word;
             while !rest.is_empty() {
-                let budget = limit.saturating_sub(markup.reserve(v));
+                // **넣고 난 뒤의 마크업으로 예산을 잡는다.** 넣기 전 상태로 재면,
+                // 이번에 들어가는 조각이 태그를 하나 더 열었을 때 그 태그를 닫을 자리가
+                // 남지 않는다 — 그러면 닫고 나서 한도를 넘는다.
+                let mut probe = markup.clone();
+                probe.feed(rest, v);
+                let budget = limit.saturating_sub(probe.reserve(v));
                 let n = rest.chars().count();
                 if len + n <= budget {
-                    markup.feed(rest, v);
+                    markup = probe;
                     cur.push_str(rest);
                     len += n;
                     break;
@@ -164,12 +169,18 @@ fn cut(parts: &mut Vec<String>, cur: &mut String, len: &mut usize, markup: &Mark
 }
 
 /// 지금 열려 있는 마크업. 조각을 끊을 때 닫고 다시 열려고 들고 있는다.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Markup {
     /// 열린 HTML 태그. (이름, 여는 태그 전체)
     tags: Vec<(String, String)>,
     /// 열린 코드펜스의 info 문자열.
     fence: Option<String>,
+    /// 조각 경계에 걸려 아직 `>` 를 못 만난 태그의 앞부분.
+    ///
+    /// **이걸 안 들고 있으면 태그를 통째로 놓친다.** 여기 들어오는 텍스트는 단어 단위로
+    /// 잘려 있어서 `<code class="…">` 하나가 두 번에 나뉘어 들어온다. 놓친 태그는
+    /// 닫히지도 다시 열리지도 않아서, 조각 하나가 통째로 깨진 HTML 이 된다.
+    partial: String,
 }
 
 impl Markup {
@@ -182,7 +193,15 @@ impl Markup {
     }
 
     fn feed_html(&mut self, s: &str) {
-        let ch: Vec<char> = s.chars().collect();
+        let joined;
+        let text = if self.partial.is_empty() {
+            s
+        } else {
+            joined = format!("{}{}", self.partial, s);
+            self.partial.clear();
+            &joined
+        };
+        let ch: Vec<char> = text.chars().collect();
         let mut i = 0;
         while i < ch.len() {
             if ch[i] != '<' {
@@ -200,7 +219,12 @@ impl Markup {
             while j < ch.len() && ch[j] != '>' {
                 j += 1;
             }
-            if j >= ch.len() || name.is_empty() {
+            if j >= ch.len() {
+                // `>` 를 아직 못 봤다. 다음 조각과 이어 붙여서 다시 본다.
+                self.partial = ch[start..].iter().collect();
+                return;
+            }
+            if name.is_empty() {
                 i += 1;
                 continue;
             }

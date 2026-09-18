@@ -142,6 +142,16 @@ impl Inline {
                 (_, 1) => Emph::Italic,
                 _ => Emph::Bold,
             };
+            // 취소선은 `~~` 다. **홀로 선 `~` 는 글자다** — `~40km`, `5~6월` 처럼
+            // 한국어에서 물결표는 근사값과 범위에 늘 쓰인다. 이걸 취소선으로 읽으면
+            // 물결표가 사라지고 멀쩡한 문장이 통째로 그어진다. 실측 표본에 취소선은
+            // 0건이었으니 `~~` 만 받는 쪽이 잃는 것이 없다.
+            if c == '~' && take < 2 {
+                v.escape_char(c, out);
+                i += 1;
+                continue;
+            }
+
             let prev = self.prev_char(line, i);
             let next = line.get(i + take).copied();
 
