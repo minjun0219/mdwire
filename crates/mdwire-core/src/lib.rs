@@ -17,7 +17,15 @@
 
 #![forbid(unsafe_code)]
 
+mod block;
+mod inline;
+mod sink;
+mod vocab;
 pub mod width;
+
+use block::Engine;
+use sink::{PartsSink, StringSink};
+use vocab::Vocab;
 
 /// 내보낼 채널. 받는 문법이 채널마다 다르고, **출력이 좁은 쪽이 파싱 범위를 정한다**.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,30 +105,83 @@ pub enum CjkPolicy {
 /// 경계에 걸린 마크업(`**굵` 에서 끊긴 것)은 안에 남겨 두고 다음 조각을 기다린다.
 /// 이것이 이 라이브러리의 핵심이다 — 완성본 변환은 이미 남들이 푼 문제고,
 /// 경계 문제는 스트리밍을 하는 한 채널과 무관하게 생긴다.
+///
+/// # 예
+///
+/// ```
+/// use mdwire::{Channel, CjkPolicy, Streamer};
+///
+/// let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+/// let mut out = String::new();
+/// // 조각 경계가 `**` 한가운데를 지나가도 반쪽으로 나가지 않는다.
+/// out.push_str(s.push("앞말 **굵"));
+/// out.push_str(s.push("게** 뒷말"));
+/// out.push_str(s.finish());
+/// assert_eq!(out, "앞말 <b>굵게</b> 뒷말");
+/// ```
 pub struct Streamer {
-    _channel: Channel,
-    _cjk: CjkPolicy,
+    engine: Engine,
+    /// [`Streamer::push`] 가 빌려주는 버퍼. 재사용하므로 조각마다 할당하지 않는다.
+    buf: String,
 }
 
 impl Streamer {
     pub fn new(channel: Channel, cjk: CjkPolicy) -> Self {
-        Self { _channel: channel, _cjk: cjk }
+        Self { engine: Engine::new(channel, cjk), buf: String::new() }
     }
 
     /// 조각을 밀어 넣고, 지금 내보낼 수 있는 출력을 받는다.
-    pub fn push(&mut self, _chunk: &str) -> String {
-        todo!("구현 예정 — 설계는 DESIGN.md")
+    ///
+    /// 돌려주는 슬라이스는 **다음 호출 전까지만** 유효하다. 할당을 아예 없애려면
+    /// [`Streamer::push_into`] 를 쓴다 — 둘은 같은 코드를 부른다(`SPEC.md` 5절).
+    pub fn push(&mut self, chunk: &str) -> &str {
+        self.buf.clear();
+        let mut sink = StringSink(&mut self.buf);
+        self.engine.feed(chunk, &mut sink);
+        &self.buf
+    }
+
+    /// 호출자 버퍼에 직접 쓴다. 정본 서명 — 조각당 할당이 0 이다.
+    pub fn push_into(&mut self, chunk: &str, out: &mut String) {
+        let mut sink = StringSink(out);
+        self.engine.feed(chunk, &mut sink);
     }
 
     /// 입력이 끝났다. 남은 것을 전부 내보낸다(열린 마크업은 닫는다).
-    pub fn finish(&mut self) -> String {
-        todo!("구현 예정 — 설계는 DESIGN.md")
+    pub fn finish(&mut self) -> &str {
+        self.buf.clear();
+        let mut sink = StringSink(&mut self.buf);
+        self.engine.finish(&mut sink);
+        &self.buf
+    }
+
+    /// [`Streamer::finish`] 의 무할당 판.
+    pub fn finish_into(&mut self, out: &mut String) {
+        let mut sink = StringSink(out);
+        self.engine.finish(&mut sink);
     }
 }
 
 /// 완성된 문서를 한 번에 변환한다. 한도를 넘으면 안전한 지점에서 나눈다.
-pub fn render(_input: &str, _channel: Channel, _cjk: CjkPolicy) -> Vec<String> {
-    todo!("구현 예정 — 설계는 DESIGN.md")
+///
+/// 나누는 자리는 **렌더 결과가 아니라 구조에서** 고른다 — 블록이 끝나 열린 마크업이
+/// 없는 지점만 경계가 된다. 변환 후에 문자 수로 자르면 `<code>` 가 열린 채 잘리고,
+/// 채널은 400 을 준다(`DESIGN.md`).
+///
+/// # 예
+///
+/// ```
+/// use mdwire::{render, Channel, CjkPolicy};
+///
+/// let parts = render("## 제목\n\n**굵게** 있는 문단", Channel::TelegramHtml, CjkPolicy::Auto);
+/// assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
+/// ```
+pub fn render(input: &str, channel: Channel, cjk: CjkPolicy) -> Vec<String> {
+    let mut engine = Engine::new(channel, cjk);
+    let mut sink = PartsSink::new(Vocab::new(channel, cjk));
+    engine.feed(input, &mut sink);
+    engine.finish(&mut sink);
+    sink.into_parts()
 }
 
 #[cfg(test)]

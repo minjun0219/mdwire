@@ -4,7 +4,7 @@
 //! 일부러 틀린 구현(입력을 그대로 돌려주는 것)을 붙여, 실행기가 그걸 실패로 잡는지 본다.
 //! 통과를 확인하는 테스트는 코어가 선 뒤 `corpus.rs` 가 맡는다.
 
-use mdwire_core::Channel;
+use mdwire::Channel;
 use mdwire_harness::adapter::FnRenderer;
 use mdwire_harness::corpus;
 use std::path::PathBuf;

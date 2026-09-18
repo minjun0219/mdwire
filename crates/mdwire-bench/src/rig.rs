@@ -137,7 +137,7 @@ pub fn measure(name: &'static str, input_bytes: usize, repeats: usize, mut run: 
 }
 
 /// 측정 결과를 표로 찍는다. 열 맞춤은 ASCII 라 문자 수로 충분하다 —
-/// 표시 폭 문제는 라이브러리 안쪽(`mdwire_core::width`)의 일이다.
+/// 표시 폭 문제는 라이브러리 안쪽(`mdwire::width`)의 일이다.
 pub fn report(title: &str, samples: &[Sample]) {
     println!("\n== {title} ==");
     println!(
@@ -161,8 +161,7 @@ mod tests {
     use super::*;
 
     /// 리그 자체의 검증. **계수기가 맞다는 근거가 없으면 이후 수치는 전부 무의미하다.**
-    /// 이 crate 의 테스트는 이 하나뿐이어야 한다 — 계수기는 스레드 로컬이지만
-    /// 같은 스레드에서 다른 테스트가 끼어들면 구간이 오염된다.
+    /// 계수기가 스레드 로컬이라 테스트가 병렬로 돌아도 구간이 섞이지 않는다.
     #[test]
     fn rig_counts_what_it_claims_to_count() {
         // 정확히 N 번 할당하는 코드: 미리 용량을 잡은 Vec 에 String 을 N 개 담는다.

@@ -7,7 +7,7 @@
 //! 분할 결과는 NUL 로 이어 붙인 한 문자열로 돌려준다 — CLI 와 같은 규약이다
 //! (`SPEC.md` 5절).
 
-use mdwire_core::{Channel, CjkPolicy};
+use mdwire::{Channel, CjkPolicy};
 use std::io::Write;
 use std::process::{Command as Proc, Stdio};
 
@@ -36,7 +36,7 @@ impl Renderer for Mdwire {
     }
 
     fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
-        Ok(mdwire_core::render(input, channel, self.cjk).join("\0"))
+        Ok(mdwire::render(input, channel, self.cjk).join("\0"))
     }
 }
 

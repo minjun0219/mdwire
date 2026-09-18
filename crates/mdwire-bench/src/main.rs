@@ -12,6 +12,7 @@
 
 mod rig;
 
+use mdwire::{Channel, CjkPolicy, Streamer};
 use rig::{measure, report, Sample};
 
 #[global_allocator]
@@ -78,6 +79,7 @@ impl ShapeCallback {
 
 fn main() {
     let doc = synthetic_doc();
+    let prose = synthetic_prose();
     let pieces = split_chunks(&doc, CHUNK);
     let input_bytes = doc.len();
     let repeats = 30;
@@ -127,6 +129,111 @@ fn main() {
         "\n변환은 넷이 같은 함수를 쓴다. 표의 차이는 전부 서명에서 나온 것이다.\n\
          '할당/조각' 이 서명을 고르는 기준이다 — 스트리밍 경로는 조각마다 불린다."
     );
+
+    engine(&doc, &pieces, repeats);
+
+    let prose_pieces = split_chunks(&prose, CHUNK);
+    println!("\n산문만(표·코드펜스 없음) {} bytes · 조각 {} 개", prose.len(), prose_pieces.len());
+    prose_only(&prose, &prose_pieces, repeats);
+}
+
+/// 스트리밍의 뜨거운 경로는 산문이다. 표와 코드펜스는 성격이 다르다 —
+/// 표는 열 너비를 재려고 어차피 버퍼링하고, 셀 수만큼 할당한다.
+/// **회귀 게이트는 이 수치에 건다.**
+fn prose_only(doc: &str, pieces: &[&str], repeats: usize) {
+    let mut out = String::with_capacity(doc.len() * 2);
+    let mut samples = Vec::new();
+    for (name, channel) in [
+        ("새 Streamer · telegram-html", Channel::TelegramHtml),
+        ("재사용 · telegram-html", Channel::TelegramHtml),
+    ] {
+        let reuse = name.starts_with("재사용");
+        let mut kept = Streamer::new(channel, CjkPolicy::Auto);
+        if reuse {
+            out.clear();
+            for p in pieces {
+                kept.push_into(p, &mut out);
+            }
+            kept.finish_into(&mut out);
+        }
+        samples.push(measure(name, doc.len(), repeats, || {
+            let mut fresh;
+            let s = if reuse {
+                &mut kept
+            } else {
+                fresh = Streamer::new(channel, CjkPolicy::Auto);
+                &mut fresh
+            };
+            out.clear();
+            for p in pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+            pieces.len()
+        }));
+    }
+    report("엔진 — 산문만", &samples);
+    println!(
+        "\n**재사용 줄의 할당이 0 이 아니면 회귀다.** 그 불변식은 아래 테스트가 지킨다."
+    );
+}
+
+/// 실제 엔진. **순위표가 아니라 우리 수치의 절대값과 추이를 본다.**
+/// 다른 구현과 비교할 때도 이 수치는 맥락일 뿐이다 — 언어가 다르면 대부분 언어 차이를 재게 된다.
+fn engine(doc: &str, pieces: &[&str], repeats: usize) {
+    let input_bytes = doc.len();
+    let mut out = String::with_capacity(input_bytes * 2);
+
+    let mut samples = Vec::new();
+    for (name, channel) in [
+        ("새 Streamer · telegram-html", Channel::TelegramHtml),
+        ("새 Streamer · slack-markdown", Channel::SlackMarkdown),
+        ("새 Streamer · plain", Channel::Plain),
+    ] {
+        samples.push(measure(name, input_bytes, repeats, || {
+            let mut s = Streamer::new(channel, CjkPolicy::Auto);
+            out.clear();
+            for p in pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+            pieces.len()
+        }));
+    }
+
+    // 버퍼가 다 자란 뒤의 정상 상태. **회귀 감시는 이 줄을 본다** —
+    // 위의 "새 Streamer" 는 첫 문서에서 버퍼를 키우는 비용이 섞여 있다.
+    for (name, channel) in [
+        ("재사용 · telegram-html", Channel::TelegramHtml),
+        ("재사용 · slack-markdown", Channel::SlackMarkdown),
+    ] {
+        let mut s = Streamer::new(channel, CjkPolicy::Auto);
+        out.clear();
+        for p in pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        samples.push(measure(name, input_bytes, repeats, || {
+            out.clear();
+            for p in pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+            pieces.len()
+        }));
+    }
+    samples.push(measure("render(완성본) · telegram-html", input_bytes, repeats, || {
+        let parts = mdwire::render(doc, Channel::TelegramHtml, CjkPolicy::Auto);
+        std::hint::black_box(&parts);
+        1
+    }));
+
+    report("엔진 — 실제 변환", &samples);
+    println!(
+        "\n이 문서의 할당은 대부분 표에서 나온다 — 셀 하나당 하나씩이고, 표는 열 너비를\n\
+         재려고 어차피 끝까지 버퍼링한다. 스트리밍의 뜨거운 경로는 아래의 산문이다.\n\
+         render 는 조각을 Vec<String> 으로 돌려주므로 조각 수만큼은 반드시 할당한다."
+    );
 }
 
 /// 합성 문서. **실제 에이전트 문서는 이 저장소에 넣지 않는다**(공개 저장소이고 개인 문서다).
@@ -161,6 +268,22 @@ fn allow(header: &str) -> bool {
     unit.repeat(8)
 }
 
+/// 표도 코드펜스도 없는 산문. 스트리밍의 뜨거운 경로다.
+fn synthetic_prose() -> String {
+    let unit = "\
+세 환경 중 **두 곳에서 동일한 증상**이 재현됐다. 원인은 캐시 계층이 아니라
+**요청 경로에서 헤더를 지우는 미들웨어**였고, 이 미들웨어는 작년에 추가됐다.
+
+- 스테이징: 재현됨, 응답은 오지만 본문이 비어 있다
+- 프로덕션: 재현됨, 같은 증상
+- 로컬: 재현 안 됨 — 미들웨어가 꺼져 있다
+
+> 조치는 미들웨어를 되돌리는 것이 아니라 **허용 목록을 명시**하는 쪽으로 간다.
+
+";
+    unit.repeat(12)
+}
+
 /// 문자 경계를 지키며 대략 `n` 바이트씩 자른다.
 fn split_chunks(s: &str, n: usize) -> Vec<&str> {
     let mut out = Vec::new();
@@ -174,4 +297,36 @@ fn split_chunks(s: &str, n: usize) -> Vec<&str> {
         start = end;
     }
     out
+}
+
+#[cfg(test)]
+mod gate {
+    use super::*;
+
+    /// 회귀 게이트. `SPEC.md` 9절이 "첫 벤치 수치를 보고 정한다"고 한 그 수치다.
+    ///
+    /// 버퍼가 다 자란 뒤 산문을 흘리면 **할당이 한 번도 일어나지 않아야 한다.**
+    /// 이 수가 0 이 아니게 되는 변경은 스트리밍 경로에 할당을 들인 것이고,
+    /// 그 경로는 조각마다 불린다.
+    #[test]
+    fn prose_streaming_is_allocation_free_once_warm() {
+        let doc = synthetic_prose();
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+        let mut out = String::new();
+
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
 }

@@ -10,7 +10,7 @@
 
 use crate::adapter::Renderer;
 use crate::check::{self, Finding};
-use mdwire_core::Channel;
+use mdwire::Channel;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;

@@ -1,0 +1,3 @@
+로그는 이렇게 본다.
+
+<pre><code class="language-sh">tail -f app.log | grep ERROR</code></pre>

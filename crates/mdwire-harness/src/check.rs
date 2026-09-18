@@ -10,7 +10,7 @@
 //! 모르게 몇 달을 간다(`DESIGN.md`).
 
 use crate::emphasis::{self, Mode, Span};
-use mdwire_core::{width::str_width, Channel};
+use mdwire::{width::str_width, Channel};
 
 /// 불변식 하나.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -327,12 +327,14 @@ fn is_delimiter(line: &str) -> bool {
 }
 
 fn check_columns(block: &[&str], out: &mut Vec<Finding>) {
+    // 줄 끝 공백은 재지 않는다. 마지막 열의 오른쪽 여백은 화면에 아무 일도 하지 않으므로
+    // 구현마다 붙이기도 안 붙이기도 한다 — 그걸 어긋남으로 볼 이유가 없다.
     let rows: Vec<Vec<usize>> = block
         .iter()
-        .map(|l| l.split('|').map(str_width).collect())
+        .map(|l| l.trim_end().split('|').map(str_width).collect())
         .collect();
-    let cols = rows[0].len();
-    for c in 0..cols {
+    let cols = rows.iter().map(Vec::len).min().unwrap_or(0);
+    for c in 0..cols.saturating_sub(1) {
         let first = rows[0][c];
         for (r, row) in rows.iter().enumerate().skip(1) {
             if row[c] != first {
@@ -349,12 +351,35 @@ fn check_columns(block: &[&str], out: &mut Vec<Finding>) {
     }
 }
 
-/// 폭을 재기 전에 엔티티를 되돌린다. `&amp;` 는 화면에서 한 칸이지 다섯 칸이 아니다.
+/// 폭을 재기 전에 화면에 안 보이는 것을 걷어낸다.
+///
+/// `&amp;` 는 화면에서 한 칸이지 다섯 칸이 아니고, `<pre>` 는 아예 0 칸이다.
+/// 이걸 안 하면 표 첫 줄만 태그 길이만큼 넓게 재서, 맞는 표를 어긋났다고 신고한다.
 fn unescape_for_width(text: &str, channel: Channel) -> String {
     if channel != Channel::TelegramHtml {
         return text.to_string();
     }
-    text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < ch.len() {
+        if ch[i] == '<' {
+            if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
+                i = end;
+                continue;
+            }
+        }
+        if ch[i] == '&' {
+            if let Some((c, end)) = emphasis::parse_entity(&ch, i) {
+                out.push(c);
+                i = end;
+                continue;
+            }
+        }
+        out.push(ch[i]);
+        i += 1;
+    }
+    out
 }
 
 #[cfg(test)]

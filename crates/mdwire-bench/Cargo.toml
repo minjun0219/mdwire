@@ -11,5 +11,6 @@ publish = false
 name = "mdwire-bench"
 path = "src/main.rs"
 
-# 계측 리그는 코어가 아니다. 그래도 의존은 두지 않는다 — std 로 충분하다.
+# 계측 리그는 코어가 아니다. 그래도 바깥 의존은 두지 않는다 — std 로 충분하다.
 [dependencies]
+mdwire-core = { path = "../mdwire-core" }

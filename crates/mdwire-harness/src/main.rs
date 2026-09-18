@@ -8,7 +8,7 @@
 //!
 //! 실패가 있으면 1 로 끝난다. CI 에 그대로 걸 수 있다.
 
-use mdwire_core::{Channel, CjkPolicy};
+use mdwire::{Channel, CjkPolicy};
 use mdwire_harness::{adapter, corpus};
 use std::path::PathBuf;
 use std::process::ExitCode;
