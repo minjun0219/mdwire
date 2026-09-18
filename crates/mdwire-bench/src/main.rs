@@ -78,6 +78,21 @@ impl ShapeCallback {
 }
 
 fn main() {
+    // 실제 문서 더미로 재는 모드. **그 문서들은 이 저장소에 없다** — 공개 저장소이고
+    // 남의 글이다. 디렉토리를 인자로 받아 훑는 이유가 그것이다.
+    let mut args = std::env::args().skip(1);
+    if let Some(flag) = args.next() {
+        if flag == "--dir" {
+            let dir = args.next().unwrap_or_else(|| {
+                eprintln!("--dir 에 경로가 없다");
+                std::process::exit(2);
+            });
+            return real_docs(std::path::Path::new(&dir));
+        }
+        eprintln!("모르는 인자: {flag}\n사용법: mdwire-bench [--dir <디렉토리>]");
+        std::process::exit(2);
+    }
+
     let doc = synthetic_doc();
     let prose = synthetic_prose();
     let pieces = split_chunks(&doc, CHUNK);
@@ -266,6 +281,75 @@ fn allow(header: &str) -> bool {
 
 ";
     unit.repeat(8)
+}
+
+/// 실제 문서 더미를 훑어 잰다. 집계만 낸다 — 본문은 읽고 버린다.
+fn real_docs(dir: &std::path::Path) {
+    let mut docs = Vec::new();
+    collect(dir, &mut docs);
+    docs.sort();
+    if docs.is_empty() {
+        eprintln!("{} 에 마크다운이 없다", dir.display());
+        std::process::exit(2);
+    }
+
+    let mut total_bytes = 0usize;
+    let mut total_chunks = 0usize;
+    let mut warm_allocs = 0usize;
+    let mut cold_allocs = 0usize;
+    let mut worst: (f64, String) = (0.0, String::new());
+    let mut out = String::new();
+    let mut warm = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+
+    for path in &docs {
+        let Ok(text) = std::fs::read_to_string(path) else { continue };
+        let pieces = split_chunks(&text, CHUNK);
+        total_bytes += text.len();
+        total_chunks += pieces.len();
+
+        // 새 Streamer — 메시지마다 하나씩 만드는 쪽이 치르는 값.
+        let (_, cold) = rig::count(|| {
+            let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        cold_allocs += cold.allocs;
+
+        // 재사용 — 버퍼가 다 자란 뒤의 정상 상태. 게이트가 보는 수치다.
+        let (_, hot) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                warm.push_into(p, &mut out);
+            }
+            warm.finish_into(&mut out);
+        });
+        warm_allocs += hot.allocs;
+        let per = if pieces.is_empty() { 0.0 } else { hot.allocs as f64 / pieces.len() as f64 };
+        if per > worst.0 {
+            worst = (per, path.file_name().unwrap_or_default().to_string_lossy().to_string());
+        }
+    }
+
+    println!("문서 {} 개 · {} bytes · 조각 {} 개 (조각 크기 {CHUNK}B)", docs.len(), total_bytes, total_chunks);
+    println!("  새 Streamer  할당/조각 {:.3}", cold_allocs as f64 / total_chunks as f64);
+    println!("  재사용       할당/조각 {:.3}", warm_allocs as f64 / total_chunks as f64);
+    println!("  가장 나쁜 문서 {:.3} 할당/조각 — {}", worst.0, worst.1);
+    println!("\n재사용 줄이 0 이 아니면 표·코드펜스가 든 문서다. 산문 경로는 0 이어야 한다.");
+}
+
+fn collect(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for e in entries.filter_map(Result::ok) {
+        let p = e.path();
+        if p.is_dir() {
+            collect(&p, out);
+        } else if p.extension().is_some_and(|x| x == "md" || x == "markdown") {
+            out.push(p);
+        }
+    }
 }
 
 /// 표도 코드펜스도 없는 산문. 스트리밍의 뜨거운 경로다.
