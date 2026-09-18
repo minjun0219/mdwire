@@ -1,0 +1,40 @@
+# 게이트. `AGENTS.md` 가 "통과 전에 커밋하지 않는다"고 정한 것을 PR 에서도 강제한다.
+#
+# 의존은 두지 않는다 — 코어와 같은 원칙이다. 캐시 액션도 쓰지 않는데,
+# 이 저장소는 바인딩 층 말고는 의존이 없어서 캐시로 아낄 것이 거의 없기 때문이다.
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 툴체인
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
+
+      # 코퍼스 대조 · 스트리밍 일치 · 할당 회귀 게이트가 전부 여기 들어 있다.
+      - name: 테스트
+        run: cargo test --workspace
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # 코어는 바인딩 층 없이도 wasm 으로 서야 한다. 호스트 빌드만으로는 안 걸린다.
+      - name: wasm 빌드
+        run: cargo build -p mdwire-wasm --target wasm32-unknown-unknown
