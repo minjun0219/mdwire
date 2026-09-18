@@ -28,13 +28,16 @@ jobs:
           rustup component add clippy
           rustup target add wasm32-unknown-unknown
 
+      # `--locked` — Cargo.lock 을 그대로 쓰고, 갱신이 필요하면 해결하지 말고 실패한다.
+      # 게이트가 업스트림 릴리스 타이밍에 따라 흔들리면 실패 원인을 가릴 수 없다.
+      #
       # 코퍼스 대조 · 스트리밍 일치 · 할당 회귀 게이트가 전부 여기 들어 있다.
       - name: 테스트
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
 
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       # 코어는 바인딩 층 없이도 wasm 으로 서야 한다. 호스트 빌드만으로는 안 걸린다.
       - name: wasm 빌드
-        run: cargo build -p mdwire-wasm --target wasm32-unknown-unknown
+        run: cargo build -p mdwire-wasm --target wasm32-unknown-unknown --locked
