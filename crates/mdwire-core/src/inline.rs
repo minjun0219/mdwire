@@ -27,8 +27,14 @@ struct Open {
     /// 마커 길이. 코드 스팬은 백틱 런의 길이를 그대로 쓴다(닫을 때 같아야 한다).
     run: usize,
     ch: char,
-    /// 추측으로 열었는가. 안 닫히면 글자로 되돌린다.
+    /// 추측으로 열었는가. 안 닫히면 글자로 되돌리거나 버린다.
     guess: bool,
+    /// 이 마커 앞이 공백(또는 블록 시작)이었는가.
+    ///
+    /// 추측이 빗나갔을 때 **되돌릴지 버릴지**를 이 값이 가른다. `2 ** 3` 처럼 앞이
+    /// 공백이면 원래 글자였으므로 되돌리고, `…온다*` 처럼 앞이 글자면 짝 잃은 닫는
+    /// 마커이므로 버린다 — 되돌려 놓으면 출력에 마커가 남는다.
+    after_space: bool,
     /// 여는 쪽 CJK 패딩이 필요한가.
     pad: bool,
 }
@@ -115,13 +121,15 @@ impl Inline {
 
             if c == '`' {
                 let run = run_len(line, i, '`');
+                let prev = self.prev_char(line, i);
                 self.open.push(Open {
                     emph: Emph::Code,
                     at: out.len(),
                     run,
                     ch: '`',
                     guess: false,
-                    pad: v.pad && self.prev_char(line, i).is_some_and(is_wide),
+                    after_space: prev.is_none_or(char::is_whitespace),
+                    pad: v.pad && prev.is_some_and(is_wide),
                 });
                 i += run;
                 continue;
@@ -186,6 +194,7 @@ impl Inline {
                     run: take,
                     ch: c,
                     guess: false,
+                    after_space,
                     pad,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
@@ -195,6 +204,7 @@ impl Inline {
                     run: take,
                     ch: c,
                     guess: true,
+                    after_space,
                     pad,
                 }),
             }
@@ -237,10 +247,15 @@ impl Inline {
 
         // 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
         let empty = out.len() == open.at;
-        if open.guess || empty || (open.emph == Emph::Code && empty) {
-            // 추측이 빗나갔다 — 마커를 글자로 되돌린다.
-            for _ in 0..open.run {
-                out.insert(open.at, open.ch);
+        if open.guess || empty {
+            // 추측이 빗나갔다. 앞이 공백이었으면 원래 글자였던 것이니 되돌리고,
+            // 앞이 글자였으면 짝 잃은 닫는 마커이니 버린다 — 되돌리면 출력에 남는다.
+            // 내용이 빈 홑마커(`참고*` 의 꼬리 같은 것)는 글자로 남긴다. `**` 는 버린다 —
+            // 홑마커는 각주나 곱셈으로 쓰이지만 `**` 가 홀로 남을 이유는 없다.
+            if open.after_space || (empty && open.run == 1) {
+                for _ in 0..open.run {
+                    out.insert(open.at, open.ch);
+                }
             }
             return;
         }

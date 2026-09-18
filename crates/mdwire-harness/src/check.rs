@@ -85,7 +85,7 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     if matches!(channel, Channel::TelegramHtml) {
         html_tags(output, &mut findings);
     }
-    tables(output, channel, &mut findings);
+    tables(input, output, channel, &mut findings);
     findings
 }
 
@@ -239,7 +239,9 @@ fn strip_verbatim(text: &str, channel: Channel, input: &str) -> String {
     }
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find("<pre").or_else(|| rest.find("<code")) {
+    // **먼저 나오는 쪽을 집는다.** `<pre` 를 우선하면 그 앞에 있던 `<code>` 구간이
+    // 통째로 살아남는다 — 그 안의 `packages/**` 같은 글로브가 남은 마커로 신고된다.
+    while let Some(start) = [rest.find("<pre"), rest.find("<code")].into_iter().flatten().min() {
         out.push_str(&rest[..start]);
         let tail = &rest[start..];
         let close = if tail.starts_with("<pre") { "</pre>" } else { "</code>" };
@@ -352,8 +354,26 @@ fn context(ch: &[char], at: usize) -> String {
 /// 고정폭 표의 열이 **표시 폭** 기준으로 맞는가.
 ///
 /// 문자 수로 맞춘 구현은 한글이 든 표에서 반드시 어긋난다. 이 규칙이 그것을 잡는다.
-fn tables(output: &str, channel: Channel, out: &mut Vec<Finding>) {
-    let text = unescape_for_width(&output.replace(PART_SEPARATOR, "\n"), channel);
+fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
+    // **코드 블록 안의 표는 표가 아니다.** 마크다운 표를 코드로 보여 주는 문서가 있고,
+    // 그건 원문 그대로 나가는 것이 맞다. 여기를 안 걸러내면 정상 통과를 고장으로 신고한다.
+    // 입력에서 코드였던 줄을 기억해 두었다가, 그 줄로 시작하는 덩어리는 건너뛴다.
+    let verbatim: std::collections::HashSet<String> =
+        verbatim_chunks(input).into_iter().map(|c| c.trim().to_string()).collect();
+    // **조각마다 따로 본다.** 조각은 각각 독립된 메시지다. 이어 붙여 놓고 보면
+    // 조각 경계에서 만난 표 둘이 한 덩어리가 되어, 서로 다른 표의 열 너비를 견주게 된다.
+    for part in output.split(PART_SEPARATOR) {
+        tables_in_part(part, channel, &verbatim, out);
+    }
+}
+
+fn tables_in_part(
+    part: &str,
+    channel: Channel,
+    verbatim: &std::collections::HashSet<String>,
+    out: &mut Vec<Finding>,
+) {
+    let text = unescape_for_width(part, channel);
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
     while i < lines.len() {
@@ -368,7 +388,9 @@ fn tables(output: &str, channel: Channel, out: &mut Vec<Finding>) {
         }
         let block = &lines[i..j];
         // 표로 보려면 구분선이 있어야 한다. 없으면 `|` 가 든 산문일 뿐이다.
-        let looks_like_table = block.len() >= 3 && block[1..2].iter().any(|l| is_delimiter(l));
+        let looks_like_table = block.len() >= 3
+            && block[1..2].iter().any(|l| is_delimiter(l))
+            && !verbatim.contains(block[0].trim());
         if looks_like_table {
             check_columns(block, out);
         }

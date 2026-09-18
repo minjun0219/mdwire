@@ -107,6 +107,7 @@ fn blocks(src: &str) -> Vec<String> {
     // 표는 **상태로 따라간다.** 구분선 옆줄만 보면 셋째 줄부터는 표인 줄 모르고
     // 셀 안의 강조를 산문으로 읽는다 — 그러면 정상 출력이 통째로 고장으로 신고된다.
     let mut in_table = false;
+    let mut in_quote = false;
     let lines: Vec<&str> = src.split('\n').collect();
 
     for (i, raw) in lines.iter().enumerate() {
@@ -141,6 +142,7 @@ fn blocks(src: &str) -> Vec<String> {
             continue;
         }
         if trimmed.is_empty() || is_heading(trimmed) || is_rule(trimmed) {
+            in_quote = false;
             // 헤딩을 건너뛰는 것은 **중립성 때문**이다. 헤딩 구문이 없는 채널은 줄 전체를
             // 굵게 내보내고, 그러면 헤딩 안의 강조 범위가 줄 전체로 커진다. 구현마다
             // 다른 이 선택을 고장으로 신고하지 않으려고 양쪽에서 똑같이 뺀다.
@@ -152,6 +154,13 @@ fn blocks(src: &str) -> Vec<String> {
         // 끝날 때 인라인을 확정하므로, 여기서도 똑같이 끊어야 같은 답이 나온다.
         if is_list_item(trimmed) {
             flush(&mut cur, &mut out);
+        }
+        // **인용문도 자기 블록이다.** 문단과 인용문 사이를 안 끊으면, 코어가 블록
+        // 경계에서 닫은 강조를 여기서는 넘어간 것으로 읽는다.
+        let quote = trimmed.starts_with('>');
+        if quote != in_quote {
+            flush(&mut cur, &mut out);
+            in_quote = quote;
         }
         if !cur.is_empty() {
             cur.push('\n');

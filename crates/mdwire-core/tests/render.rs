@@ -39,6 +39,21 @@ fn unclosed_code_fence_closes() {
 fn lone_asterisks_stay_literal() {
     // `2 ** 3` 은 강조가 아니다. 추측으로 열었더라도 안 닫히면 되돌린다.
     assert_eq!(tg("2 ** 3 은 곱셈이 아니다"), "2 ** 3 은 곱셈이 아니다");
+    // 홑마커 꼬리도 글자다 — 각주로 쓰인다.
+    assert_eq!(tg("참고*"), "참고*");
+}
+
+/// **짝 잃은 닫는 마커는 버린다.** 앞이 글자면 그건 닫으려던 마커지 본문이 아니고,
+/// 글자로 되돌려 놓으면 출력에 마커가 남는다 — 그게 곧 실패다.
+#[test]
+fn an_orphaned_closing_marker_is_dropped() {
+    assert_eq!(tg("온다* 뒤에 더 있다"), "온다 뒤에 더 있다");
+    assert_eq!(tg("꼬리**"), "꼬리");
+    // 블록이 갈리면 강조는 넘어가지 않고, 넘어가려던 마커도 남지 않는다.
+    assert_eq!(
+        tg("문단에서 *기울임이 열리고\n> 인용 줄이 온다* 뒤"),
+        "문단에서 <i>기울임이 열리고</i>\n<blockquote>인용 줄이 온다 뒤</blockquote>"
+    );
 }
 
 #[test]
@@ -142,6 +157,26 @@ fn an_oversized_fence_keeps_its_tags_across_parts() {
         assert!(balanced(part), "조각이 깨졌다");
         assert!(part.starts_with("<pre>"), "이어지는 조각은 펜스를 다시 열어야 한다");
     }
+}
+
+/// 표는 **`|` 로 시작하는 줄**이면 앞 블록이 무엇이든 시작한다.
+/// 빈 줄을 요구하면 인용문·리스트 바로 뒤에 붙은 표를 통째로 놓친다.
+#[test]
+fn a_table_can_start_right_after_any_block() {
+    let table = "|  | 값 |\n|---|---|\n| 가 | 1 |";
+
+    // 인용문 바로 뒤. 인용문을 닫고 표를 연다.
+    let out = tg(&format!("> 인용이 먼저다.\n{table}"));
+    assert!(out.starts_with("<blockquote>인용이 먼저다.</blockquote>"), "{out}");
+    assert!(out.contains("<pre>"), "{out}");
+    assert_eq!(out.matches("<blockquote>").count(), out.matches("</blockquote>").count());
+
+    // 리스트 바로 뒤, 문단 바로 뒤.
+    assert!(tg(&format!("- 항목\n{table}")).contains("<pre>"));
+    assert!(tg(&format!("문단이 먼저다.\n{table}")).contains("<pre>"));
+
+    // 문단 한가운데의 `|` 는 여전히 글자다.
+    assert_eq!(one("문단 a | b 가 있다", Channel::Plain), "문단 a | b 가 있다");
 }
 
 #[test]
