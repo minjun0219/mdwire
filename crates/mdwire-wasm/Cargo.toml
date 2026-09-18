@@ -1,0 +1,16 @@
+[package]
+name = "mdwire-wasm"
+description = "WASM bindings for mdwire — browser and npm."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# wasm-bindgen 은 여기에만 둔다. 코어는 의존이 없다 (`SPEC.md` 3절).
+[dependencies]
+mdwire-core = { path = "../mdwire-core" }
+wasm-bindgen = "0.2"

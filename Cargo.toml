@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mdwire-core", "crates/mdwire-cli", "crates/mdwire-bench", "crates/mdwire-harness"]
+members = ["crates/mdwire-core", "crates/mdwire-cli", "crates/mdwire-bench", "crates/mdwire-harness", "crates/mdwire-wasm"]
 resolver = "2"
 
 [workspace.package]

@@ -7,7 +7,10 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: design stage. Not usable yet.**
+**Status: v0.1 core works.** Normalizing, rendering, splitting and streaming are
+implemented for three channels — Telegram HTML, Slack `markdown_text`, and plain text —
+with a Rust core, a CLI, and WASM bindings. See `SPEC.md` for what is in v0.1 and what
+was deliberately deferred.
 
 ## What it does
 
@@ -22,6 +25,29 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    headings and no tables.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
+
+## Use it
+
+```sh
+cat agent-output.md | mdwire --channel telegram-html          # parts separated by NUL
+cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arrives
+```
+
+```rust
+let parts = mdwire::render(input, Channel::TelegramHtml, CjkPolicy::Auto);
+
+let mut s = Streamer::new(Channel::SlackMarkdown, CjkPolicy::Auto);
+s.push_into(chunk, &mut out);  // no allocation per chunk
+s.finish_into(&mut out);       // flush, closing anything left open
+```
+
+```js
+import init, { render, Streamer } from "mdwire";
+```
+
+The streamer holds back only what it must: a prefix it cannot classify yet, a marker run
+at the end of a chunk, and the inside of an emphasis that has not closed. Paragraphs are
+never held — a renderer that waits for a newline is not streaming.
 
 ## Why another one
 
@@ -46,6 +72,23 @@ Three gaps in what exists today, each measured rather than assumed:
 - **The test corpus is a first-class artifact.** `corpus/` holds input → expected output
   per channel. A port in another language is correct when it passes the corpus. This is
   how consistency survives more than one implementation.
+
+## Building
+
+```sh
+cargo test --workspace     # unit tests, the corpus, and the allocation gate
+cargo clippy --workspace
+cargo run --release -p mdwire-bench       # allocation counts and throughput
+cargo run -p mdwire-harness --bin mdwire-check   # corpus + invariant scoring
+```
+
+`mdwire-check` scores any implementation that reads stdin and writes stdout, so a port in
+another language can be measured with the same yardstick:
+
+```sh
+mdwire-check --cmd "node convert.js --to {channel}"
+mdwire-check --scan ./some-directory-of-markdown   # invariants only, no expected output
+```
 
 ## License
 

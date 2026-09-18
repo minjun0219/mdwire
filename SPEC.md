@@ -204,5 +204,7 @@ CLI 는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 정해서 미룬 것이지 안 정한 것이 아니다.
 
 - Telegram MarkdownV2 · Slack 레거시 `mrkdwn`
-- `no_std` 전환 — 벤치로 WASM 크기 이득을 재고 판단
+- `no_std` 전환 — 지금 wasm 번들은 105 KB(release, `wasm-opt` 전)다. 이 중 얼마가
+  `std` 이고 얼마가 `wasm-bindgen` 인지 가른 뒤에 판단한다. 숫자를 가르기 전에
+  옮기면 얻는 것 없이 코어만 불편해진다
 - Go 구현 — 코퍼스가 정본이니 생길 때 포팅한다. FFI 는 쓰지 않는다
