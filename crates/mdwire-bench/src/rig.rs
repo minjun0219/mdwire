@@ -140,6 +140,9 @@ pub fn measure(name: &'static str, input_bytes: usize, repeats: usize, mut run: 
 /// 표시 폭 문제는 라이브러리 안쪽(`mdwire::width`)의 일이다.
 pub fn report(title: &str, samples: &[Sample]) {
     println!("\n== {title} ==");
+    // 처리량의 절대값은 같은 커밋에서도 회차마다 1.4배까지 흔들린다(터보·발열).
+    // 읽어야 하는 것은 할당 횟수(결정적)와 같은 회차 안의 상대비다.
+    // 절대 MiB/s 를 문서에 옮겨 적으면 재현 안 되는 숫자가 규칙이 된다.
     println!(
         "{:<28} {:>12} {:>12} {:>14} {:>12}",
         "후보", "할당/문서", "할당/조각", "바이트/문서", "MiB/s"
