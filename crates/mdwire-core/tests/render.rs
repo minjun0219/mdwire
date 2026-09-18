@@ -39,6 +39,21 @@ fn unclosed_code_fence_closes() {
 fn lone_asterisks_stay_literal() {
     // `2 ** 3` 은 강조가 아니다. 추측으로 열었더라도 안 닫히면 되돌린다.
     assert_eq!(tg("2 ** 3 은 곱셈이 아니다"), "2 ** 3 은 곱셈이 아니다");
+    // 홑마커 꼬리도 글자다 — 각주로 쓰인다.
+    assert_eq!(tg("참고*"), "참고*");
+}
+
+/// **짝 잃은 닫는 마커는 버린다.** 앞이 글자면 그건 닫으려던 마커지 본문이 아니고,
+/// 글자로 되돌려 놓으면 출력에 마커가 남는다 — 그게 곧 실패다.
+#[test]
+fn an_orphaned_closing_marker_is_dropped() {
+    assert_eq!(tg("온다* 뒤에 더 있다"), "온다 뒤에 더 있다");
+    assert_eq!(tg("꼬리**"), "꼬리");
+    // 블록이 갈리면 강조는 넘어가지 않고, 넘어가려던 마커도 남지 않는다.
+    assert_eq!(
+        tg("문단에서 *기울임이 열리고\n> 인용 줄이 온다* 뒤"),
+        "문단에서 <i>기울임이 열리고</i>\n<blockquote>인용 줄이 온다 뒤</blockquote>"
+    );
 }
 
 #[test]
