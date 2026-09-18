@@ -136,7 +136,13 @@ impl Engine {
         }
 
         if !self.line_open {
-            match classify(&self.pending, eol, self.state == State::None) {
+            // 표는 **`|` 로 시작하는 줄에서만** 시작한다. 앞 블록이 무엇이든 상관없다.
+            //
+            // 붙드는 값이 그 줄 하나뿐이라 그렇다 — 구분선이 따라오는지 보려면 한 줄을
+            // 더 기다려야 하는데, 대상이 `|` 로 시작하는 줄뿐이면 산문은 한 번도 안 걸린다.
+            // 반대로 "줄 어디에든 `|` 가 있으면 표일 수 있다"로 넓히면 모든 줄을 끝까지
+            // 붙들어야 하고, 그러면 스트리밍이 죽는다. 그 경계가 여기다.
+            match classify(&self.pending, eol, true) {
                 Decision::NeedMore => return,
                 Decision::Whole(kind) => {
                     self.whole(kind, sink);
@@ -185,6 +191,9 @@ impl Engine {
             if is_delimiter_row(&line) && self.table.begin(&held, &line) {
                 self.pending.clear();
                 self.scratch = line;
+                // 앞 블록이 인용문이었을 수 있다. 표를 시작하기 전에 닫는다 —
+                // 안 닫으면 `<blockquote>` 가 열린 채로 표가 들어간다.
+                self.close_block(sink);
                 self.state = State::Table;
                 return true;
             }

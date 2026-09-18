@@ -144,6 +144,26 @@ fn an_oversized_fence_keeps_its_tags_across_parts() {
     }
 }
 
+/// 표는 **`|` 로 시작하는 줄**이면 앞 블록이 무엇이든 시작한다.
+/// 빈 줄을 요구하면 인용문·리스트 바로 뒤에 붙은 표를 통째로 놓친다.
+#[test]
+fn a_table_can_start_right_after_any_block() {
+    let table = "|  | 값 |\n|---|---|\n| 가 | 1 |";
+
+    // 인용문 바로 뒤. 인용문을 닫고 표를 연다.
+    let out = tg(&format!("> 인용이 먼저다.\n{table}"));
+    assert!(out.starts_with("<blockquote>인용이 먼저다.</blockquote>"), "{out}");
+    assert!(out.contains("<pre>"), "{out}");
+    assert_eq!(out.matches("<blockquote>").count(), out.matches("</blockquote>").count());
+
+    // 리스트 바로 뒤, 문단 바로 뒤.
+    assert!(tg(&format!("- 항목\n{table}")).contains("<pre>"));
+    assert!(tg(&format!("문단이 먼저다.\n{table}")).contains("<pre>"));
+
+    // 문단 한가운데의 `|` 는 여전히 글자다.
+    assert_eq!(one("문단 a | b 가 있다", Channel::Plain), "문단 a | b 가 있다");
+}
+
 #[test]
 fn a_run_of_three_markers_leaves_nothing_behind() {
     // `***x***` 에서 두 개만 집으면 별표 하나가 출력에 남는다. 남은 마커는 실패다.
