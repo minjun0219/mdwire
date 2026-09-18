@@ -186,8 +186,11 @@ fn stray_markers(output: &str, channel: Channel, out: &mut Vec<Finding>) {
                 if run >= 2 {
                     let prev = if i > 0 { Some(ch[i - 1]) } else { None };
                     let next = ch.get(i + run).copied();
-                    let (left, right) = emphasis::flanking(prev, next);
-                    if left || right {
+                    // 강조가 될 수 있었던 자리인가 — 열 수 있거나, 앞이 공백이 아니어서
+                    // 닫는 자리일 수 있거나. `2 ** 3` 처럼 양쪽이 공백인 것은 글자다.
+                    let could_be_emphasis = emphasis::can_open(prev, next)
+                        || !prev.is_none_or(char::is_whitespace);
+                    if could_be_emphasis {
                         let from = i.saturating_sub(10);
                         let to = (i + run + 10).min(ch.len());
                         out.push(Finding {

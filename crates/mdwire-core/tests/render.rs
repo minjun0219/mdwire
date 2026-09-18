@@ -69,6 +69,29 @@ fn no_emphasis_marker_survives_into_tag_channels() {
     }
 }
 
+/// 한국어 출력에서 흔한 모양 — 강조 끝에 조사가 붙고 그 앞이 구두점이다.
+///
+/// CommonMark 은 "앞이 구두점이고 뒤가 글자면 닫을 수 없다"고 한다. 그 규칙을 그대로
+/// 따르면 넷 다 안 닫히고 **강조가 블록 끝까지 번져 뒤의 무관한 텍스트를 삼킨다.**
+#[test]
+fn emphasis_closes_even_when_a_punctuation_precedes_the_marker() {
+    assert_eq!(tg("**(중요)**이다"), "<b>(중요)</b>이다");
+    assert_eq!(tg("**끝.**이라서 그렇다"), "<b>끝.</b>이라서 그렇다");
+    assert_eq!(tg("**코드 `a`**였다"), "<b>코드 <code>a</code></b>였다");
+    assert_eq!(
+        tg("- 실패의 **99%가 `TIMEOUT`**이었고, 나머지는 달랐다"),
+        "• 실패의 <b>99%가 <code>TIMEOUT</code></b>이었고, 나머지는 달랐다"
+    );
+}
+
+/// 위 규칙을 풀면서도 **줄 첫머리의 여는 마커는 여전히 닫기가 아니어야 한다.**
+/// 여기가 뒤집히면 그게 이 저장소가 존재하는 이유인 바로 그 고장이다.
+#[test]
+fn a_marker_after_whitespace_still_never_closes() {
+    assert_eq!(tg("채널**이다.\n**신분 공개**가 대상"), "채널<b>이다.\n신분 공개</b>가 대상");
+    assert_eq!(tg("앞말 **강조**"), "앞말 <b>강조</b>");
+}
+
 #[test]
 fn a_run_of_three_markers_leaves_nothing_behind() {
     // `***x***` 에서 두 개만 집으면 별표 하나가 출력에 남는다. 남은 마커는 실패다.

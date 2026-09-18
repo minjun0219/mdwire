@@ -4,9 +4,9 @@
 //!
 //! 규칙은 셋이다.
 //!
-//! 1. **flanking 판정으로 열기/닫기를 가른다.** 줄 첫머리의 `**` 는 앞이 줄바꿈이므로
-//!    닫기가 될 수 없다. 정규식이 이걸 못 해서 뒤의 `**` 와 잘못 짝짓고, 강조 범위가
-//!    뒤집혔다(`DESIGN.md`).
+//! 1. **같은 종류가 열려 있고 앞이 공백이 아니면 닫는다.** 줄 첫머리의 `**` 는 앞이
+//!    줄바꿈이라 닫기가 될 수 없다. 정규식이 이걸 못 해서 뒤의 `**` 와 잘못 짝짓고,
+//!    강조 범위가 뒤집혔다(`DESIGN.md`).
 //! 2. **이미 열린 것과 같은 종류를 또 열려고 하면 버린다.** 겹쳐 열 이유가 없고,
 //!    이 자리에서 "닫기"로 읽는 순간 범위가 뒤집힌다.
 //! 3. **블록이 끝나면 열린 것을 닫는다**(`SPEC.md` 6절). 단, 양쪽이 다 공백이라
@@ -154,32 +154,34 @@ impl Inline {
                 continue;
             }
 
-            let (left, right) = flanking(prev, next);
+            let left = can_open(prev, next);
+            let after_space = prev.is_none_or(char::is_whitespace);
             let same = self.open.iter().rposition(|o| o.emph == emph);
+            let pad = v.pad && prev.is_some_and(is_wide);
 
-            match (right, same) {
-                (true, Some(at)) => self.close_at(at, out, v, next),
-                _ if left => {
-                    if same.is_none() {
-                        self.open.push(Open {
-                            emph,
-                            at: out.len(),
-                            run: take,
-                            ch: c,
-                            guess: false,
-                            pad: v.pad && prev.is_some_and(is_wide),
-                        });
-                    }
-                    // 같은 종류가 이미 열려 있으면 버린다. 규칙 2 — 여기서 닫으면 범위가 뒤집힌다.
-                }
-                (_, Some(at)) => self.close_at(at, out, v, next),
-                (_, None) => self.open.push(Open {
+            match same {
+                // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
+                Some(at) if !after_space => self.close_at(at, out, v, next),
+                // 앞이 공백인데 뒤로는 열 수 있다 — 줄 첫머리에 온 여는 마커다.
+                // **여기서 닫으면 강조 범위가 뒤집힌다.** 겹쳐 열지도 않고 버린다. 규칙 2.
+                Some(_) if left => {}
+                Some(at) => self.close_at(at, out, v, next),
+                None if left => self.open.push(Open {
+                    emph,
+                    at: out.len(),
+                    run: take,
+                    ch: c,
+                    guess: false,
+                    pad,
+                }),
+                // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
+                None => self.open.push(Open {
                     emph,
                     at: out.len(),
                     run: take,
                     ch: c,
                     guess: true,
-                    pad: v.pad && prev.is_some_and(is_wide),
+                    pad,
                 }),
             }
             i += take;
@@ -283,18 +285,29 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric()
 }
 
-/// CommonMark 의 좌/우 flanking 판정.
+/// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).
 ///
 /// `None` 은 블록의 끝(또는 시작)이고 공백처럼 다룬다. 줄 끝에서 다음 글자가 없는 것과
 /// 다음 줄이 이어지는 것은 같은 판정을 받아야 한다 — 그래야 wrap 이 결과를 바꾸지 않는다.
-fn flanking(prev: Option<char>, next: Option<char>) -> (bool, bool) {
-    let left = next.is_some_and(|n| {
+///
+/// # 닫는 쪽은 왜 우측 flanking 이 아닌가
+///
+/// CommonMark 은 **앞이 구두점이고 뒤가 글자면 닫지 못하게** 한다. 한국어 출력이 거기
+/// 정면으로 걸린다 — 강조 끝에 조사가 붙고 그 앞이 구두점인 모양이 흔하기 때문이다.
+///
+/// ```text
+/// **끝.**이라서     **(중요)**이다     **`코드`**였다
+/// ```
+///
+/// 이 규칙을 그대로 따르면 셋 다 닫히지 못하고 **강조가 블록 끝까지 번져 뒤의 무관한
+/// 텍스트를 삼킨다.** 우리 목적은 스펙 준수가 아니라 복구다. 그래서 닫는 판정은
+/// "같은 종류가 열려 있고 앞이 공백이 아니면 닫는다" 하나로 간다. 앞이 공백인 경우를
+/// 빼는 것이 핵심인데, 그게 줄 첫머리로 밀려난 **여는** 마커이고 거기서 닫으면
+/// 범위가 뒤집히기 때문이다(`DESIGN.md`).
+fn can_open(prev: Option<char>, next: Option<char>) -> bool {
+    next.is_some_and(|n| {
         !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| p.is_whitespace() || is_punct(p)))
-    });
-    let right = prev.is_some_and(|p| {
-        !p.is_whitespace() && (!is_punct(p) || next.is_none_or(|n| n.is_whitespace() || is_punct(n)))
-    });
-    (left, right)
+    })
 }
 
 fn is_punct(c: char) -> bool {

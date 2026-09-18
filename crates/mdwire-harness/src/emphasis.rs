@@ -280,31 +280,29 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             continue;
         }
 
-        let (left, right) = flanking(prev, next);
+        let left = can_open(prev, next);
+        let after_space = prev.is_none_or(char::is_whitespace);
         let open_same = stack.iter().rposition(|o| o.kind == kind);
 
-        if let (true, Some(at)) = (right, open_same) {
-            close_to(&mut stack, &mut root, at, scan);
-        } else if left {
-            if open_same.is_some() {
-                // 이미 같은 종류가 열려 있는데 또 여는 마커가 왔다.
-                // 줄바꿈에 걸린 강조에서 실제로 나오는 모양이다 — 겹쳐 열지 않고 버린다.
-                // 여기서 이 마커를 "닫기"로 읽으면 강조 범위가 뒤집힌다. 그 고장이 원본이다.
+        match open_same {
+            // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
+            Some(at) if !after_space => close_to(&mut stack, &mut root, at, scan),
+            // 이미 같은 종류가 열려 있는데 또 여는 마커가 왔다. 줄바꿈에 걸린 강조에서
+            // 실제로 나오는 모양이다 — 겹쳐 열지 않고 버린다. 여기서 "닫기"로 읽으면
+            // 강조 범위가 뒤집힌다. 그 고장이 원본이다.
+            Some(_) if left => {
                 if mode == Mode::Strict {
                     scan.unpaired.push(unpaired(&ch, i, take));
                 }
-            } else {
-                stack.push(Open { kind, marker, guess: false, buf: String::new() });
             }
-        } else if mode == Mode::Repair {
-            // 양쪽 다 공백이라 문법적으로는 강조가 아니다. 그래도 80열 wrap 이
-            // `... **\n강조**` 를 만들어 낸다. 일단 열어 두고, 안 닫히면 글자로 되돌린다.
-            match open_same {
-                Some(at) => close_to(&mut stack, &mut root, at, scan),
-                None => stack.push(Open { kind, marker, guess: true, buf: String::new() }),
+            Some(at) => close_to(&mut stack, &mut root, at, scan),
+            None if left => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
+            // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
+            // 일단 열어 두고, 안 닫히면 글자로 되돌린다.
+            None if mode == Mode::Repair => {
+                stack.push(Open { kind, marker, guess: true, buf: String::new() })
             }
-        } else {
-            push_text(&mut stack, &mut root, &marker);
+            None => push_text(&mut stack, &mut root, &marker),
         }
         i += take;
     }
@@ -405,19 +403,18 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric()
 }
 
-/// CommonMark 의 좌/우 flanking 판정. 강조 마커가 열 수 있는지 닫을 수 있는지를 가른다.
+/// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).
 ///
 /// **줄 첫머리의 `**` 가 닫기가 될 수 없다**는 것이 핵심이다. 앞이 줄바꿈(= 공백)이면
-/// 우측 flanking 이 아니고, 그래서 열기로만 읽힌다. 정규식 변환기가 이 판정을 못 해서
-/// 뒤의 `**` 와 잘못 짝지었고, 강조 범위가 뒤집혔다.
-pub(crate) fn flanking(prev: Option<char>, next: Option<char>) -> (bool, bool) {
-    let left = next.is_some_and(|n| {
+/// 열기로만 읽힌다. 정규식 변환기가 이 판정을 못 해서 뒤의 `**` 와 잘못 짝지었고,
+/// 강조 범위가 뒤집혔다.
+///
+/// 닫는 쪽은 우측 flanking 을 쓰지 않는다 — 이유는 코어의 같은 이름 함수에 적어 뒀다.
+/// 규칙은 코어와 같고 구현만 따로다.
+pub(crate) fn can_open(prev: Option<char>, next: Option<char>) -> bool {
+    next.is_some_and(|n| {
         !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| p.is_whitespace() || is_punct(p)))
-    });
-    let right = prev.is_some_and(|p| {
-        !p.is_whitespace() && (!is_punct(p) || next.is_none_or(|n| n.is_whitespace() || is_punct(n)))
-    });
-    (left, right)
+    })
 }
 
 pub(crate) fn is_punct(c: char) -> bool {
