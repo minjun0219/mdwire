@@ -386,27 +386,44 @@ impl Engine {
         self.wrote = true;
     }
 
+    /// **지금까지 내보낸 것에 열려 있는 블록 마크업을 닫아 붙인다.** 상태는 건드리지 않는다.
+    ///
+    /// 인라인 강조는 짝이 맞을 때까지 안에 붙들어 두므로 이미 균형이 맞다. 하지만 블록의
+    /// 여는 마크업(`<blockquote>`·`<pre>`·헤딩의 `<b>`)은 그 블록이 끝나기 전에 나간다 —
+    /// 코드블록 하나가 끝날 때까지 출력을 멈출 수는 없기 때문이다. 그래서 **누적본을
+    /// 중간에 그대로 채널로 보내면 열린 태그가 남는다.** 보내기 직전에 이걸 덧붙이면 된다.
+    pub fn close_open(&self, out: &mut String) {
+        self.block_close_markup(out);
+    }
+
+    /// 블록의 닫는 마크업. 인라인 정리는 하지 않는다.
+    fn block_close_markup(&self, out: &mut String) {
+        match self.state {
+            State::Heading => {
+                if self.v.max_heading() == 0 && !self.v.is_plain() {
+                    out.push_str(self.v.close(Emph::Bold));
+                }
+            }
+            State::Quote => out.push_str(self.v.quote_close()),
+            State::Fence => self.v.verbatim_close(&self.fence.info, out),
+            State::None | State::Para | State::List | State::Table => {}
+        }
+    }
+
     /// 블록을 닫는다. 열린 인라인을 확정하고, 블록의 닫는 마크업을 붙이고, 경계를 알린다.
     fn close_block<S: Sink>(&mut self, sink: &mut S) {
         match self.state {
             State::None => {}
-            State::Para | State::List => {
+            State::Para | State::List | State::Heading | State::Quote => {
                 self.inline.finish_block(&mut self.out, &self.v);
-            }
-            State::Heading => {
-                self.inline.finish_block(&mut self.out, &self.v);
-                if self.v.max_heading() == 0 && !self.v.is_plain() {
-                    self.out.push_str(self.v.close(Emph::Bold));
-                }
-            }
-            State::Quote => {
-                self.inline.finish_block(&mut self.out, &self.v);
-                self.out.push_str(self.v.quote_close());
+                let mut out = std::mem::take(&mut self.out);
+                self.block_close_markup(&mut out);
+                self.out = out;
             }
             State::Fence => {
-                let info = std::mem::take(&mut self.fence.info);
-                self.v.verbatim_close(&info, &mut self.out);
-                self.fence.info = info;
+                let mut out = std::mem::take(&mut self.out);
+                self.block_close_markup(&mut out);
+                self.out = out;
             }
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);

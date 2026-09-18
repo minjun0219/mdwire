@@ -160,6 +160,34 @@ impl Streamer {
         let mut sink = StringSink(out);
         self.engine.finish(&mut sink);
     }
+
+    /// **지금까지 받은 것을 그대로 보내도 되게 만든다.** 상태는 건드리지 않으므로
+    /// 붙인 뒤에도 스트리밍은 이어진다.
+    ///
+    /// 강조는 짝이 맞을 때까지 안에 붙들려 있어 이미 균형이 맞지만, 블록의 여는
+    /// 마크업(`<blockquote>`·`<pre>`·헤딩의 `<b>`)은 블록이 끝나기 전에 나간다 —
+    /// 코드블록이 끝날 때까지 출력을 멈추면 스트리밍이 아니기 때문이다. 누적본을
+    /// 중간에 채널로 보내는 쪽(토큰이 오는 대로 메시지를 편집하는 경우)은 보내기
+    /// 직전에 이걸 덧붙인다. **누적본 자체에는 넣지 않는다** — 다음 조각이 이어진다.
+    ///
+    /// ```
+    /// use mdwire::{Channel, CjkPolicy, Streamer};
+    ///
+    /// let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    /// let mut acc = String::new();
+    /// s.push_into("> 인용이 시작되고", &mut acc);
+    ///
+    /// let mut snapshot = acc.clone();
+    /// s.close_open(&mut snapshot);          // 지금 보내도 되는 모양
+    /// assert_eq!(snapshot, "<blockquote>인용이 시작되고</blockquote>");
+    ///
+    /// s.push_into("\n> 이어진다\n", &mut acc);  // 누적본은 그대로 이어진다
+    /// s.finish_into(&mut acc);
+    /// assert_eq!(acc, "<blockquote>인용이 시작되고\n이어진다</blockquote>");
+    /// ```
+    pub fn close_open(&self, out: &mut String) {
+        self.engine.close_open(out);
+    }
 }
 
 /// 완성된 문서를 한 번에 변환한다. 한도를 넘으면 안전한 지점에서 나눈다.

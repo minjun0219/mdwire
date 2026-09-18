@@ -270,6 +270,73 @@ fn streaming_never_emits_half_a_tag() {
     }
 }
 
+/// **스트리밍 도중 아무 지점에서 끊어도 그 시점의 누적본을 보낼 수 있어야 한다.**
+///
+/// 인라인은 붙들려서 이미 균형이 맞지만 블록의 여는 마크업은 먼저 나간다.
+/// `close_open` 을 덧붙인 결과가 모든 지점에서 균형이 맞는지 본다 — 안 맞으면
+/// 그 시점에 보낸 메시지를 채널이 400 으로 거절한다.
+#[test]
+fn any_mid_stream_snapshot_is_sendable() {
+    let input = "# 제목\n\n> 인용 안의 **강조**와\n> 이어지는 줄\n\n```rust\nlet a = 1;\nlet b = 2;\n```\n\n| 열 | 값 |\n|---|---|\n| 가 | 1 |\n\n끝 문단 **굵게**";
+    let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    let mut acc = String::new();
+    let mut checked = 0;
+    let mut raw_broken = 0;
+
+    for c in input.chars() {
+        let mut piece = [0u8; 4];
+        s.push_into(c.encode_utf8(&mut piece), &mut acc);
+        if !balanced(&acc) {
+            raw_broken += 1;
+        }
+        let mut snapshot = acc.clone();
+        s.close_open(&mut snapshot);
+        assert!(balanced(&snapshot), "여기서 끊으면 못 보낸다: {snapshot:?}");
+        checked += 1;
+    }
+    s.finish_into(&mut acc);
+    assert!(balanced(&acc));
+    assert!(checked > 50, "충분히 많은 지점을 봐야 한다");
+    // close_open 없이는 실제로 깨지는 지점이 있어야 한다.
+    // 하나도 없으면 이 테스트는 아무것도 지키지 않는 것이다.
+    assert!(raw_broken > 0, "누적본이 늘 균형이 맞다면 close_open 은 필요 없는 API 다");
+}
+
+/// 태그가 짝이 맞고 순서대로 닫히는가. 채널이 보는 것과 같은 잣대다.
+fn balanced(html: &str) -> bool {
+    let mut stack: Vec<String> = Vec::new();
+    let ch: Vec<char> = html.chars().collect();
+    let mut i = 0;
+    while i < ch.len() {
+        if ch[i] != '<' {
+            i += 1;
+            continue;
+        }
+        let closing = ch.get(i + 1) == Some(&'/');
+        let from = if closing { i + 2 } else { i + 1 };
+        let mut j = from;
+        while j < ch.len() && (ch[j].is_ascii_alphanumeric() || ch[j] == '-') {
+            j += 1;
+        }
+        let name: String = ch[from..j].iter().collect();
+        while j < ch.len() && ch[j] != '>' {
+            j += 1;
+        }
+        if j >= ch.len() {
+            return false; // 태그가 반으로 잘렸다
+        }
+        if closing {
+            if stack.pop().as_deref() != Some(name.as_str()) {
+                return false;
+            }
+        } else {
+            stack.push(name);
+        }
+        i = j + 1;
+    }
+    stack.is_empty()
+}
+
 #[test]
 fn empty_input_produces_nothing() {
     assert!(render("", Channel::TelegramHtml, CjkPolicy::Auto).is_empty());

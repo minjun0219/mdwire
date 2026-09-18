@@ -11,7 +11,10 @@
 //!
 //! const s = new Streamer("slack-markdown", "auto");
 //! let out = "";
-//! for await (const chunk of stream) out += s.push(chunk);
+//! for await (const chunk of stream) {
+//!   out += s.push(chunk);
+//!   await edit(out + s.closeOpen());   // 중간에 보낼 때만 닫아 붙인다
+//! }
 //! out += s.finish();
 //! ```
 //!
@@ -60,6 +63,22 @@ impl Streamer {
         self.buf.clear();
         self.inner.push_into(chunk, &mut self.buf);
         self.buf.clone()
+    }
+
+    /// **지금까지 받은 것을 그대로 보내려면 이걸 뒤에 붙인다.**
+    ///
+    /// 상태는 건드리지 않으므로 붙인 뒤에도 스트리밍은 이어진다. 누적본 자체에는
+    /// 넣지 말고, 보내기 직전에만 붙인다. 토큰이 오는 대로 메시지를 편집하는 쪽이 쓴다.
+    ///
+    /// ```js
+    /// acc += s.push(chunk);
+    /// await edit(acc + s.closeOpen());   // 누적본은 그대로 둔다
+    /// ```
+    #[wasm_bindgen(js_name = closeOpen)]
+    pub fn close_open(&self) -> String {
+        let mut out = String::new();
+        self.inner.close_open(&mut out);
+        out
     }
 
     /// 입력이 끝났다. 남은 것을 내보내고 열린 마크업을 닫는다.
