@@ -239,7 +239,9 @@ fn strip_verbatim(text: &str, channel: Channel, input: &str) -> String {
     }
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find("<pre").or_else(|| rest.find("<code")) {
+    // **먼저 나오는 쪽을 집는다.** `<pre` 를 우선하면 그 앞에 있던 `<code>` 구간이
+    // 통째로 살아남는다 — 그 안의 `packages/**` 같은 글로브가 남은 마커로 신고된다.
+    while let Some(start) = [rest.find("<pre"), rest.find("<code")].into_iter().flatten().min() {
         out.push_str(&rest[..start]);
         let tail = &rest[start..];
         let close = if tail.starts_with("<pre") { "</pre>" } else { "</code>" };
