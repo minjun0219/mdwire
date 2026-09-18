@@ -303,7 +303,8 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             (_, 1) => Kind::Italic,
             _ => Kind::Bold,
         };
-        // 취소선은 `~~` 다. 홀로 선 `~` 는 글자다 — 규칙은 코어와 같다.
+        // 취소선은 `~~` 다. 홀로 선 `~` 는 글자다(GFM · 슬랙 `markdown_text` 둘 다).
+        // 규칙은 코어와 같다.
         if c == '~' && take < 2 {
             push_char(&mut stack, &mut root, c);
             i += 1;

@@ -48,9 +48,13 @@ impl Vocab {
             (Channel::TelegramHtml, Emph::Strike) => "<s>",
             (Channel::TelegramHtml, Emph::Code) => "<code>",
             (Channel::Plain, _) => "",
+            // 취소선 표기는 채널마다 갈린다. 슬랙 `markdown_text` 는 표준 마크다운이라
+            // `~~` 고, 레거시 `mrkdwn` 과 텔레그램 MarkdownV2 는 `~` 하나다.
+            // 하나로 뭉뚱그리면 한쪽은 취소선이 안 걸리고 물결표만 보인다.
+            (Channel::SlackMrkdwn | Channel::TelegramMarkdownV2, Emph::Strike) => "~",
+            (_, Emph::Strike) => "~~",
             (_, Emph::Bold) => "**",
             (_, Emph::Italic) => "_",
-            (_, Emph::Strike) => "~",
             (_, Emph::Code) => "`",
         }
     }
@@ -166,7 +170,8 @@ impl Vocab {
     /// 헤딩이 쓸 수 있는 가장 깊은 레벨. 구문이 없는 채널은 0.
     pub fn max_heading(&self) -> usize {
         match self.channel {
-            // 슬랙은 `###` 까지만 헤딩으로 읽는다.
+            // 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다.
+            // 그러니 더 깊이 적을 값이 없다 — 셋에서 끊는다.
             Channel::SlackMarkdown => 3,
             Channel::TelegramHtml | Channel::TelegramMarkdownV2 | Channel::SlackMrkdwn
             | Channel::Plain => 0,

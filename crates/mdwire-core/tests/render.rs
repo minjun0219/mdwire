@@ -107,12 +107,25 @@ fn emphasis_spans_a_wrapped_list_item() {
     );
 }
 
-/// 물결표는 한국어에서 근사값과 범위에 늘 쓰인다. 취소선은 `~~` 여야 한다.
+/// 물결표는 한국어에서 근사값과 범위에 늘 쓰인다. 취소선 입력은 `~~` 여야 한다 —
+/// GFM 도 슬랙 `markdown_text` 도 그렇게 적는다.
 #[test]
 fn a_lone_tilde_is_text_not_strikethrough() {
     assert_eq!(tg("주행 ~40km 까지 ~22km 부족하다"), "주행 ~40km 까지 ~22km 부족하다");
     assert_eq!(tg("충전은 5~6월이다"), "충전은 5~6월이다");
     assert_eq!(tg("~~진짜 취소선~~ 이다"), "<s>진짜 취소선</s> 이다");
+}
+
+/// **취소선 표기는 채널마다 갈린다.** 하나로 뭉뚱그리면 한쪽은 취소선이 안 걸리고
+/// 물결표만 보인다 — 슬랙 `markdown_text` 는 표준 마크다운이라 `~~` 를 받는다.
+#[test]
+fn strikethrough_uses_each_channels_own_syntax() {
+    let input = "~~지난 계획~~ 은 접는다";
+    assert_eq!(tg(input), "<s>지난 계획</s> 은 접는다");
+    assert_eq!(one(input, Channel::SlackMarkdown), "~~지난 계획~~ 은 접는다");
+    assert_eq!(one(input, Channel::Plain), "지난 계획 은 접는다");
+    // 취소선 안의 강조도 살아남는다.
+    assert_eq!(tg("~~취소선 안의 **굵게**~~"), "<s>취소선 안의 <b>굵게</b></s>");
 }
 
 /// 한도를 넘는 코드펜스를 쪼갤 때, 조각마다 `<pre><code class=…>` 가 제대로 닫히고
