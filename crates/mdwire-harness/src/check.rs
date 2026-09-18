@@ -81,7 +81,7 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
 
     over_limit(output, channel, &mut findings);
     emphasis_range(input, output, channel, &mut findings);
-    stray_markers(output, channel, &mut findings);
+    stray_markers(input, output, channel, &mut findings);
     if matches!(channel, Channel::TelegramHtml) {
         html_tags(output, &mut findings);
     }
@@ -128,30 +128,31 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
                 pool.remove(at);
             }
             None => {
-                let near = pool
-                    .iter()
-                    .filter(|g| g.kind == w.kind)
-                    .map(|g| g.text.as_str())
-                    .max_by_key(|t| common_prefix(t, &w.text));
-                out.push(Finding {
-                    rule: Rule::EmphasisRange,
-                    detail: match near {
-                        Some(n) => format!(
-                            "{} 범위가 다르다\n      원문: {}\n      출력: {}",
-                            w.kind.label(),
-                            w.text,
-                            n
-                        ),
-                        None => format!("{} 범위가 출력에 없다: {}", w.kind.label(), w.text),
-                    },
-                });
+                // **어느 쪽으로 어긋났는지**가 진단의 전부다. 비슷한 것을 보여 주는 것으로는
+                // 출력이 더 넓게 잡았는지 좁게 잡았는지 알 수 없고, 그 둘은 원인이 다르다.
+                let wider = pool.iter().find(|g| g.kind == w.kind && g.text.contains(&w.text));
+                let narrower = pool.iter().find(|g| g.kind == w.kind && w.text.contains(&g.text));
+                let detail = match (wider, narrower) {
+                    (Some(g), _) => format!(
+                        "{} 범위가 원문보다 넓다\n      원문: {}\n      출력: {}",
+                        w.kind.label(),
+                        w.text,
+                        g.text
+                    ),
+                    (None, Some(g)) => format!(
+                        "{} 범위가 원문보다 좁다\n      원문: {}\n      출력: {}",
+                        w.kind.label(),
+                        w.text,
+                        g.text
+                    ),
+                    (None, None) => {
+                        format!("{} 범위가 출력에 아예 없다: {}", w.kind.label(), w.text)
+                    }
+                };
+                out.push(Finding { rule: Rule::EmphasisRange, detail });
             }
         }
     }
-}
-
-fn common_prefix(a: &str, b: &str) -> usize {
-    a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count()
 }
 
 /// 변환되지 않은 마커가 남았는가.
@@ -159,7 +160,7 @@ fn common_prefix(a: &str, b: &str) -> usize {
 /// **`**` 가 출력에 남으면 그건 실패다.** 정상이라면 전부 태그나 채널 문법으로 바뀌었어야
 /// 한다. 원본 고장이 몇 달을 간 이유가 정확히 "틀려도 채널이 200 을 준다"였고,
 /// 그래서 이 불변식을 테스트에 박아 둔다.
-fn stray_markers(output: &str, channel: Channel, out: &mut Vec<Finding>) {
+fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
         Channel::SlackMarkdown | Channel::SlackMrkdwn => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
@@ -173,7 +174,7 @@ fn stray_markers(output: &str, channel: Channel, out: &mut Vec<Finding>) {
             }
         }
         _ => {
-            let text = strip_verbatim(&output.replace(PART_SEPARATOR, "\n"), channel);
+            let text = strip_verbatim(&output.replace(PART_SEPARATOR, "\n"), channel, input);
             let ch: Vec<char> = text.chars().collect();
             let mut i = 0;
             while i < ch.len() {
@@ -186,6 +187,15 @@ fn stray_markers(output: &str, channel: Channel, out: &mut Vec<Finding>) {
                 if run >= 2 {
                     let prev = if i > 0 { Some(ch[i - 1]) } else { None };
                     let next = ch.get(i + run).copied();
+                    // 식별자 안의 밑줄은 강조가 아니다 — `GUID-1234__GUID-5678` 처럼
+                    // 글자 사이에 낀 `__` 는 파서도 글자로 둔다. 같은 예외를 여기도 둔다.
+                    if c == '_'
+                        && prev.is_some_and(char::is_alphanumeric)
+                        && next.is_some_and(char::is_alphanumeric)
+                    {
+                        i += run;
+                        continue;
+                    }
                     // 강조가 될 수 있었던 자리인가 — 열 수 있거나, 앞이 공백이 아니어서
                     // 닫는 자리일 수 있거나. `2 ** 3` 처럼 양쪽이 공백인 것은 글자다.
                     let could_be_emphasis = emphasis::can_open(prev, next)
@@ -210,7 +220,20 @@ fn stray_markers(output: &str, channel: Channel, out: &mut Vec<Finding>) {
 }
 
 /// 코드·고정폭 구간을 들어낸다. 그 안의 `*` 는 글자이지 마커가 아니다.
-fn strip_verbatim(text: &str, channel: Channel) -> String {
+///
+/// Plain 채널은 코드 표시가 출력에 안 남으므로(마크업을 지우는 것이 일이다)
+/// **입력에서 코드였던 덩어리를 찾아 지운다.** `wiki/**/*.md` 같은 glob 이
+/// 코드 스팬 안에 들어 있는 문서가 실제로 있다.
+fn strip_verbatim(text: &str, channel: Channel, input: &str) -> String {
+    if channel == Channel::Plain {
+        let mut out = text.to_string();
+        for chunk in verbatim_chunks(input) {
+            if chunk.contains('*') || chunk.contains('_') || chunk.contains('~') {
+                out = out.replace(&chunk, " ");
+            }
+        }
+        return out;
+    }
     if channel != Channel::TelegramHtml {
         return text.to_string();
     }
@@ -227,6 +250,35 @@ fn strip_verbatim(text: &str, channel: Channel) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// 입력에서 코드였던 덩어리들. 코드펜스 본문과 인라인 코드 스팬.
+fn verbatim_chunks(input: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut fence = false;
+    for line in input.lines() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            fence = !fence;
+            continue;
+        }
+        if fence {
+            chunks.push(line.to_string());
+            continue;
+        }
+        let mut rest = line;
+        while let Some(start) = rest.find('`') {
+            let after = &rest[start + 1..];
+            match after.find('`') {
+                Some(end) => {
+                    chunks.push(after[..end].to_string());
+                    rest = &after[end + 1..];
+                }
+                None => break,
+            }
+        }
+    }
+    chunks
 }
 
 /// 연 태그를 닫았는가, 채널이 받는 태그만 썼는가, 글자로서의 `<`·`&` 를 이스케이프했는가.

@@ -77,7 +77,12 @@ pub fn normalize_ws(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut space = false;
     for c in s.chars() {
-        if c.is_whitespace() || c == '\u{200b}' {
+        // 폭 없는 공백은 **지운다.** 공백으로 접으면 `굵은 것`+ZWSP+`이` 가
+        // `굵은 것 이` 가 되어, CJK 패딩을 넣은 출력이 입력과 안 맞는 것으로 나온다.
+        if c == '\u{200b}' {
+            continue;
+        }
+        if c.is_whitespace() {
             space = !out.is_empty();
         } else {
             if space {
@@ -99,6 +104,9 @@ fn blocks(src: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut fence: Option<(char, usize)> = None;
+    // 표는 **상태로 따라간다.** 구분선 옆줄만 보면 셋째 줄부터는 표인 줄 모르고
+    // 셀 안의 강조를 산문으로 읽는다 — 그러면 정상 출력이 통째로 고장으로 신고된다.
+    let mut in_table = false;
     let lines: Vec<&str> = src.split('\n').collect();
 
     for (i, raw) in lines.iter().enumerate() {
@@ -116,7 +124,19 @@ fn blocks(src: &str) -> Vec<String> {
             fence = Some((m, l));
             continue;
         }
-        if is_table_line(line, lines.get(i + 1).copied(), i.checked_sub(1).and_then(|p| lines.get(p)).copied()) {
+        if in_table {
+            if !trimmed.is_empty() && line.contains('|') {
+                continue;
+            }
+            in_table = false;
+        }
+        if is_delimiter_row(line) {
+            flush(&mut cur, &mut out);
+            in_table = true;
+            continue;
+        }
+        // 머리글 줄. 다음 줄이 구분선이면 표의 시작이다.
+        if line.contains('|') && lines.get(i + 1).copied().is_some_and(is_delimiter_row) {
             flush(&mut cur, &mut out);
             continue;
         }
@@ -126,6 +146,12 @@ fn blocks(src: &str) -> Vec<String> {
             // 다른 이 선택을 고장으로 신고하지 않으려고 양쪽에서 똑같이 뺀다.
             flush(&mut cur, &mut out);
             continue;
+        }
+        // **리스트 항목은 각각이 한 블록이다.** 항목 여럿을 한 덩어리로 묶으면
+        // 한 항목의 안 닫힌 강조가 다음 항목까지 번진 것으로 읽힌다. 코어는 항목이
+        // 끝날 때 인라인을 확정하므로, 여기서도 똑같이 끊어야 같은 답이 나온다.
+        if is_list_item(trimmed) {
+            flush(&mut cur, &mut out);
         }
         if !cur.is_empty() {
             cur.push('\n');
@@ -154,19 +180,6 @@ fn is_fence(trimmed: &str) -> Option<(char, usize)> {
     None
 }
 
-/// 표의 줄인가. 앞뒤 줄을 봐서 구분선이 있는 덩어리일 때만 참이다 —
-/// 산문에 낀 `|` 하나를 표로 오인하면 그 문단의 강조를 통째로 놓친다.
-fn is_table_line(line: &str, next: Option<&str>, prev: Option<&str>) -> bool {
-    if !line.contains('|') {
-        return false;
-    }
-    let sep = |s: Option<&str>| s.is_some_and(is_delimiter_row);
-    is_delimiter_row(line) || sep(next) || sep(prev) || {
-        // 구분선이 두 줄 위일 수도 있다(헤더 · 구분선 · 본문들).
-        false
-    }
-}
-
 fn is_delimiter_row(line: &str) -> bool {
     let t = line.trim();
     t.contains('-')
@@ -191,6 +204,20 @@ fn strip_block_marker(line: &str) -> &str {
         }
     }
     t
+}
+
+/// 리스트 항목의 시작인가.
+fn is_list_item(trimmed: &str) -> bool {
+    for m in ["- ", "* ", "+ ", "• "] {
+        if trimmed.starts_with(m) {
+            return true;
+        }
+    }
+    let digits = trimmed.chars().take_while(|c| c.is_ascii_digit()).count();
+    digits > 0 && {
+        let rest = &trimmed[digits..];
+        rest.starts_with(". ") || rest.starts_with(") ")
+    }
 }
 
 /// 구분선인가. `***` 는 강조가 아니다 — 이걸 안 거르면 구분선을 굵게 만든 줄 알고
@@ -245,13 +272,20 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         }
 
         // 링크의 URL 부분은 본문이 아니다. `[텍스트](url)` 에서 괄호 안을 건너뛴다.
-        if c == ']' && ch.get(i + 1) == Some(&'(') {
-            if let Some(end) = ch[i + 2..].iter().position(|&x| x == ')') {
-                i += 2 + end + 1;
-                continue;
-            }
+        //
+        // **대괄호를 무조건 건너뛰면 안 된다.** `[[위키링크]]` 처럼 링크가 아닌 대괄호가
+        // 본문에 그대로 남는 문서가 있고, 그걸 삼키면 입력 쪽 텍스트만 짧아져서
+        // 출력과 안 맞는다 — 정상 출력을 고장으로 신고하게 된다.
+        if c == ']' && ch.get(i + 1) == Some(&'(') && link_end(&ch, i).is_some() {
+            i = link_end(&ch, i).expect("방금 확인했다");
+            continue;
         }
         if c == '[' {
+            if opens_link(&ch, i) {
+                i += 1;
+                continue;
+            }
+            push_char(&mut stack, &mut root, c);
             i += 1;
             continue;
         }
@@ -269,6 +303,13 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             (_, 1) => Kind::Italic,
             _ => Kind::Bold,
         };
+        // 취소선은 `~~` 다. 홀로 선 `~` 는 글자다 — 규칙은 코어와 같다.
+        if c == '~' && take < 2 {
+            push_char(&mut stack, &mut root, c);
+            i += 1;
+            continue;
+        }
+
         let marker: String = ch[i..i + take].iter().collect();
         let prev = if i > 0 { Some(ch[i - 1]) } else { None };
         let next = ch.get(i + take).copied();
@@ -360,6 +401,27 @@ fn push_text(stack: &mut [Open], root: &mut String, s: &str) {
         Some(o) => o.buf.push_str(s),
         None => root.push_str(s),
     }
+}
+
+/// `](` 뒤의 닫는 괄호 다음 위치.
+fn link_end(ch: &[char], at: usize) -> Option<usize> {
+    ch[at + 2..].iter().position(|&x| x == ')').map(|p| at + 2 + p + 1)
+}
+
+/// 이 `[` 가 진짜 링크를 여는가 — 뒤에 `](…)` 가 있는가.
+fn opens_link(ch: &[char], at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut j = at + 1;
+    while j < ch.len() {
+        match ch[j] {
+            '[' => depth += 1,
+            ']' if depth == 0 => break,
+            ']' => depth -= 1,
+            _ => {}
+        }
+        j += 1;
+    }
+    ch.get(j) == Some(&']') && ch.get(j + 1) == Some(&'(') && link_end(ch, j).is_some()
 }
 
 pub(crate) fn run_len(ch: &[char], at: usize, c: char) -> usize {
