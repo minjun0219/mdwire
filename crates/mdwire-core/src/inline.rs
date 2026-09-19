@@ -102,8 +102,14 @@ impl Inline {
                         self.close_at(self.open.len() - 1, out, v, line.get(i + run).copied());
                         i += run;
                     } else {
-                        v.escape_char(line[i], out);
-                        i += 1;
+                        // **안 맞는 백틱 런은 통째로 건너뛴다.** 한 글자씩 넘기면 길이 N+1 인
+                        // 런 안에 길이 N 인 런이 들어 있는 꼴이 되어, 그 안쪽에서 잘못 닫는다.
+                        // `` ` foo `` bar ` `` 의 내용이 "foo `" 로 잘리던 것이 이것이다.
+                        let step = run.max(1);
+                        for k in 0..step {
+                            v.escape_char(line[i + k], out);
+                        }
+                        i += step;
                     }
                     continue;
                 }

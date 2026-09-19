@@ -61,6 +61,17 @@ fn underscores_inside_identifiers_survive() {
     assert_eq!(tg("plain_text_name 은 그대로다"), "plain_text_name 은 그대로다");
 }
 
+/// 닫는 백틱을 찾을 때 **안 맞는 런은 통째로 건너뛴다.**
+///
+/// 한 글자씩 넘기면 길이 N+1 인 런 안에 길이 N 인 런이 들어 있는 꼴이 되어 그 안쪽에서
+/// 잘못 닫힌다. CommonMark 스펙 테스트의 입력을 빌려 돌리다 잡았다.
+#[test]
+fn a_code_span_closes_on_a_run_of_the_same_length() {
+    assert_eq!(tg("` foo `` bar `"), "<code> foo `` bar </code>");
+    assert_eq!(tg("` `` `"), "<code> `` </code>");
+    assert_eq!(tg("``백틱 ` 포함`` 밖"), "<code>백틱 ` 포함</code> 밖");
+}
+
 #[test]
 fn markers_inside_code_are_text() {
     assert_eq!(tg("`**굵지 않다**` 그리고 밖"), "<code>**굵지 않다**</code> 그리고 밖");
@@ -198,6 +209,40 @@ fn crlf_input_does_not_leak_carriage_returns() {
 #[test]
 fn checkboxes_are_not_dressed_up() {
     assert_eq!(tg("- [ ] 안 한 일\n- [x] 한 일"), "• [ ] 안 한 일\n• [x] 한 일");
+}
+
+/// CJK 전반에서 닫는 마커가 먹어야 한다.
+///
+/// CommonMark 는 "앞이 구두점이고 뒤가 글자면 닫을 수 없다"고 정해 놨고, 중국어·일본어·
+/// 한국어가 거기 정면으로 걸린다 — 셋 다 경계에 공백을 안 넣기 때문이다. 표준화 논의가
+/// 진행 중인 알려진 결함이다(CommonMark 의 CJK-friendly 개정안).
+#[test]
+fn emphasis_closes_next_to_cjk_punctuation() {
+    // 일본어 — 개정안 문서가 대표 예로 드는 모양
+    assert_eq!(
+        tg("**強調記号として認識されない。**この文のせいで。"),
+        "<b>強調記号として認識されない。</b>この文のせいで。"
+    );
+    assert_eq!(tg("**「引用符」**です。"), "<b>「引用符」</b>です。");
+    assert_eq!(tg("**（注釈）**は重要だ。"), "<b>（注釈）</b>は重要だ。");
+    // 중국어
+    assert_eq!(tg("**中文加粗，**后面接着中文。"), "<b>中文加粗，</b>后面接着中文。");
+    // 한국어
+    assert_eq!(tg("**끝.**이라서 그렇다."), "<b>끝.</b>이라서 그렇다.");
+}
+
+/// CJK 판정은 **표시 폭과 다른 질문**이다. 한 함수로 쓰면 두 군데가 틀린다.
+#[test]
+fn cjk_padding_follows_cjk_not_width() {
+    let pad = |s: &str| render(s, Channel::SlackMarkdown, CjkPolicy::Auto).remove(0);
+    // 반각 가타카나 — 폭은 1이지만 CJK 다. 끼워야 한다
+    assert_eq!(pad("**강조**ｱｲｳ"), "**강조**\u{200b}ｱｲｳ");
+    // 이모지 — 폭은 2지만 CJK 가 아니다. 끼우면 안 된다
+    assert_eq!(pad("**강조**🚀"), "**강조**🚀");
+    // 조합형(NFD) 한글 — 중성·종성은 폭 0이어도 CJK 다
+    assert_eq!(pad("**강조**\u{1103}\u{1161}"), "**강조**\u{200b}\u{1103}\u{1161}");
+    // 영문 옆에는 안 끼운다 — 복사할 때 딸려간다
+    assert_eq!(pad("**강조**abc"), "**강조**abc");
 }
 
 // ── 블록 매핑 (SPEC 8절) ────────────────────────────────────────────────
