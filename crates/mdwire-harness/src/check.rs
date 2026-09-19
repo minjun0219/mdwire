@@ -67,6 +67,16 @@ const TELEGRAM_TAGS: &[&str] = &[
     "tg-spoiler", "span",
 ];
 
+/// 닫는 짝이 없는 HTML 요소. 열린 채로 두는 것이 정상이다.
+///
+/// 텔레그램은 이것들도 안 받으므로 "허용 안 되는 태그"로는 걸린다. 다만 그걸 다시
+/// "안 닫혔다"로 세면 같은 사실을 두 번 신고하는 것이고, `<br>` 을 내보내는 구현이
+/// 실제보다 나빠 보인다.
+const VOID_TAGS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
+    "source", "track", "wbr",
+];
+
 /// 출력 조각 구분자. CLI 와 같은 규약이다(`SPEC.md` 5절).
 pub const PART_SEPARATOR: char = '\0';
 
@@ -313,7 +323,7 @@ fn html_tags(output: &str, out: &mut Vec<Finding>) {
                                 detail: format!("열린 적 없는 </{name}>"),
                             }),
                         }
-                    } else {
+                    } else if !VOID_TAGS.contains(&name.as_str()) {
                         stack.push(name);
                     }
                     i = end;
