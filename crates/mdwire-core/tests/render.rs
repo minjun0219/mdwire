@@ -61,6 +61,17 @@ fn underscores_inside_identifiers_survive() {
     assert_eq!(tg("plain_text_name 은 그대로다"), "plain_text_name 은 그대로다");
 }
 
+/// 닫는 백틱을 찾을 때 **안 맞는 런은 통째로 건너뛴다.**
+///
+/// 한 글자씩 넘기면 길이 N+1 인 런 안에 길이 N 인 런이 들어 있는 꼴이 되어 그 안쪽에서
+/// 잘못 닫힌다. CommonMark 스펙 테스트의 입력을 빌려 돌리다 잡았다.
+#[test]
+fn a_code_span_closes_on_a_run_of_the_same_length() {
+    assert_eq!(tg("` foo `` bar `"), "<code> foo `` bar </code>");
+    assert_eq!(tg("` `` `"), "<code> `` </code>");
+    assert_eq!(tg("``백틱 ` 포함`` 밖"), "<code>백틱 ` 포함</code> 밖");
+}
+
 #[test]
 fn markers_inside_code_are_text() {
     assert_eq!(tg("`**굵지 않다**` 그리고 밖"), "<code>**굵지 않다**</code> 그리고 밖");
