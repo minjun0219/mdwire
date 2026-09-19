@@ -31,6 +31,8 @@ pub enum Rule {
     TableMisaligned,
     /// 입력이 비지 않았는데 출력이 비었는가.
     EmptyOutput,
+    /// 입력에 있던 낱말이 출력에서 사라졌는가.
+    TextLoss,
 }
 
 impl Rule {
@@ -44,6 +46,7 @@ impl Rule {
             Rule::OverLimit => "한도 초과",
             Rule::TableMisaligned => "표 열 어긋남",
             Rule::EmptyOutput => "빈 출력",
+            Rule::TextLoss => "내용 손실",
         }
     }
 }
@@ -86,7 +89,169 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
         html_tags(output, &mut findings);
     }
     tables(input, output, channel, &mut findings);
+    text_loss(input, output, &mut findings);
     findings
+}
+
+/// 입력의 낱말이 출력에 남아 있는가.
+///
+/// **"얼마나 충실하게 옮겼는가"의 가장 직접적인 잣대다.** 강조가 맞고 태그가 균형이
+/// 맞아도 내용이 잘려 나가면 소용이 없다. 실제로 한도를 분할이 아니라 절단으로 다루는
+/// 구현이 있고, 그건 다른 규칙에 하나도 안 걸리면서 뒤쪽을 통째로 버린다.
+///
+/// 낱말 단위로 보는 이유는 **표기 변화에 걸리지 않기 위해서**다. 불릿이 `-` 에서 `•` 로
+/// 바뀌든 표가 다시 정렬되든 낱말은 그대로다.
+fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
+    let have: std::collections::HashSet<String> =
+        words(&bare(&output.replace(PART_SEPARATOR, "\n"))).into_iter().collect();
+    let mut missing: Vec<String> = Vec::new();
+    for w in words(&bare(&prose_only(input))) {
+        if !have.contains(&w) && !missing.contains(&w) {
+            missing.push(w);
+        }
+    }
+    if missing.is_empty() {
+        return;
+    }
+    let shown: Vec<&str> = missing.iter().take(5).map(String::as_str).collect();
+    out.push(Finding {
+        rule: Rule::TextLoss,
+        detail: format!(
+            "입력에 있던 낱말 {}개가 출력에 없다: {}{}",
+            missing.len(),
+            shown.join(" · "),
+            if missing.len() > 5 { " …" } else { "" }
+        ),
+    });
+}
+
+/// 마크업을 걷어낸 글자만 남긴다. **양쪽에 똑같이 적용해야 한다.**
+///
+/// 마커를 낱말 경계로 두면 `**금요일**에` 가 "금요일"+"에" 로 쪼개지는데 출력은
+/// `금요일에` 한 낱말이라 사라진 것으로 잡힌다. 한국어는 조사가 붙어서 특히 그렇다.
+fn bare(text: &str) -> String {
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    // 속성 값은 본문 흐름에 끼워 넣지 않고 뒤에 따로 모은다. 태그 자리에 무엇이든
+    // 넣으면 `<b>굵게</b>이다` 가 두 낱말로 쪼개진다 — 입력은 `굵게이다` 한 낱말이다.
+    let mut attrs = String::new();
+    let mut i = 0;
+    while i < ch.len() {
+        if ch[i] == '<' {
+            if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
+                // 태그는 지우되 **속성 값은 남긴다.** `<a href="…">` 의 주소는 화면에
+                // 안 보여도 실제로 배달되는 내용이다. 지우면 링크가 사라진 것으로 잡힌다.
+                let mut quoted = false;
+                for &c in &ch[i..end] {
+                    if c == '"' {
+                        quoted = !quoted;
+                        if !quoted {
+                            attrs.push(' ');
+                        }
+                    } else if quoted {
+                        attrs.push(c);
+                    }
+                }
+                i = end;
+                continue;
+            }
+        }
+        // 폭 없는 공백도 지운다 — 우리가 일부러 끼운 것이라 낱말을 쪼개면 안 된다.
+        if !matches!(ch[i], '*' | '_' | '~' | '`' | '\u{200b}') {
+            out.push(ch[i]);
+        }
+        i += 1;
+    }
+    if !attrs.is_empty() {
+        out.push(' ');
+        out.push_str(&attrs);
+    }
+    out
+}
+
+/// 글자 사이를 띄지 않는 문자인가 — 한자·가나.
+///
+/// **한글은 뺀다.** 어절 단위로 띄어 써서 낱말 비교가 그대로 통한다. 같은 "CJK" 라도
+/// 여기서는 갈린다. 코어의 `is_cjk` 와 목적이 다른 판정이라 여기 따로 둔다 —
+/// 채점기는 코어와 독립이어야 한다.
+fn runs_together(c: char) -> bool {
+    let cp = c as u32;
+    (0x3040..=0x30FF).contains(&cp)      // 히라가나 · 가타카나
+        || (0x3400..=0x4DBF).contains(&cp)   // 한자 확장 A
+        || (0x4E00..=0x9FFF).contains(&cp)   // 한중일 통합 한자
+        || (0xF900..=0xFAFF).contains(&cp)   // 호환 한자
+        || (0xFF66..=0xFF9F).contains(&cp)   // 반각 가타카나
+        || (0x20000..=0x3FFFD).contains(&cp) // 한자 확장 B 이상
+}
+
+/// 비교 단위. 라틴은 낱말, **CJK 는 두 글자 조각**이다.
+///
+/// 일본어·중국어는 띄어쓰기가 없어서 한 문장이 통째로 한 낱말이 된다. 그러면 한 글자만
+/// 달라져도 그 문장 전체가 사라진 것으로 잡힌다. 한국어는 어절 단위로 띄어 써서
+/// 이 문제가 없다 — 같은 "CJK" 라도 여기서는 갈린다.
+fn words(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for token in text.split(|c: char| !c.is_alphanumeric()) {
+        let chars: Vec<char> = token.chars().collect();
+        if chars.len() < 2 {
+            continue;
+        }
+        if chars.iter().any(|&c| runs_together(c)) {
+            // 두 글자씩 겹쳐 가며 자른다. 내용이 실제로 빠지면 조각도 빠진다.
+            for w in chars.windows(2) {
+                out.push(w.iter().collect());
+            }
+        } else {
+            out.push(token.to_string());
+        }
+    }
+    out
+}
+
+/// 셈에서 뺄 것을 뺀 입력. **본문만 남긴다.**
+///
+/// 두 가지를 뺀다.
+/// - 코드펜스의 info 문자열. ` ```rust ` 의 "rust" 는 표시지 본문이 아니다
+/// - **URL 과 앵커.** 주소 안쪽은 저자가 쓴 글이 아니라 기계 부품이고, 채널마다
+///   href 로 가든 괄호로 가든 조각이 달라진다. 입력 쪽에서 빼면 거짓 경보만 준다
+fn prose_only(input: &str) -> String {
+    let no_fence_info: String = input
+        .lines()
+        .map(|l| {
+            let t = l.trim_start();
+            if t.starts_with("```") || t.starts_with("~~~") {
+                ""
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let ch: Vec<char> = no_fence_info.chars().collect();
+    let mut out = String::with_capacity(ch.len());
+    let mut i = 0;
+    while i < ch.len() {
+        // `](주소)` 의 괄호 안
+        if ch[i] == ']' && ch.get(i + 1) == Some(&'(') {
+            if let Some(p) = ch[i + 2..].iter().position(|&c| c == ')') {
+                i += 2 + p + 1;
+                continue;
+            }
+        }
+        // 맨몸 URL 과 앵커
+        if ch[i..].starts_with(&['h', 't', 't', 'p'])
+            || (ch[i] == '#' && i > 0 && ch[i - 1] == '(')
+        {
+            while i < ch.len() && !ch[i].is_whitespace() && ch[i] != ')' && ch[i] != '>' {
+                i += 1;
+            }
+            continue;
+        }
+        out.push(ch[i]);
+        i += 1;
+    }
+    out
 }
 
 /// 조각 하나하나가 한도 안인가. 분할이 있는 이유 자체다.
@@ -530,6 +695,22 @@ mod tests {
         assert!(f.is_empty(), "{f:?}");
         let f = check("**굵게** 다", "**굵게 다", Channel::SlackMarkdown);
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
+    }
+
+    /// **내용이 살아남았는가.** 강조가 맞고 태그가 균형이어도 잘려 나가면 소용없다.
+    #[test]
+    fn truncated_output_is_caught_even_when_everything_else_is_valid() {
+        let input = "앞부분은 멀쩡하다. **강조**도 있다.\n\n뒷부분은 잘려 나간다. 중요한 내용.";
+        // 한도 때문에 뒤를 버린 출력 — 다른 규칙에는 하나도 안 걸린다.
+        let cut = "앞부분은 멀쩡하다. <b>강조</b>도 있다.";
+        let f = check(input, cut, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+        assert!(f.iter().all(|x| x.rule == Rule::TextLoss), "다른 규칙에는 안 걸려야 한다: {f:?}");
+
+        // 다 옮긴 출력은 조용하다. 불릿이 바뀌거나 표가 다시 정렬돼도 낱말은 그대로다.
+        let whole = "앞부분은 멀쩡하다. <b>강조</b>도 있다.\n\n뒷부분은 잘려 나간다. 중요한 내용.";
+        assert!(check(input, whole, Channel::TelegramHtml).is_empty());
+        assert!(check("- 항목 하나", "• 항목 하나", Channel::Plain).is_empty());
     }
 
     #[test]
