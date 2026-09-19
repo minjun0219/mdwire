@@ -171,6 +171,46 @@ pub fn char_width(c: char) -> usize {
     1
 }
 
+/// CJK 인접 강조 정책이 보는 "CJK 문자"인가.
+///
+/// **표시 폭과는 다른 질문이다.** 둘을 한 함수로 쓰면 두 군데가 틀린다 —
+/// 반각 가타카나(`ｱｲｳ`)는 폭이 1이지만 CJK 라 패딩이 필요하고, 이모지는 폭이 2지만
+/// CJK 가 아니라 패딩이 필요 없다.
+///
+/// 판정 기준은 CommonMark 의 CJK-friendly 개정안을 따른다 — East Asian Width 가
+/// `W`·`F`·`H` 이면서 이모지 표현이 아니거나, 스크립트가 Hangul 이면 CJK 다.
+/// (<https://github.com/tats-u/markdown-cjk-friendly>)
+pub fn is_cjk(c: char) -> bool {
+    in_ranges(CJK, c as u32)
+}
+
+/// CJK 구간. 한자·가나·한글(조합형 자모 포함)·전각/반각 CJK 기호.
+/// **이모지와 기호는 일부러 뺐다** — 폭이 2여도 CJK 가 아니다.
+const CJK: &[(u32, u32)] = &[
+    (0x1100, 0x11FF), // 한글 자모(조합형). NFD 로 분해된 한글이 여기다
+    (0x2E80, 0x2EF3), // CJK 부수
+    (0x2F00, 0x2FD5), // 강희 부수
+    (0x3000, 0x303F), // CJK 구두점 — `。` `、` `「」` 가 여기다
+    (0x3041, 0x30FF), // 히라가나 · 가타카나
+    (0x3105, 0x312F),
+    (0x3131, 0x318E), // 한글 호환 자모
+    (0x3190, 0x31E3),
+    (0x31F0, 0x321E),
+    (0x3220, 0x3247),
+    (0x3250, 0x4DBF),
+    (0x4E00, 0x9FFF), // 한중일 통합 한자
+    (0xA960, 0xA97C), // 한글 자모 확장 A
+    (0xAC00, 0xD7A3), // 한글 음절
+    (0xD7B0, 0xD7FB), // 한글 자모 확장 B
+    (0xF900, 0xFAFF), // 호환 한자
+    (0xFE10, 0xFE19),
+    (0xFE30, 0xFE6B), // 세로쓰기 형태 · 전각 기호
+    (0xFF01, 0xFF60), // 전각 영숫자·기호 — `（）` `，` 가 여기다
+    (0xFF61, 0xFFDC), // **반각** 가타카나·한글. 폭은 1이지만 CJK 다
+    (0x20000, 0x2FFFD),
+    (0x30000, 0x3FFFD),
+];
+
 /// 문자열의 표시 폭.
 ///
 /// 이모지 결합 연쇄(ZWJ 로 이어진 가족 이모지 등)는 구성 요소를 각각 세므로
@@ -241,6 +281,34 @@ mod tests {
         let s = "한글";
         assert_eq!(s.chars().count(), 2);
         assert_eq!(str_width(s), 4, "문자 수로 맞추면 표가 어긋난다");
+    }
+
+    #[test]
+    fn cjk_is_not_the_same_question_as_width() {
+        // 폭 1인데 CJK — 반각 가타카나. 패딩이 필요하다
+        assert_eq!(char_width('ｱ'), 1);
+        assert!(is_cjk('ｱ'));
+        // 폭 2인데 CJK 아님 — 이모지. 패딩이 필요 없다
+        assert_eq!(char_width('🚀'), 2);
+        assert!(!is_cjk('🚀'));
+        assert!(!is_cjk('✅'));
+        // 조합형 한글(NFD). 폭 0인 중성·종성도 CJK 다
+        assert!(is_cjk('\u{1100}') && is_cjk('\u{1161}'));
+        // CJK 구두점 — 개정안이 다루는 바로 그 글자들
+        for c in ['。', '、', '，', '「', '」', '（', '）'] {
+            assert!(is_cjk(c), "{c} 가 CJK 로 안 잡힌다");
+        }
+        // 라틴은 아니다
+        for c in ['a', '1', ' ', '.', '-'] {
+            assert!(!is_cjk(c), "{c} 가 CJK 로 잡힌다");
+        }
+    }
+
+    #[test]
+    fn cjk_table_is_sorted_and_disjoint() {
+        for w in CJK.windows(2) {
+            assert!(w[0].1 < w[1].0, "구간이 겹치거나 순서가 틀렸다: {:?}", w);
+        }
     }
 
     #[test]

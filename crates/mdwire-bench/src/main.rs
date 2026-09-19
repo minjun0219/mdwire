@@ -333,7 +333,30 @@ fn real_docs(dir: &std::path::Path) {
         }
     }
 
+    // 처리량도 같이 낸다 — 프로세스 기동을 빼고 변환만 재려면 여기서 재는 수밖에 없다.
+    let mut best = std::time::Duration::MAX;
+    for _ in 0..5 {
+        let start = std::time::Instant::now();
+        for path in &docs {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                out.clear();
+                let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+                for p in split_chunks(&text, CHUNK) {
+                    s.push_into(p, &mut out);
+                }
+                s.finish_into(&mut out);
+                std::hint::black_box(&out);
+            }
+        }
+        best = best.min(start.elapsed());
+    }
+
     println!("문서 {} 개 · {} bytes · 조각 {} 개 (조각 크기 {CHUNK}B)", docs.len(), total_bytes, total_chunks);
+    println!(
+        "  처리량       {:.1}ms · {:.0} MiB/s (파일 읽기 포함)",
+        best.as_secs_f64() * 1000.0,
+        total_bytes as f64 / 1048576.0 / best.as_secs_f64()
+    );
     println!("  새 Streamer  할당/조각 {:.3}", cold_allocs as f64 / total_chunks as f64);
     println!("  재사용       할당/조각 {:.3}", warm_allocs as f64 / total_chunks as f64);
     println!("  가장 나쁜 문서 {:.3} 할당/조각 — {}", worst.0, worst.1);
