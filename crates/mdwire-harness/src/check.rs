@@ -499,6 +499,30 @@ mod tests {
         assert!(f.iter().any(|x| x.rule == Rule::DisallowedTag), "{f:?}");
     }
 
+    /// void 요소는 닫는 짝이 없는 것이 **정상**이다.
+    ///
+    /// 텔레그램은 이것들을 안 받으므로 `DisallowedTag` 로는 남아야 하고, 거기에
+    /// `UnclosedTag` 까지 더하면 같은 사실을 두 번 신고하는 것이라 `<br>` 을 내보내는
+    /// 구현이 실제보다 나빠 보인다.
+    #[test]
+    fn void_elements_are_disallowed_but_not_unclosed() {
+        for tag in ["<br>", "<hr>", "<input>", "<img src=\"x\">"] {
+            let out = format!("가{tag}나");
+            let f = check("가나", &out, Channel::TelegramHtml);
+            assert!(
+                f.iter().any(|x| x.rule == Rule::DisallowedTag),
+                "{tag} 가 허용 안 되는 태그로 안 잡힌다: {f:?}"
+            );
+            assert!(
+                !f.iter().any(|x| x.rule == Rule::UnclosedTag),
+                "{tag} 를 안 닫혔다고 세고 있다: {f:?}"
+            );
+        }
+        // 짝이 있는 태그가 안 닫힌 것은 여전히 잡는다 — 예외가 너무 넓어지지 않았는지 본다.
+        let f = check("가", "<b>가", Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::UnclosedTag), "{f:?}");
+    }
+
     #[test]
     fn catches_raw_angle_bracket() {
         let f = check("a < b", "a < b", Channel::TelegramHtml);
