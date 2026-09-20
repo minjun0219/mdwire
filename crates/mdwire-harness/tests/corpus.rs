@@ -30,7 +30,14 @@ fn streaming_agrees_with_batch() {
     let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
     for case in &cases {
         for channel in Channel::v0_1() {
-            let batch = mdwire::render(&case.input, channel, CjkPolicy::Auto).join("");
+            let parts = mdwire::render(&case.input, channel, CjkPolicy::Auto);
+            // **한도를 넘겨 나뉜 케이스는 건너뛴다.** 조각은 저마다 메시지 하나라 앞머리
+            // 줄바꿈을 털어 내고 시작한다 — 도로 이어 붙이면 스트리밍과 달라지는 것이
+            // 정상이다. 스트리밍은 한도를 모른다(`SPEC.md` 5절).
+            if parts.len() > 1 {
+                continue;
+            }
+            let batch = parts.join("");
             for size in [1usize, 2, 3, 7, 64] {
                 let mut s = Streamer::new(channel, CjkPolicy::Auto);
                 let mut got = String::new();
