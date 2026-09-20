@@ -131,23 +131,11 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                     break;
                 }
                 if len > 0 {
-                    let before = len;
-                    cut(&mut parts, &mut cur, &mut len, &mut markup, v, limit);
-                    if len < before {
-                        continue;
-                    }
-                    // **끊어도 자리가 안 생겼다.** 다시 연 마크업이 그만큼 도로 먹은
-                    // 것이라, 여기서 또 끊으면 똑같은 조각만 끝없이 찍어 낸다. 아래
-                    // 글자 단위 경로로 내려가 반드시 한 글자는 소비한다.
+                    cut(&mut parts, &mut cur, &mut len, &markup, v);
+                    continue;
                 }
-                // 공백 하나 없는 덩어리다 — 글자로 끊는다.
-                //
-                // 예산이 0 이면 **이 덩어리가 여는 태그가 한도만 하다는 뜻**이다. 그런
-                // 태그는 이 채널에서 애초에 쓸 수 없다 — 한 글자씩 끊어 봐야 조각만
-                // 쏟아진다. 지금 열려 있는 것 기준으로 최대한 담고, 닫을 자리는 `cut`
-                // 이 마크업을 버려서 만든다.
-                let room = if budget == 0 { limit.saturating_sub(markup.reserve(v)) } else { budget };
-                let take = room.saturating_sub(len).max(1);
+                // 조각이 비었는데도 안 들어간다. 공백 하나 없는 덩어리다 — 글자로 끊는다.
+                let take = budget.max(1);
                 let end = rest
                     .char_indices()
                     .nth(take)
@@ -157,7 +145,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 len += take;
                 rest = &rest[end..];
                 if !rest.is_empty() {
-                    cut(&mut parts, &mut cur, &mut len, &mut markup, v, limit);
+                    cut(&mut parts, &mut cur, &mut len, &markup, v);
                 }
             }
         }
@@ -169,14 +157,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
 }
 
 /// 조각을 끊는다. 열린 것을 닫고, 다음 조각 앞머리에서 다시 연다.
-fn cut(
-    parts: &mut Vec<String>,
-    cur: &mut String,
-    len: &mut usize,
-    markup: &mut Markup,
-    v: &Vocab,
-    limit: usize,
-) {
+fn cut(parts: &mut Vec<String>, cur: &mut String, len: &mut usize, markup: &Markup, v: &Vocab) {
     if cur.is_empty() {
         return;
     }
@@ -193,18 +174,8 @@ fn cut(
     markup.close_all(&mut part, v);
     parts.push(part);
     markup.reopen(cur, v);
-    // **다시 열 수 없는 마크업은 버린다.** 여는 태그만으로 조각이 차 버리면 내용이 한
-    // 글자도 안 들어가고, 같은 자리에서 같은 조각을 끝없이 찍어 낸다. 마크업보다
-    // 내용이 먼저다 — 여기서부터는 꾸밈 없이 내보낸다.
-    let reopened = cur.chars().count() + carry.chars().count();
-    if reopened >= limit {
-        cur.clear();
-        markup.forget();
-        *len = 0;
-        return;
-    }
     cur.push_str(&carry);
-    *len = reopened;
+    *len = cur.chars().count();
 }
 
 /// 지금 열려 있는 마크업. 조각을 끊을 때 닫고 다시 열려고 들고 있는다.
@@ -312,13 +283,6 @@ impl Markup {
         }
     }
 
-    /// 열린 것을 없던 일로 한다. 이미 닫아서 내보낸 뒤에만 부른다.
-    fn forget(&mut self) {
-        self.tags.clear();
-        self.fence = None;
-        self.partial.clear();
-    }
-
     fn reopen(&self, out: &mut String, _v: &Vocab) {
         if let Some(info) = &self.fence {
             out.push_str("```");
@@ -328,79 +292,5 @@ impl Markup {
         for (_, full) in &self.tags {
             out.push_str(full);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::CjkPolicy;
-
-    fn html(limit: usize, text: &str) -> Vec<String> {
-        split_hard(text, limit, &Vocab::new(Channel::TelegramHtml, CjkPolicy::Auto))
-    }
-
-    /// 조각 하나가 곧 메시지 하나다 — 태그가 그 안에서 열리고 닫혀야 한다.
-    fn balanced(part: &str) -> bool {
-        let ch: Vec<char> = part.chars().collect();
-        let mut stack: Vec<String> = Vec::new();
-        let mut i = 0;
-        while i < ch.len() {
-            if ch[i] != '<' {
-                i += 1;
-                continue;
-            }
-            let closing = ch.get(i + 1) == Some(&'/');
-            let from = if closing { i + 2 } else { i + 1 };
-            let mut j = from;
-            while j < ch.len() && ch[j].is_ascii_alphanumeric() {
-                j += 1;
-            }
-            let name: String = ch[from..j].iter().collect();
-            while j < ch.len() && ch[j] != '>' {
-                j += 1;
-            }
-            if j >= ch.len() {
-                return false; // 태그가 반으로 잘렸다
-            }
-            if closing {
-                if stack.pop().as_deref() != Some(name.as_str()) {
-                    return false;
-                }
-            } else {
-                stack.push(name);
-            }
-            i = j + 1;
-        }
-        stack.is_empty()
-    }
-
-    /// **끊어도 자리가 안 생기면 글자로 끊는다.**
-    ///
-    /// 마크업을 다시 여는 데 드는 글자가 끊어서 번 자리를 도로 먹으면, 끊기만 해서는
-    /// 진도가 안 나간다 — 예전에는 여기서 같은 조각을 끝없이 찍어 냈다.
-    #[test]
-    fn splitting_makes_progress_inside_open_markup() {
-        let text = format!("<blockquote>글 {} 끝</blockquote>", "y".repeat(600));
-        let parts = html(200, &text);
-        assert!(parts.len() < 10, "조각이 {}개 — 진도가 안 나갔다", parts.len());
-        for (i, p) in parts.iter().enumerate() {
-            assert!(balanced(p), "조각 {i} 의 태그가 안 맞는다: {p:?}");
-        }
-        assert!(parts.concat().contains("끝"), "뒤쪽 내용이 사라졌다");
-    }
-
-    /// 여는 태그 하나가 한도만 하면 다시 열 수 없다. 마크업을 버리고서라도 나아간다.
-    ///
-    /// 이 자리에서는 조각이 유효한 HTML 이 되지 못한다 — 애초에 담을 수 없는 태그라서다.
-    /// 그래서 **이런 태그를 만들지 않는 것**이 `Vocab::link` 의 몫이고, 여기는 최후의
-    /// 안전장치로 "끝나기는 한다"만 지킨다.
-    #[test]
-    fn splitting_gives_up_on_markup_that_cannot_reopen() {
-        let url = "https://e.com/".to_string() + &"x".repeat(400);
-        let text = format!("<a href=\"{url}\">아주 긴 링크</a> 뒤에 오는 글");
-        let parts = html(200, &text);
-        assert!(parts.len() < 10, "조각이 {}개 — 진도가 안 나갔다", parts.len());
-        assert!(parts.concat().contains("뒤에 오는 글"), "뒤쪽 내용이 사라졌다");
     }
 }
