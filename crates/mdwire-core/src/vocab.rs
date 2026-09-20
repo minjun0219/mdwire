@@ -217,8 +217,12 @@ impl Vocab {
     }
 }
 
-/// CJK 인접인가. 판정은 `width::is_cjk` 가 한다 — **표시 폭과는 다른 질문이다.**
-pub(crate) fn is_wide(c: char) -> bool {
+/// 이 글자 옆에 폭 없는 공백을 끼워야 하는가.
+///
+/// 이름이 정책을 가리킨다 — 판정 자체는 `width::is_cjk` 가 하고, 여기서는 그것이
+/// **패딩의 기준**이라는 사실만 말한다. 전에는 `is_wide`(표시 폭 2)였는데 그건
+/// 다른 질문이었다: 반각 가타카나는 폭 1이지만 끼워야 하고 이모지는 폭 2지만 아니다.
+pub(crate) fn needs_cjk_padding(c: char) -> bool {
     is_cjk(c)
 }
 
