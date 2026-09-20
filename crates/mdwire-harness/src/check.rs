@@ -97,7 +97,11 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     emphasis_range(input, output, channel, &mut findings);
     stray_markers(input, output, channel, &mut findings);
     if matches!(channel, Channel::TelegramHtml) {
-        html_tags(output, &mut findings);
+        // **조각마다 따로 본다.** 조각 하나가 곧 메시지 하나다. 이어 붙여서 보면
+        // 여는 태그와 닫는 태그가 서로 다른 메시지에 있어도 균형이 맞아 보인다.
+        for part in output.split(PART_SEPARATOR) {
+            html_tags(part, &mut findings);
+        }
     }
     tables(input, output, channel, &mut findings);
     text_loss(input, output, &mut findings);
@@ -950,6 +954,19 @@ mod tests {
         // 그래도 진짜로 빠지면 잡힌다.
         let f = check(input, "shield panel. See", Channel::Plain);
         assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
+    /// 조각 하나가 곧 메시지 하나다. **경계를 가로지른 태그는 양쪽 다 깨진 HTML 이다.**
+    #[test]
+    fn a_tag_split_across_parts_is_broken_in_both() {
+        let split = "앞 <a \0href=\"https://example.com\">뒤</a>";
+        let f = check("앞 [뒤](https://example.com)", split, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::UnclosedTag || x.rule == Rule::RawHtmlChar), "{f:?}");
+
+        // 조각마다 닫고 다시 열면 조용하다.
+        let ok = "앞 <b>굵게</b>\0<b>이어서</b> 뒤";
+        let f = check("앞 **굵게 이어서** 뒤", ok, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::UnclosedTag), "{f:?}");
     }
 
 }

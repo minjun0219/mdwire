@@ -221,4 +221,29 @@ mod tests {
         assert_eq!(Channel::TelegramHtml.limit(), 4096);
         assert_eq!(Channel::SlackMarkdown.limit(), 12_000);
     }
+
+    /// **조각 하나가 곧 메시지 하나다.** 태그 한가운데서 끊으면 조각이 `… <a ` 로
+    /// 끝나고, 채널은 그 메시지를 통째로 거절한다. 실제 문서(링크가 달린 긴 목록)에서
+    /// 나온 고장이다.
+    #[test]
+    fn parts_never_end_inside_a_tag() {
+        let mut input = String::new();
+        for i in 0..40 {
+            input.push_str(&format!(
+                "- `method{i}(options?: SomeLongOptionsType{i}): string` — 주소의 뒤집힌 꼴을 \
+                 돌려준다 [src](https://example.com/owner/repo/blob/master/src/mod{i}.ts#L{i}28)\n"
+            ));
+        }
+        let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+        assert!(parts.len() > 1, "한도를 넘겨서 나뉘어야 하는 입력이다");
+        for (i, p) in parts.iter().enumerate() {
+            assert_eq!(
+                p.matches('<').count(),
+                p.matches('>').count(),
+                "조각 {i} 가 태그 한가운데서 끊겼다: …{}",
+                &p[p.len().saturating_sub(40)..]
+            );
+            assert!(p.chars().count() <= Channel::TelegramHtml.limit(), "조각 {i} 가 한도를 넘었다");
+        }
+    }
 }
