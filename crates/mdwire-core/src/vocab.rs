@@ -98,6 +98,19 @@ impl Vocab {
     pub fn link(&self, text: &str, url: &str, out: &mut String) {
         match self.channel {
             Channel::TelegramHtml => {
+                // **한도를 넘는 주소는 링크로 내지 않는다.** 여는 태그 하나가 메시지를
+                // 다 차지하면 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다.
+                // 주소는 괄호에 넣어 글로 내보낸다 — 링크는 죽어도 내용은 산다.
+                let markup = escaped_len(url) + "<a href=\"\"></a>".len();
+                if markup >= self.channel.limit() {
+                    out.push_str(text);
+                    if !url.is_empty() && url != text {
+                        out.push_str(" (");
+                        self.escape(url, out);
+                        out.push(')');
+                    }
+                    return;
+                }
                 out.push_str("<a href=\"");
                 for c in url.chars() {
                     match c {
@@ -228,3 +241,16 @@ pub(crate) fn needs_cjk_padding(c: char) -> bool {
 
 /// 폭 없는 공백. CJK 인접 강조를 살린다.
 pub(crate) const ZWSP: char = '\u{200b}';
+
+/// escape 하고 나면 몇 글자가 되는가. **재기만 하고 만들지는 않는다** — 스트리밍
+/// 경로에서 링크마다 문자열을 하나씩 더 만들 수는 없다.
+fn escaped_len(url: &str) -> usize {
+    url.chars()
+        .map(|c| match c {
+            '&' => 5,
+            '<' | '>' => 4,
+            '"' => 6,
+            _ => 1,
+        })
+        .sum()
+}

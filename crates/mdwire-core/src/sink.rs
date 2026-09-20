@@ -131,11 +131,17 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                     break;
                 }
                 if len > 0 {
-                    cut(&mut parts, &mut cur, &mut len, &markup, v);
+                    cut(&mut parts, &mut cur, &mut len, &mut markup, v, limit);
                     continue;
                 }
                 // 조각이 비었는데도 안 들어간다. 공백 하나 없는 덩어리다 — 글자로 끊는다.
-                let take = budget.max(1);
+                //
+                // 예산이 0 이면 **이 덩어리가 여는 태그가 한도만 하다는 뜻**이다. 그런
+                // 태그는 이 채널에서 애초에 쓸 수 없다 — 한 글자씩 끊어 봐야 조각만
+                // 쏟아진다. 지금 열려 있는 것 기준으로 최대한 담고, 닫을 자리는 `cut`
+                // 이 마크업을 버려서 만든다.
+                let room = if budget == 0 { limit.saturating_sub(markup.reserve(v)) } else { budget };
+                let take = room.max(1);
                 let end = rest
                     .char_indices()
                     .nth(take)
@@ -145,7 +151,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 len += take;
                 rest = &rest[end..];
                 if !rest.is_empty() {
-                    cut(&mut parts, &mut cur, &mut len, &markup, v);
+                    cut(&mut parts, &mut cur, &mut len, &mut markup, v, limit);
                 }
             }
         }
@@ -157,7 +163,14 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
 }
 
 /// 조각을 끊는다. 열린 것을 닫고, 다음 조각 앞머리에서 다시 연다.
-fn cut(parts: &mut Vec<String>, cur: &mut String, len: &mut usize, markup: &Markup, v: &Vocab) {
+fn cut(
+    parts: &mut Vec<String>,
+    cur: &mut String,
+    len: &mut usize,
+    markup: &mut Markup,
+    v: &Vocab,
+    limit: usize,
+) {
     if cur.is_empty() {
         return;
     }
@@ -174,6 +187,15 @@ fn cut(parts: &mut Vec<String>, cur: &mut String, len: &mut usize, markup: &Mark
     markup.close_all(&mut part, v);
     parts.push(part);
     markup.reopen(cur, v);
+    // **다시 열 수 없는 마크업은 버린다.** 여는 태그만으로 조각이 차 버리면 내용이 한
+    // 글자도 안 들어가고, 같은 자리에서 같은 조각을 끝없이 찍어 낸다. 마크업보다
+    // 내용이 먼저다 — 여기서부터는 꾸밈 없이 내보낸다.
+    if cur.chars().count() + carry.chars().count() >= limit {
+        cur.clear();
+        markup.forget();
+        *len = 0;
+        return;
+    }
     cur.push_str(&carry);
     *len = cur.chars().count();
 }
@@ -283,6 +305,13 @@ impl Markup {
         }
     }
 
+    /// 열린 것을 없던 일로 한다. 이미 닫아서 내보낸 뒤에만 부른다.
+    fn forget(&mut self) {
+        self.tags.clear();
+        self.fence = None;
+        self.partial.clear();
+    }
+
     fn reopen(&self, out: &mut String, _v: &Vocab) {
         if let Some(info) = &self.fence {
             out.push_str("```");
@@ -292,5 +321,27 @@ impl Markup {
         for (_, full) in &self.tags {
             out.push_str(full);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CjkPolicy;
+
+    fn html(limit: usize, text: &str) -> Vec<String> {
+        split_hard(text, limit, &Vocab::new(Channel::TelegramHtml, CjkPolicy::Auto))
+    }
+
+    /// **다시 열 수 없는 마크업이면 포기하고 나아간다.** 여는 태그가 한도만 한데
+    /// 조각마다 다시 열면, 내용이 한 글자도 안 들어가서 같은 조각을 끝없이 찍어 낸다.
+    #[test]
+    fn splitting_makes_progress_even_when_markup_cannot_reopen() {
+        let url = "https://e.com/".to_string() + &"x".repeat(80);
+        let text = format!("<a href=\"{url}\">아주 긴 링크</a> 뒤에 오는 글");
+        let parts = html(40, &text);
+        assert!(parts.len() < 40, "조각이 {}개 — 진도가 안 나갔다", parts.len());
+        let joined: String = parts.concat();
+        assert!(joined.contains("뒤에 오는 글"), "뒤쪽 내용이 사라졌다: {joined:?}");
     }
 }

@@ -504,3 +504,27 @@ fn empty_input_produces_nothing() {
     assert!(render("", Channel::TelegramHtml, CjkPolicy::Auto).is_empty());
     assert!(render("   \n\n  \n", Channel::TelegramHtml, CjkPolicy::Auto).is_empty());
 }
+
+/// **한도보다 긴 주소는 링크로 내지 않는다.**
+///
+/// `<a href="…">` 하나가 메시지 한 통을 다 차지하면, 조각을 아무리 나눠도 내용이 한
+/// 글자도 안 들어간다. 예전에는 여기서 렌더가 끝나지 않았다. 링크를 포기하고 주소를
+/// 글로 내보낸다 — 링크는 죽어도 내용은 산다.
+#[test]
+fn an_address_longer_than_the_limit_becomes_text() {
+    let url = format!("https://example.com/{}", "x".repeat(5000));
+    let parts = render(&format!("[아주 긴 링크]({url}) 뒤에 오는 글"), Channel::TelegramHtml, CjkPolicy::Auto);
+
+    let joined = parts.join("");
+    assert!(!joined.contains("<a "), "링크로 내면 조각이 성립하지 않는다: {}", &joined[..80.min(joined.len())]);
+    assert!(joined.contains("아주 긴 링크"), "링크 텍스트가 사라졌다");
+    assert!(joined.contains("뒤에 오는 글"), "뒤쪽 내용이 사라졌다");
+    for (i, p) in parts.iter().enumerate() {
+        assert!(p.chars().count() <= Channel::TelegramHtml.limit(), "조각 {i} 가 한도를 넘었다");
+        assert!(balanced(p), "조각 {i} 의 태그가 안 맞는다");
+    }
+
+    // 한도 안쪽 주소는 그대로 링크다.
+    let ok = render("[링크](https://example.com/x) 뒤", Channel::TelegramHtml, CjkPolicy::Auto);
+    assert!(ok[0].contains("<a href=\"https://example.com/x\">링크</a>"), "{:?}", ok[0]);
+}
