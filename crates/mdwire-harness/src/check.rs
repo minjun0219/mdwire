@@ -220,19 +220,35 @@ fn runs_together(c: char) -> bool {
         || (0x20000..=0x3FFFD).contains(&cp) // 한자 확장 B 이상
 }
 
+/// 그림문자. 이모지는 영숫자가 아니라서 낱말 쪼개기로는 아예 안 잡힌다.
+fn is_pictograph(c: char) -> bool {
+    let cp = c as u32;
+    (0x1F000..=0x1FAFF).contains(&cp)
+        || (0x2600..=0x27BF).contains(&cp)
+        || (0x2B00..=0x2BFF).contains(&cp)
+}
+
 /// 비교 단위. 라틴은 낱말, **CJK 는 두 글자 조각**이다.
 ///
 /// 일본어·중국어는 띄어쓰기가 없어서 한 문장이 통째로 한 낱말이 된다. 그러면 한 글자만
 /// 달라져도 그 문장 전체가 사라진 것으로 잡힌다. 한국어는 어절 단위로 띄어 써서
 /// 이 문제가 없다 — 같은 "CJK" 라도 여기서는 갈린다.
+///
+/// **한 글자짜리와 이모지도 센다.** 이 규칙이 약속하는 것은 "대충 다 옮겼다"가 아니라
+/// **저자가 쓴 것이 남아 있다**는 쪽이다. 등급·선택지·버전 번호는 한 글자로 서고,
+/// 이모지만 있는 줄도 저자가 쓴 내용이다. 실제 문서 2289건으로 재보면 한 글자와
+/// 이모지를 세는 값은 신규 findings 1건 — 느슨하게 둘 이유가 없다.
 fn words(text: &str) -> Vec<String> {
     let mut out = Vec::new();
+    for c in text.chars().filter(|&c| is_pictograph(c)) {
+        out.push(c.to_string());
+    }
     for token in text.split(|c: char| !c.is_alphanumeric()) {
         let chars: Vec<char> = token.chars().collect();
-        if chars.len() < 2 {
+        if chars.is_empty() {
             continue;
         }
-        if chars.iter().any(|&c| runs_together(c)) {
+        if chars.len() >= 2 && chars.iter().any(|&c| runs_together(c)) {
             // 두 글자씩 겹쳐 가며 자른다. 내용이 실제로 빠지면 조각도 빠진다.
             for w in chars.windows(2) {
                 out.push(w.iter().collect());
@@ -823,6 +839,20 @@ mod tests {
         let out = "예: https://bank.example/#&lt;form action=&quot;https://x&quot; method=&quot;POST&quot;&gt;";
         let f = check(input, out, Channel::TelegramHtml);
         assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
+    /// **한 글자와 이모지도 내용이다.** 짧은 선택지·등급·이모지만 있는 줄이 사라져도
+    /// 잡혀야 한다.
+    #[test]
+    fn single_characters_and_emoji_are_content() {
+        let f = check("선택지는 A B C 셋이다", "선택지는 A 셋이다", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        let f = check("배포 끝\n\n🎉 🚀", "배포 끝", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        // 다 옮기면 조용하다.
+        assert!(check("배포 끝\n\n🎉 🚀", "배포 끝\n\n🎉 🚀", Channel::Plain).is_empty());
     }
 
 }
