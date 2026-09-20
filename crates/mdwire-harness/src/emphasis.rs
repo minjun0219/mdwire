@@ -200,33 +200,38 @@ fn is_delimiter_row(line: &str) -> bool {
 fn strip_block_marker(line: &str) -> &str {
     let t = line.trim_start();
     let t = t.trim_start_matches('>').trim_start();
-    for m in ["- ", "* ", "+ ", "• "] {
+    strip_list_marker(t).unwrap_or(t)
+}
+
+/// 리스트 마커를 벗긴 나머지. 마커가 아니면 `None`.
+///
+/// **마커 뒤는 공백이거나 탭이다.** `*<TAB>ws` 를 목록으로 안 보면 줄마다 앞에 선 `*`
+/// 가 강조 마커로 짝지어져, 멀쩡한 출력을 고장으로 신고한다.
+fn strip_list_marker(t: &str) -> Option<&str> {
+    for m in ['-', '*', '+', '•'] {
         if let Some(rest) = t.strip_prefix(m) {
-            return rest;
+            if rest.starts_with([' ', '\t']) {
+                return Some(&rest[1..]);
+            }
         }
     }
-    let digits = t.chars().take_while(char::is_ascii_digit).count();
+    let digits = t.chars().take_while(|c| c.is_ascii_digit()).count();
     if digits > 0 {
         let rest = &t[digits..];
-        if let Some(r) = rest.strip_prefix(". ").or_else(|| rest.strip_prefix(") ")) {
-            return r;
+        for d in ['.', ')'] {
+            if let Some(r) = rest.strip_prefix(d) {
+                if r.starts_with([' ', '\t']) {
+                    return Some(&r[1..]);
+                }
+            }
         }
     }
-    t
+    None
 }
 
 /// 리스트 항목의 시작인가.
 fn is_list_item(trimmed: &str) -> bool {
-    for m in ["- ", "* ", "+ ", "• "] {
-        if trimmed.starts_with(m) {
-            return true;
-        }
-    }
-    let digits = trimmed.chars().take_while(|c| c.is_ascii_digit()).count();
-    digits > 0 && {
-        let rest = &trimmed[digits..];
-        rest.starts_with(". ") || rest.starts_with(") ")
-    }
+    strip_list_marker(trimmed).is_some()
 }
 
 /// 구분선인가. `***` 는 강조가 아니다 — 이걸 안 거르면 구분선을 굵게 만든 줄 알고
@@ -234,14 +239,15 @@ fn is_list_item(trimmed: &str) -> bool {
 pub(crate) fn is_rule(trimmed: &str) -> bool {
     let t = trimmed.trim_end();
     ['-', '*', '_'].iter().any(|&ch| {
-        t.chars().filter(|&c| c == ch).count() >= 3 && t.chars().all(|c| c == ch || c == ' ')
+        t.chars().filter(|&c| c == ch).count() >= 3
+            && t.chars().all(|c| c == ch || c == ' ' || c == '\t')
     })
 }
 
 /// ATX 헤딩인가.
 pub(crate) fn is_heading(trimmed: &str) -> bool {
     let hashes = trimmed.chars().take_while(|&c| c == '#').count();
-    (1..=6).contains(&hashes) && trimmed[hashes..].starts_with(' ')
+    (1..=6).contains(&hashes) && trimmed[hashes..].starts_with([' ', '\t'])
 }
 
 struct Open {
