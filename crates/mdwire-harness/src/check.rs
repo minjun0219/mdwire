@@ -10,6 +10,7 @@
 //! 모르게 몇 달을 간다(`DESIGN.md`).
 
 use crate::emphasis::{self, Mode, Span};
+use std::collections::{HashMap, HashSet};
 use mdwire::{width::str_width, Channel};
 
 /// 불변식 하나.
@@ -31,6 +32,8 @@ pub enum Rule {
     TableMisaligned,
     /// 입력이 비지 않았는데 출력이 비었는가.
     EmptyOutput,
+    /// 입력에 있던 낱말이 출력에서 사라졌는가.
+    TextLoss,
 }
 
 impl Rule {
@@ -44,6 +47,7 @@ impl Rule {
             Rule::OverLimit => "한도 초과",
             Rule::TableMisaligned => "표 열 어긋남",
             Rule::EmptyOutput => "빈 출력",
+            Rule::TextLoss => "내용 손실",
         }
     }
 }
@@ -96,7 +100,288 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
         html_tags(output, &mut findings);
     }
     tables(input, output, channel, &mut findings);
+    text_loss(input, output, &mut findings);
     findings
+}
+
+/// 입력의 낱말이 출력에 남아 있는가.
+///
+/// **"얼마나 충실하게 옮겼는가"의 가장 직접적인 잣대다.** 강조가 맞고 태그가 균형이
+/// 맞아도 내용이 잘려 나가면 소용이 없다. 실제로 한도를 분할이 아니라 절단으로 다루는
+/// 구현이 있고, 그건 다른 규칙에 하나도 안 걸리면서 뒤쪽을 통째로 버린다.
+///
+/// 낱말 단위로 보는 이유는 **표기 변화에 걸리지 않기 위해서**다. 불릿이 `-` 에서 `•` 로
+/// 바뀌든 표가 다시 정렬되든 낱말은 그대로다.
+fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
+    // **출현 횟수까지 센다.** 집합으로 보면 한 번만 남아 있어도 통과라서, 같은 말이
+    // 반복되는 문단이나 목록의 뒤쪽만 잘라 내는 구현을 놓친다.
+    let mut have: HashMap<String, usize> = HashMap::new();
+    for w in words(&bare(&strip_urls(&output.replace(PART_SEPARATOR, "\n"), Seam::Glue))) {
+        *have.entry(w).or_default() += 1;
+    }
+    let seam = seam_words(output);
+
+    let missing = missing_words(&prose_only(input, Seam::Glue), &have, &seam);
+    if missing.is_empty() {
+        return;
+    }
+    // **입력을 두 가지로 읽는다.** 링크를 걷어낸 자리에 경계가 남는지 아닌지는 채널이
+    // 정한다 — `[안전 시트](주소)의` 를 텔레그램은 `안전 시트의` 로 붙여 내지만, 표
+    // 안에서는 `안전 시트 (주소)의` 로 띄어서 낸다. 한쪽 읽기로만 보면 다른 쪽이
+    // 통째로 거짓 경보가 된다. 둘 다에서 빠졌을 때만 손실로 센다.
+    let split = missing_words(&prose_only(input, Seam::Split), &have, &seam);
+    let missing: Vec<String> = missing.into_iter().filter(|w| split.contains(w)).collect();
+    if missing.is_empty() {
+        return;
+    }
+
+    let shown: Vec<&str> = missing.iter().take(5).map(String::as_str).collect();
+    out.push(Finding {
+        rule: Rule::TextLoss,
+        detail: format!(
+            "입력의 낱말 {}개가 출력에서 빠졌다: {}{}",
+            missing.len(),
+            shown.join(" · "),
+            if missing.len() > 5 { " …" } else { "" }
+        ),
+    });
+}
+
+/// `have` 에서 몫을 못 찾은 낱말. 순서는 보고용으로 지키되 같은 낱말을 여러 번 싣지 않는다.
+fn missing_words(text: &str, have: &HashMap<String, usize>, seam: &HashSet<String>) -> Vec<String> {
+    let mut have = have.clone();
+    let mut missing = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for w in words(&bare(text)) {
+        match have.get_mut(&w) {
+            // 남은 몫이 있으면 하나 쓴다. 두 번 나온 말은 두 번 남아 있어야 한다.
+            Some(n) if *n > 0 => *n -= 1,
+            _ if seam.contains(&w) => {}
+            _ => {
+                if seen.insert(w.clone()) {
+                    missing.push(w);
+                }
+            }
+        }
+    }
+    missing
+}
+
+/// 조각 경계를 가로지르던 비교 단위.
+///
+/// **정상적인 분할을 손실로 세지 않기 위해서다.** 띄어쓰기 없는 일본어·중국어 문단이
+/// 한도를 넘어 두 조각으로 나뉘면, 경계에 걸쳐 있던 조각이 양쪽으로 끊겨 어디에도 없게
+/// 된다. 그렇다고 조각을 전부 이어 붙여서 세면 이번엔 원문에 없던 낱말이 생겨 진짜
+/// 손실을 가려 준다 — 그래서 **이음매 주변만** 이어 붙여 따로 만든다.
+fn seam_words(output: &str) -> HashSet<String> {
+    // 비교 단위 하나가 걸치는 길이만 보면 된다. 긴 낱말까지 넉넉히 덮는 값.
+    const EDGE: usize = 64;
+    let mut out = HashSet::new();
+    let parts: Vec<&str> = output.split(PART_SEPARATOR).collect();
+    for pair in parts.windows(2) {
+        let left: Vec<char> = pair[0].chars().collect();
+        let tail: String = left[left.len().saturating_sub(EDGE)..].iter().collect();
+        let head: String = pair[1].chars().take(EDGE).collect();
+        out.extend(words(&bare(&strip_urls(&format!("{tail}{head}"), Seam::Glue))));
+    }
+    out
+}
+
+/// 마크업을 걷어낸 글자만 남긴다. **양쪽에 똑같이 적용해야 한다.**
+///
+/// 마커를 낱말 경계로 두면 `**금요일**에` 가 "금요일"+"에" 로 쪼개지는데 출력은
+/// `금요일에` 한 낱말이라 사라진 것으로 잡힌다. 한국어는 조사가 붙어서 특히 그렇다.
+fn bare(text: &str) -> String {
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    // 속성 값은 본문 흐름에 끼워 넣지 않고 뒤에 따로 모은다. 태그 자리에 무엇이든
+    // 넣으면 `<b>굵게</b>이다` 가 두 낱말로 쪼개진다 — 입력은 `굵게이다` 한 낱말이다.
+    let mut attrs = String::new();
+    let mut i = 0;
+    while i < ch.len() {
+        if ch[i] == '<' {
+            if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
+                // 태그는 지우되 **속성 값은 남긴다.** `<a href="…">` 의 주소는 화면에
+                // 안 보여도 실제로 배달되는 내용이다. 지우면 링크가 사라진 것으로 잡힌다.
+                let mut quoted = false;
+                for &c in &ch[i..end] {
+                    if c == '"' {
+                        quoted = !quoted;
+                        if !quoted {
+                            attrs.push(' ');
+                        }
+                    } else if quoted {
+                        attrs.push(c);
+                    }
+                }
+                i = end;
+                continue;
+            }
+        }
+        // 폭 없는 공백도 지운다 — 우리가 일부러 끼운 것이라 낱말을 쪼개면 안 된다.
+        if !matches!(ch[i], '*' | '_' | '~' | '`' | '\u{200b}') {
+            out.push(ch[i]);
+        }
+        i += 1;
+    }
+    if !attrs.is_empty() {
+        out.push(' ');
+        out.push_str(&attrs);
+    }
+    out
+}
+
+/// 글자 사이를 띄지 않는 문자인가 — 한자·가나.
+///
+/// **한글은 뺀다.** 어절 단위로 띄어 써서 낱말 비교가 그대로 통한다. 같은 "CJK" 라도
+/// 여기서는 갈린다. 코어의 `is_cjk` 와 목적이 다른 판정이라 여기 따로 둔다 —
+/// 채점기는 코어와 독립이어야 한다.
+fn runs_together(c: char) -> bool {
+    let cp = c as u32;
+    (0x3040..=0x30FF).contains(&cp)      // 히라가나 · 가타카나
+        || (0x3400..=0x4DBF).contains(&cp)   // 한자 확장 A
+        || (0x4E00..=0x9FFF).contains(&cp)   // 한중일 통합 한자
+        || (0xF900..=0xFAFF).contains(&cp)   // 호환 한자
+        || (0xFF66..=0xFF9F).contains(&cp)   // 반각 가타카나
+        || (0x20000..=0x3FFFD).contains(&cp) // 한자 확장 B 이상
+}
+
+/// 그림문자. 이모지는 영숫자가 아니라서 낱말 쪼개기로는 아예 안 잡힌다.
+fn is_pictograph(c: char) -> bool {
+    let cp = c as u32;
+    (0x1F000..=0x1FAFF).contains(&cp)
+        || (0x2600..=0x27BF).contains(&cp)
+        || (0x2B00..=0x2BFF).contains(&cp)
+}
+
+/// 비교 단위. 라틴은 낱말, **CJK 는 두 글자 조각**이다.
+///
+/// 일본어·중국어는 띄어쓰기가 없어서 한 문장이 통째로 한 낱말이 된다. 그러면 한 글자만
+/// 달라져도 그 문장 전체가 사라진 것으로 잡힌다. 한국어는 어절 단위로 띄어 써서
+/// 이 문제가 없다 — 같은 "CJK" 라도 여기서는 갈린다.
+///
+/// **한 글자짜리와 이모지도 센다.** 이 규칙이 약속하는 것은 "대충 다 옮겼다"가 아니라
+/// **저자가 쓴 것이 남아 있다**는 쪽이다. 등급·선택지·버전 번호는 한 글자로 서고,
+/// 이모지만 있는 줄도 저자가 쓴 내용이다. 실제 문서 2289건으로 재보면 한 글자와
+/// 이모지를 세는 값은 신규 findings 1건 — 느슨하게 둘 이유가 없다.
+fn words(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for c in text.chars().filter(|&c| is_pictograph(c)) {
+        out.push(c.to_string());
+    }
+    for token in text.split(|c: char| !c.is_alphanumeric()) {
+        let chars: Vec<char> = token.chars().collect();
+        if chars.is_empty() {
+            continue;
+        }
+        if chars.len() >= 2 && chars.iter().any(|&c| runs_together(c)) {
+            // 두 글자씩 겹쳐 가며 자른다. 내용이 실제로 빠지면 조각도 빠진다.
+            for w in chars.windows(2) {
+                out.push(w.iter().collect());
+            }
+        } else {
+            out.push(token.to_string());
+        }
+    }
+    out
+}
+
+/// 셈에서 뺄 것을 뺀 입력. **본문만 남긴다.**
+///
+/// 코드펜스의 info 문자열을 뺀다 — ` ```rust ` 의 "rust" 는 표시지 본문이 아니다.
+/// 입력에만 적용한다. 출력에서 펜스 줄을 지우면 없던 손실이 생긴다.
+fn prose_only(input: &str, seam: Seam) -> String {
+    let no_fence_info: String = input
+        .lines()
+        .map(|l| {
+            let t = l.trim_start();
+            if t.starts_with("```") || t.starts_with("~~~") {
+                ""
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    strip_urls(&no_fence_info, seam)
+}
+
+/// 걷어낸 자리를 어떻게 읽을 것인가.
+#[derive(Clone, Copy, PartialEq)]
+enum Seam {
+    /// 양옆을 붙여 읽는다. `[안전 시트](주소)의` → `안전 시트의`
+    Glue,
+    /// 자리에 경계를 남긴다. `[안전 시트](주소)의` → `안전 시트 의`
+    Split,
+}
+
+/// **URL 과 앵커를 뺀 글.** 입력과 출력 양쪽에 똑같이 쓴다.
+///
+/// 주소 안쪽은 저자가 쓴 글이 아니라 기계 부품이고, 채널마다 href 로 가든 괄호로 가든
+/// 조각이 달라진다. **한쪽에서만 빼면 낱말 경계가 어긋난다** — `[안전 시트](주소)의` 는
+/// 입력에서 `[안전 시트]의` 가 되어 "시트의" 한 낱말인데, 주소를 그대로 둔 출력에서는
+/// "시트" 와 "의" 로 갈린다.
+fn strip_urls(text: &str, seam: Seam) -> String {
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(ch.len());
+    let mut i = 0;
+    while i < ch.len() {
+        // `](주소)` 의 괄호 안
+        if ch[i] == ']' && ch.get(i + 1) == Some(&'(') {
+            if let Some(p) = ch[i + 2..].iter().position(|&c| c == ')') {
+                i += 2 + p + 1;
+                if seam == Seam::Split {
+                    out.push(' ');
+                }
+                continue;
+            }
+        }
+        // 링크 라벨의 대괄호. **경계인지 아닌지가 채널마다 갈린다** — 입력의
+        // `See[패널` 은 대괄호가 지워진 출력에서 `See패널` 한 낱말이 된다. 지우는 쪽으로
+        // 맞추고, 경계가 남는 읽기는 `Seam::Split` 이 맡는다.
+        if ch[i] == '[' || ch[i] == ']' {
+            i += 1;
+            if seam == Seam::Split {
+                out.push(' ');
+            }
+            continue;
+        }
+        // 맨몸 URL 과 앵커.
+        //
+        // **스킴까지 봐야 한다.** `http` 로 시작하기만 하면 먹어 치우면 `http2` 같은
+        // 낱말이 통째로 사라져서, 정작 내용이 빠졌을 때 못 잡는다(거짓 음성).
+        let scheme = ch[i..].starts_with(&['h', 't', 't', 'p', ':', '/', '/'])
+            || ch[i..].starts_with(&['h', 't', 't', 'p', 's', ':', '/', '/']);
+        // 앵커는 **링크 목적지 자리에서만** 뺀다. `(#` 만 보면 출력의 `(#1391 …)`
+        // 같은 평범한 괄호까지 먹어서, 입력에만 남은 낱말이 생긴다.
+        let anchor = ch[i] == '#' && i > 1 && ch[i - 1] == '(' && ch[i - 2] == ']';
+        if scheme || anchor {
+            // **주소에 올 수 없는 글자에서 멈춘다.** 한 글자라도 더 먹으면 입력에서만
+            // 태그가 깨져서, 속성 이름이 본문 낱말로 둔갑한다 — `<form action="…"
+            // method="POST">` 에서 닫는 따옴표까지 먹으면 입력 쪽만 `method` 를 낱말로
+            // 센다.
+            //
+            // **멈출 글자는 `bare` 가 남기는 것 중에서만 고른다.** 백틱처럼 `bare` 가
+            // 지우는 글자에서 멈추면 반대쪽으로 어긋난다 — 입력의 `` `주소`이고 `` 는
+            // `이고` 로 남는데 출력은 `주소이고` 한 낱말이라, 없던 손실이 생긴다.
+            while i < ch.len() && !ch[i].is_whitespace() && !")<>\"".contains(ch[i]) {
+                // escape 된 형태에서도 같은 자리에서 멈춘다. 텔레그램 HTML 은 `<` 를
+                // `&lt;` 로 내보내므로, 엔티티를 안 보면 출력에서만 주소가 더 길어져
+                // 뒤에 붙은 글자를 먹어 버린다.
+                if emphasis::parse_entity(&ch, i).is_some() {
+                    break;
+                }
+                i += 1;
+            }
+            if seam == Seam::Split {
+                out.push(' ');
+            }
+            continue;
+        }
+        out.push(ch[i]);
+        i += 1;
+    }
+    out
 }
 
 /// 조각 하나하나가 한도 안인가. 분할이 있는 이유 자체다.
@@ -566,9 +851,105 @@ mod tests {
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
     }
 
+    /// **내용이 살아남았는가.** 강조가 맞고 태그가 균형이어도 잘려 나가면 소용없다.
+    #[test]
+    fn truncated_output_is_caught_even_when_everything_else_is_valid() {
+        let input = "앞부분은 멀쩡하다. **강조**도 있다.\n\n뒷부분은 잘려 나간다. 중요한 내용.";
+        // 한도 때문에 뒤를 버린 출력 — 다른 규칙에는 하나도 안 걸린다.
+        let cut = "앞부분은 멀쩡하다. <b>강조</b>도 있다.";
+        let f = check(input, cut, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+        assert!(f.iter().all(|x| x.rule == Rule::TextLoss), "다른 규칙에는 안 걸려야 한다: {f:?}");
+
+        // 다 옮긴 출력은 조용하다. 불릿이 바뀌거나 표가 다시 정렬돼도 낱말은 그대로다.
+        let whole = "앞부분은 멀쩡하다. <b>강조</b>도 있다.\n\n뒷부분은 잘려 나간다. 중요한 내용.";
+        assert!(check(input, whole, Channel::TelegramHtml).is_empty());
+        assert!(check("- 항목 하나", "• 항목 하나", Channel::Plain).is_empty());
+    }
+
     #[test]
     fn empty_output_for_nonempty_input_is_a_failure() {
         let f = check("내용이 있다", "   ", Channel::Plain);
         assert!(f.iter().any(|x| x.rule == Rule::EmptyOutput), "{f:?}");
     }
+    /// **정상적인 분할은 손실이 아니다.** 띄어쓰기 없는 한자 문단이 한도를 넘어
+    /// 나뉘면 경계에 걸친 조각이 양쪽으로 끊긴다 — 그걸 손실로 세면 안 된다.
+    #[test]
+    fn part_boundary_is_not_text_loss() {
+        let whole: String = (0x4E00u32..0x4E00 + 5000).filter_map(char::from_u32).collect();
+        let half = whole.chars().count() / 2;
+        let a: String = whole.chars().take(half).collect();
+        let b: String = whole.chars().skip(half).collect();
+        let split = format!("{a}\0{b}");
+        let f = check(&whole, &split, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        // 그래도 경계 밖에서 잘라 내면 잡힌다.
+        let cut = format!("{a}\0{}", b.chars().take(10).collect::<String>());
+        let f = check(&whole, &cut, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
+    /// **몇 번 나왔는지까지 본다.** 한 번만 남겨도 통과면, 반복되는 목록의 뒤쪽을
+    /// 잘라 내는 구현이 그대로 통과한다.
+    #[test]
+    fn repeated_words_must_survive_as_many_times() {
+        let input = "중요한 항목 하나\n중요한 항목 둘\n중요한 항목 셋";
+        let cut = "중요한 항목 하나\n항목 둘\n항목 셋";
+        let f = check(input, cut, Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+        assert!(check(input, input, Channel::Plain).is_empty());
+    }
+
+    /// 입력과 출력에서 **같은 자리를 빼야** 없던 손실이 안 생긴다.
+    #[test]
+    fn url_stripping_does_not_move_word_boundaries() {
+        // 링크 뒤에 조사가 붙는다. 입력은 `[안전 시트]의`, 출력은 `안전 시트의` 다.
+        let input = "[안전 시트](https://example.com/seat)의 설치 방법";
+        let out = "<a href=\"https://example.com/seat\">안전 시트</a>의 설치 방법";
+        assert!(check(input, out, Channel::TelegramHtml).is_empty());
+
+        // 주소 뒤에 태그가 바로 붙어도 속성 이름이 본문 낱말로 둔갑하지 않는다.
+        let input = "예: https://bank.example/#<form action=\"https://x\" method=\"POST\">";
+        let out = "예: https://bank.example/#&lt;form action=&quot;https://x&quot; method=&quot;POST&quot;&gt;";
+        let f = check(input, out, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
+    /// **한 글자와 이모지도 내용이다.** 짧은 선택지·등급·이모지만 있는 줄이 사라져도
+    /// 잡혀야 한다.
+    #[test]
+    fn single_characters_and_emoji_are_content() {
+        let f = check("선택지는 A B C 셋이다", "선택지는 A 셋이다", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        let f = check("배포 끝\n\n🎉 🚀", "배포 끝", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        // 다 옮기면 조용하다.
+        assert!(check("배포 끝\n\n🎉 🚀", "배포 끝\n\n🎉 🚀", Channel::Plain).is_empty());
+    }
+
+    /// 링크를 걷어낸 자리에 경계가 남는지는 **채널이 정한다.** 같은 입력을 텔레그램은
+    /// 문단에서 붙여 내고 표 안에서는 띄어서 낸다 — 한쪽 읽기로만 보면 다른 쪽이
+    /// 통째로 거짓 경보가 된다.
+    #[test]
+    fn link_markup_boundaries_are_read_both_ways() {
+        let input = "[안전 시트](https://example.com/seat)의 설치";
+        // 문단: 태그를 지우면 조사가 붙는다
+        assert!(check(input, "<a href=\"https://example.com/seat\">안전 시트</a>의 설치", Channel::TelegramHtml)
+            .is_empty());
+        // 표 안: 링크가 `텍스트 (주소)` 로 풀려서 조사가 떨어진다
+        assert!(check(input, "안전 시트 (https://example.com/seat)의 설치", Channel::TelegramHtml)
+            .is_empty());
+
+        // 대괄호가 낱말을 가르던 자리도 같다. `See[패널` → `See패널`
+        let input = "shield panel. See[패널 - 에어로 실드](https://example.com/p)";
+        assert!(check(input, "shield panel. See패널 - 에어로 실드", Channel::Plain).is_empty());
+
+        // 그래도 진짜로 빠지면 잡힌다.
+        let f = check(input, "shield panel. See", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
 }
