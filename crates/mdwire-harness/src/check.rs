@@ -106,15 +106,43 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     // **출현 횟수까지 센다.** 집합으로 보면 한 번만 남아 있어도 통과라서, 같은 말이
     // 반복되는 문단이나 목록의 뒤쪽만 잘라 내는 구현을 놓친다.
     let mut have: HashMap<String, usize> = HashMap::new();
-    for w in words(&bare(&strip_urls(&output.replace(PART_SEPARATOR, "\n")))) {
+    for w in words(&bare(&strip_urls(&output.replace(PART_SEPARATOR, "\n"), Seam::Glue))) {
         *have.entry(w).or_default() += 1;
     }
     let seam = seam_words(output);
 
-    // 순서는 보고용으로 지키되, 같은 낱말을 여러 번 싣지 않는다.
-    let mut missing: Vec<String> = Vec::new();
+    let missing = missing_words(&prose_only(input, Seam::Glue), &have, &seam);
+    if missing.is_empty() {
+        return;
+    }
+    // **입력을 두 가지로 읽는다.** 링크를 걷어낸 자리에 경계가 남는지 아닌지는 채널이
+    // 정한다 — `[안전 시트](주소)의` 를 텔레그램은 `안전 시트의` 로 붙여 내지만, 표
+    // 안에서는 `안전 시트 (주소)의` 로 띄어서 낸다. 한쪽 읽기로만 보면 다른 쪽이
+    // 통째로 거짓 경보가 된다. 둘 다에서 빠졌을 때만 손실로 센다.
+    let split = missing_words(&prose_only(input, Seam::Split), &have, &seam);
+    let missing: Vec<String> = missing.into_iter().filter(|w| split.contains(w)).collect();
+    if missing.is_empty() {
+        return;
+    }
+
+    let shown: Vec<&str> = missing.iter().take(5).map(String::as_str).collect();
+    out.push(Finding {
+        rule: Rule::TextLoss,
+        detail: format!(
+            "입력의 낱말 {}개가 출력에서 빠졌다: {}{}",
+            missing.len(),
+            shown.join(" · "),
+            if missing.len() > 5 { " …" } else { "" }
+        ),
+    });
+}
+
+/// `have` 에서 몫을 못 찾은 낱말. 순서는 보고용으로 지키되 같은 낱말을 여러 번 싣지 않는다.
+fn missing_words(text: &str, have: &HashMap<String, usize>, seam: &HashSet<String>) -> Vec<String> {
+    let mut have = have.clone();
+    let mut missing = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    for w in words(&bare(&prose_only(input))) {
+    for w in words(&bare(text)) {
         match have.get_mut(&w) {
             // 남은 몫이 있으면 하나 쓴다. 두 번 나온 말은 두 번 남아 있어야 한다.
             Some(n) if *n > 0 => *n -= 1,
@@ -126,19 +154,7 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
             }
         }
     }
-    if missing.is_empty() {
-        return;
-    }
-    let shown: Vec<&str> = missing.iter().take(5).map(String::as_str).collect();
-    out.push(Finding {
-        rule: Rule::TextLoss,
-        detail: format!(
-            "입력의 낱말 {}개가 출력에서 빠졌다: {}{}",
-            missing.len(),
-            shown.join(" · "),
-            if missing.len() > 5 { " …" } else { "" }
-        ),
-    });
+    missing
 }
 
 /// 조각 경계를 가로지르던 비교 단위.
@@ -156,7 +172,7 @@ fn seam_words(output: &str) -> HashSet<String> {
         let left: Vec<char> = pair[0].chars().collect();
         let tail: String = left[left.len().saturating_sub(EDGE)..].iter().collect();
         let head: String = pair[1].chars().take(EDGE).collect();
-        out.extend(words(&bare(&strip_urls(&format!("{tail}{head}")))));
+        out.extend(words(&bare(&strip_urls(&format!("{tail}{head}"), Seam::Glue))));
     }
     out
 }
@@ -264,7 +280,7 @@ fn words(text: &str) -> Vec<String> {
 ///
 /// 코드펜스의 info 문자열을 뺀다 — ` ```rust ` 의 "rust" 는 표시지 본문이 아니다.
 /// 입력에만 적용한다. 출력에서 펜스 줄을 지우면 없던 손실이 생긴다.
-fn prose_only(input: &str) -> String {
+fn prose_only(input: &str, seam: Seam) -> String {
     let no_fence_info: String = input
         .lines()
         .map(|l| {
@@ -277,7 +293,16 @@ fn prose_only(input: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    strip_urls(&no_fence_info)
+    strip_urls(&no_fence_info, seam)
+}
+
+/// 걷어낸 자리를 어떻게 읽을 것인가.
+#[derive(Clone, Copy, PartialEq)]
+enum Seam {
+    /// 양옆을 붙여 읽는다. `[안전 시트](주소)의` → `안전 시트의`
+    Glue,
+    /// 자리에 경계를 남긴다. `[안전 시트](주소)의` → `안전 시트 의`
+    Split,
 }
 
 /// **URL 과 앵커를 뺀 글.** 입력과 출력 양쪽에 똑같이 쓴다.
@@ -286,7 +311,7 @@ fn prose_only(input: &str) -> String {
 /// 조각이 달라진다. **한쪽에서만 빼면 낱말 경계가 어긋난다** — `[안전 시트](주소)의` 는
 /// 입력에서 `[안전 시트]의` 가 되어 "시트의" 한 낱말인데, 주소를 그대로 둔 출력에서는
 /// "시트" 와 "의" 로 갈린다.
-fn strip_urls(text: &str) -> String {
+fn strip_urls(text: &str, seam: Seam) -> String {
     let ch: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(ch.len());
     let mut i = 0;
@@ -295,8 +320,21 @@ fn strip_urls(text: &str) -> String {
         if ch[i] == ']' && ch.get(i + 1) == Some(&'(') {
             if let Some(p) = ch[i + 2..].iter().position(|&c| c == ')') {
                 i += 2 + p + 1;
+                if seam == Seam::Split {
+                    out.push(' ');
+                }
                 continue;
             }
+        }
+        // 링크 라벨의 대괄호. **경계인지 아닌지가 채널마다 갈린다** — 입력의
+        // `See[패널` 은 대괄호가 지워진 출력에서 `See패널` 한 낱말이 된다. 지우는 쪽으로
+        // 맞추고, 경계가 남는 읽기는 `Seam::Split` 이 맡는다.
+        if ch[i] == '[' || ch[i] == ']' {
+            i += 1;
+            if seam == Seam::Split {
+                out.push(' ');
+            }
+            continue;
         }
         // 맨몸 URL 과 앵커.
         //
@@ -324,6 +362,9 @@ fn strip_urls(text: &str) -> String {
                     break;
                 }
                 i += 1;
+            }
+            if seam == Seam::Split {
+                out.push(' ');
             }
             continue;
         }
@@ -853,6 +894,28 @@ mod tests {
 
         // 다 옮기면 조용하다.
         assert!(check("배포 끝\n\n🎉 🚀", "배포 끝\n\n🎉 🚀", Channel::Plain).is_empty());
+    }
+
+    /// 링크를 걷어낸 자리에 경계가 남는지는 **채널이 정한다.** 같은 입력을 텔레그램은
+    /// 문단에서 붙여 내고 표 안에서는 띄어서 낸다 — 한쪽 읽기로만 보면 다른 쪽이
+    /// 통째로 거짓 경보가 된다.
+    #[test]
+    fn link_markup_boundaries_are_read_both_ways() {
+        let input = "[안전 시트](https://example.com/seat)의 설치";
+        // 문단: 태그를 지우면 조사가 붙는다
+        assert!(check(input, "<a href=\"https://example.com/seat\">안전 시트</a>의 설치", Channel::TelegramHtml)
+            .is_empty());
+        // 표 안: 링크가 `텍스트 (주소)` 로 풀려서 조사가 떨어진다
+        assert!(check(input, "안전 시트 (https://example.com/seat)의 설치", Channel::TelegramHtml)
+            .is_empty());
+
+        // 대괄호가 낱말을 가르던 자리도 같다. `See[패널` → `See패널`
+        let input = "shield panel. See[패널 - 에어로 실드](https://example.com/p)";
+        assert!(check(input, "shield panel. See패널 - 에어로 실드", Channel::Plain).is_empty());
+
+        // 그래도 진짜로 빠지면 잡힌다.
+        let f = check(input, "shield panel. See", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
     }
 
 }
