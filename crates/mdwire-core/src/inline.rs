@@ -18,7 +18,7 @@
 //! ([`Inline::safe_len`]). 여는 마크업은 짝이 맞는 순간 그 자리에 끼워 넣는다.
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
-use crate::vocab::{is_wide, Emph, Vocab, ZWSP};
+use crate::vocab::{needs_cjk_padding, Emph, Vocab, ZWSP};
 
 struct Open {
     emph: Emph,
@@ -135,7 +135,7 @@ impl Inline {
                     ch: '`',
                     guess: false,
                     after_space: prev.is_none_or(char::is_whitespace),
-                    pad: v.pad && prev.is_some_and(is_wide),
+                    pad: v.pad && prev.is_some_and(needs_cjk_padding),
                 });
                 i += run;
                 continue;
@@ -185,7 +185,7 @@ impl Inline {
             let left = can_open(prev, next);
             let after_space = prev.is_none_or(char::is_whitespace);
             let same = self.open.iter().rposition(|o| o.emph == emph);
-            let pad = v.pad && prev.is_some_and(is_wide);
+            let pad = v.pad && prev.is_some_and(needs_cjk_padding);
 
             match same {
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
@@ -271,7 +271,7 @@ impl Inline {
             out.insert(open.at, ZWSP);
         }
         out.push_str(v.close(open.emph));
-        if v.pad && next.is_some_and(is_wide) {
+        if v.pad && next.is_some_and(needs_cjk_padding) {
             out.push(ZWSP);
         }
     }

@@ -4,7 +4,7 @@
 //! 손대는 곳이 이 파일이어야 한다는 뜻이고, 그게 `SPEC.md` 4절과 8절의 표가 코드에
 //! 대응하는 방식이다.
 
-use crate::width::char_width;
+use crate::width::is_cjk;
 use crate::{Channel, CjkPolicy};
 
 /// 인라인 강조의 종류.
@@ -217,11 +217,13 @@ impl Vocab {
     }
 }
 
-/// CJK 인접인가. 표시 폭이 2 면 한글·한자·가나·전각기호·이모지다.
-/// 이 판정으로 충분한 이유는, 채널 파서가 강조를 놓치는 것이 정확히 "폭 2 글자 옆"이기
-/// 때문이다.
-pub(crate) fn is_wide(c: char) -> bool {
-    char_width(c) == 2
+/// 이 글자 옆에 폭 없는 공백을 끼워야 하는가.
+///
+/// 이름이 정책을 가리킨다 — 판정 자체는 `width::is_cjk` 가 하고, 여기서는 그것이
+/// **패딩의 기준**이라는 사실만 말한다. 전에는 `is_wide`(표시 폭 2)였는데 그건
+/// 다른 질문이었다: 반각 가타카나는 폭 1이지만 끼워야 하고 이모지는 폭 2지만 아니다.
+pub(crate) fn needs_cjk_padding(c: char) -> bool {
+    is_cjk(c)
 }
 
 /// 폭 없는 공백. CJK 인접 강조를 살린다.
