@@ -67,6 +67,16 @@ const TELEGRAM_TAGS: &[&str] = &[
     "tg-spoiler", "span",
 ];
 
+/// 닫는 짝이 없는 HTML 요소. 열린 채로 두는 것이 정상이다.
+///
+/// 텔레그램은 이것들도 안 받으므로 "허용 안 되는 태그"로는 걸린다. 다만 그걸 다시
+/// "안 닫혔다"로 세면 같은 사실을 두 번 신고하는 것이고, `<br>` 을 내보내는 구현이
+/// 실제보다 나빠 보인다.
+const VOID_TAGS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
+    "source", "track", "wbr",
+];
+
 /// 출력 조각 구분자. CLI 와 같은 규약이다(`SPEC.md` 5절).
 pub const PART_SEPARATOR: char = '\0';
 
@@ -313,7 +323,7 @@ fn html_tags(output: &str, out: &mut Vec<Finding>) {
                                 detail: format!("열린 적 없는 </{name}>"),
                             }),
                         }
-                    } else {
+                    } else if !VOID_TAGS.contains(&name.as_str()) {
                         stack.push(name);
                     }
                     i = end;
@@ -487,6 +497,30 @@ mod tests {
         assert!(f.iter().any(|x| x.rule == Rule::UnclosedTag), "{f:?}");
         let f = check("가", "<h1>가</h1>", Channel::TelegramHtml);
         assert!(f.iter().any(|x| x.rule == Rule::DisallowedTag), "{f:?}");
+    }
+
+    /// void 요소는 닫는 짝이 없는 것이 **정상**이다.
+    ///
+    /// 텔레그램은 이것들을 안 받으므로 `DisallowedTag` 로는 남아야 하고, 거기에
+    /// `UnclosedTag` 까지 더하면 같은 사실을 두 번 신고하는 것이라 `<br>` 을 내보내는
+    /// 구현이 실제보다 나빠 보인다.
+    #[test]
+    fn void_elements_are_disallowed_but_not_unclosed() {
+        for tag in ["<br>", "<hr>", "<input>", "<img src=\"x\">"] {
+            let out = format!("가{tag}나");
+            let f = check("가나", &out, Channel::TelegramHtml);
+            assert!(
+                f.iter().any(|x| x.rule == Rule::DisallowedTag),
+                "{tag} 가 허용 안 되는 태그로 안 잡힌다: {f:?}"
+            );
+            assert!(
+                !f.iter().any(|x| x.rule == Rule::UnclosedTag),
+                "{tag} 를 안 닫혔다고 세고 있다: {f:?}"
+            );
+        }
+        // 짝이 있는 태그가 안 닫힌 것은 여전히 잡는다 — 예외가 너무 넓어지지 않았는지 본다.
+        let f = check("가", "<b>가", Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::UnclosedTag), "{f:?}");
     }
 
     #[test]
