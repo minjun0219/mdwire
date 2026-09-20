@@ -46,11 +46,22 @@ pub(crate) struct Inline {
     prev: Option<char>,
     /// 링크 텍스트를 렌더할 때만 쓰는 버퍼. 재사용해서 할당을 아낀다.
     scratch: String,
+    /// 지금 열려 있는 코드 스팬의 **날것 내용**.
+    ///
+    /// 블록이 끝나도록 닫는 런이 안 오면 그 백틱은 코드가 아니라 글자였다는 뜻이다.
+    /// 그때 삼킨 내용을 도로 꺼내 다시 읽으려고 들고 있는다. 코드 스팬은 겹쳐 열리지
+    /// 않아서 하나면 충분하고, 비우기만 하고 버리지 않아 할당이 다시 들지 않는다.
+    code_src: String,
 }
 
 impl Inline {
     pub fn new() -> Self {
-        Self { open: Vec::new(), prev: None, scratch: String::new() }
+        Self {
+            open: Vec::new(),
+            prev: None,
+            scratch: String::new(),
+            code_src: String::new(),
+        }
     }
 
     /// 블록 경계. 인라인 상태는 블록을 넘지 않는다.
@@ -108,6 +119,7 @@ impl Inline {
                         let step = run.max(1);
                         for k in 0..step {
                             v.escape_char(line[i + k], out);
+                            self.code_src.push(line[i + k]);
                         }
                         i += step;
                     }
@@ -128,6 +140,7 @@ impl Inline {
             if c == '`' {
                 let run = run_len(line, i, '`');
                 let prev = self.prev_char(line, i);
+                self.code_src.clear();
                 self.open.push(Open {
                     emph: Emph::Code,
                     at: out.len(),
@@ -225,10 +238,37 @@ impl Inline {
 
     /// 블록이 끝났다. 열린 것을 전부 정리한다.
     pub fn finish_block(&mut self, out: &mut String, v: &Vocab) {
-        while !self.open.is_empty() {
+        while let Some(top) = self.open.last() {
+            if top.emph == Emph::Code {
+                self.revert_code_span(out, v);
+                continue;
+            }
             self.close_at(self.open.len() - 1, out, v, None);
         }
         self.prev = None;
+    }
+
+    /// 안 닫힌 코드 스팬을 글자로 되돌린다.
+    ///
+    /// **블록이 끝나도록 닫는 런이 안 왔으면 그 백틱은 코드가 아니었다.** 그대로
+    /// `<code>` 로 닫아 버리면 뒤에 오던 강조가 통째로 코드 안에 갇힌다 — 실제 문서에서
+    /// `앞 ``` 뒤에 **굵게**` 의 굵게가 사라지고 있었다.
+    ///
+    /// 백틱만 되돌리고 끝내면 안 된다. 삼킨 내용은 코드로 읽혀서 강조가 안 걸린
+    /// 상태다 — **도로 꺼내 다시 읽어야** 그 안의 강조가 산다.
+    fn revert_code_span(&mut self, out: &mut String, v: &Vocab) {
+        let Some(open) = self.open.pop() else { return };
+        out.truncate(open.at);
+        for _ in 0..open.run {
+            out.push(open.ch);
+        }
+        let src = std::mem::take(&mut self.code_src);
+        let chars: Vec<char> = src.chars().collect();
+        self.code_src = src;
+        self.code_src.clear();
+        // 다시 읽는 내용은 백틱 바로 뒤에서 시작한다.
+        self.prev = Some(open.ch);
+        self.render(&chars, out, v);
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {

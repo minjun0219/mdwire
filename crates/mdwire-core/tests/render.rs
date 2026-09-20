@@ -538,3 +538,21 @@ fn an_over_limit_bare_link_is_not_written_twice() {
     let joined = parts.join("");
     assert_eq!(joined.matches("&amp;x=1").count(), 1, "주소가 두 번 나왔다");
 }
+
+/// **짝 없는 백틱 런은 글자다.**
+///
+/// 코드로 삼켜서 블록 끝까지 닫아 버리면, 뒤에 오던 강조가 통째로 코드 안에 갇힌다.
+/// 실제 문서에서 `앞 ``` 뒤에 **굵게**` 의 굵게가 사라지고 있었다.
+#[test]
+fn an_unpaired_backtick_run_is_text_and_what_follows_still_emphasizes() {
+    let got = one("앞부분 ``` 뒤에 **굵게** 가 온다", Channel::TelegramHtml);
+    assert_eq!(got, "앞부분 ``` 뒤에 <b>굵게</b> 가 온다");
+
+    // 짝이 맞는 런은 그대로 코드다.
+    let got = one("앞 `코드` 와 **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 <code>코드</code> 와 <b>굵게</b>");
+
+    // 긴 런도 짝이 맞으면 코드다.
+    let got = one("앞 ``코드 `안` 에`` 와 **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 <code>코드 `안` 에</code> 와 <b>굵게</b>");
+}
