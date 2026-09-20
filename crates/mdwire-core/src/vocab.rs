@@ -104,7 +104,7 @@ impl Vocab {
                 let markup = escaped_len(url) + "<a href=\"\"></a>".len();
                 if markup >= self.channel.limit() {
                     out.push_str(text);
-                    if !url.is_empty() && url != text {
+                    if !url.is_empty() && !escaped_eq(text, url) {
                         out.push_str(" (");
                         self.escape(url, out);
                         out.push(')');
@@ -253,4 +253,32 @@ fn escaped_len(url: &str) -> usize {
             _ => 1,
         })
         .sum()
+}
+
+/// escape 한 주소가 이 텍스트와 같은가. **만들지 않고 견준다.**
+///
+/// 맨몸 링크는 라벨이 곧 주소인데, `text` 는 이미 escape 되어 있고 `url` 은 날것이다.
+/// 그냥 견주면 `&` 하나 때문에 다르다고 보고 주소를 두 번 내보낸다.
+fn escaped_eq(text: &str, url: &str) -> bool {
+    let mut t = text.chars();
+    for c in url.chars() {
+        let escaped = match c {
+            '&' => "&amp;",
+            '<' => "&lt;",
+            '>' => "&gt;",
+            '"' => "&quot;",
+            _ => {
+                if t.next() != Some(c) {
+                    return false;
+                }
+                continue;
+            }
+        };
+        for e in escaped.chars() {
+            if t.next() != Some(e) {
+                return false;
+            }
+        }
+    }
+    t.next().is_none()
 }

@@ -516,7 +516,8 @@ fn an_address_longer_than_the_limit_becomes_text() {
     let parts = render(&format!("[아주 긴 링크]({url}) 뒤에 오는 글"), Channel::TelegramHtml, CjkPolicy::Auto);
 
     let joined = parts.join("");
-    assert!(!joined.contains("<a "), "링크로 내면 조각이 성립하지 않는다: {}", &joined[..80.min(joined.len())]);
+    let preview: String = joined.chars().take(80).collect();
+    assert!(!joined.contains("<a "), "링크로 내면 조각이 성립하지 않는다: {preview}");
     assert!(joined.contains("아주 긴 링크"), "링크 텍스트가 사라졌다");
     assert!(joined.contains("뒤에 오는 글"), "뒤쪽 내용이 사라졌다");
     for (i, p) in parts.iter().enumerate() {
@@ -527,4 +528,13 @@ fn an_address_longer_than_the_limit_becomes_text() {
     // 한도 안쪽 주소는 그대로 링크다.
     let ok = render("[링크](https://example.com/x) 뒤", Channel::TelegramHtml, CjkPolicy::Auto);
     assert!(ok[0].contains("<a href=\"https://example.com/x\">링크</a>"), "{:?}", ok[0]);
+}
+
+/// 맨몸 링크는 라벨이 곧 주소다. **escape 차이로 다르다고 보면 주소를 두 번 낸다.**
+#[test]
+fn an_over_limit_bare_link_is_not_written_twice() {
+    let url = format!("https://example.com/?q={}&x=1", "y".repeat(5000));
+    let parts = render(&format!("[{url}]({url})"), Channel::TelegramHtml, CjkPolicy::Auto);
+    let joined = parts.join("");
+    assert_eq!(joined.matches("&amp;x=1").count(), 1, "주소가 두 번 나왔다");
 }
