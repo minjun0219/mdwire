@@ -104,9 +104,12 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
 fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     let have: std::collections::HashSet<String> =
         words(&bare(&output.replace(PART_SEPARATOR, "\n"))).into_iter().collect();
+    // 순서는 보고용으로 지키되, 중복 판정은 집합으로 한다 — 선형 탐색으로 하면
+    // 빠진 낱말이 많을수록(= 크게 잘려 나갔을수록) 비용이 제곱으로 는다.
     let mut missing: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for w in words(&bare(&prose_only(input))) {
-        if !have.contains(&w) && !missing.contains(&w) {
+        if !have.contains(&w) && seen.insert(w.clone()) {
             missing.push(w);
         }
     }
@@ -239,10 +242,13 @@ fn prose_only(input: &str) -> String {
                 continue;
             }
         }
-        // 맨몸 URL 과 앵커
-        if ch[i..].starts_with(&['h', 't', 't', 'p'])
-            || (ch[i] == '#' && i > 0 && ch[i - 1] == '(')
-        {
+        // 맨몸 URL 과 앵커.
+        //
+        // **스킴까지 봐야 한다.** `http` 로 시작하기만 하면 먹어 치우면 `http2` 같은
+        // 낱말이 통째로 사라져서, 정작 내용이 빠졌을 때 못 잡는다(거짓 음성).
+        let scheme = ch[i..].starts_with(&['h', 't', 't', 'p', ':', '/', '/'])
+            || ch[i..].starts_with(&['h', 't', 't', 'p', 's', ':', '/', '/']);
+        if scheme || (ch[i] == '#' && i > 0 && ch[i - 1] == '(') {
             while i < ch.len() && !ch[i].is_whitespace() && ch[i] != ')' && ch[i] != '>' {
                 i += 1;
             }
