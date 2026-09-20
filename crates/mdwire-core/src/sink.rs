@@ -162,9 +162,19 @@ fn cut(parts: &mut Vec<String>, cur: &mut String, len: &mut usize, markup: &Mark
         return;
     }
     let mut part = std::mem::take(cur);
+    // **태그 한가운데서는 끊지 않는다.** 조각 하나가 `… <a ` 로 끝나면 그 조각은
+    // 그 자체로 깨진 HTML 이고, 채널은 메시지를 통째로 거절한다. 여는 태그가 아직
+    // `>` 를 못 만났으면 그만큼 도로 빼서 다음 조각으로 넘긴다.
+    let carry = match part.len().checked_sub(markup.partial.len()) {
+        Some(at) if !markup.partial.is_empty() && at > 0 && part.ends_with(&markup.partial) => {
+            part.split_off(at)
+        }
+        _ => String::new(),
+    };
     markup.close_all(&mut part, v);
     parts.push(part);
     markup.reopen(cur, v);
+    cur.push_str(&carry);
     *len = cur.chars().count();
 }
 
