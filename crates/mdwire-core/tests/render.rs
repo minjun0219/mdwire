@@ -231,6 +231,36 @@ fn emphasis_closes_next_to_cjk_punctuation() {
     assert_eq!(tg("**끝.**이라서 그렇다."), "<b>끝.</b>이라서 그렇다.");
 }
 
+/// 따옴표로 시작하고 끝나는 강조 뒤에 조사가 붙는 모양.
+///
+/// **실제 글에서 아주 흔하다** — 인용을 굵게 처리하면 거의 항상 이 꼴이 된다.
+/// 여는 쪽은 앞이 공백이라 문제가 없고, 닫는 쪽이 `"` 뒤 `로` 라서 CommonMark 가 막는다.
+#[test]
+fn emphasis_closes_after_a_quote_mark() {
+    assert_eq!(
+        tg(r#"잣대를 **"저자가 쓴 게 얼마나 살아남느냐"**로 둔다"#),
+        r#"잣대를 <b>"저자가 쓴 게 얼마나 살아남느냐"</b>로 둔다"#
+    );
+    // 곡선 따옴표와 홑따옴표도 같다.
+    assert_eq!(tg("**“곡선”**이라고"), "<b>“곡선”</b>이라고");
+    assert_eq!(tg("**'홑'**을"), "<b>'홑'</b>을");
+    // 닫는 마커 뒤가 마침표여도 닫힌다.
+    assert_eq!(tg(r#"**"끝"**."#), r#"<b>"끝"</b>."#);
+}
+
+/// **복구 규칙은 언어를 가리지 않는다.**
+///
+/// CommonMark 의 CJK-friendly 개정안은 마커 뒤가 CJK 일 때만 닫게 해 주므로 영어에서는
+/// 같은 모양이 그대로 깨진다. 우리 규칙은 "같은 종류가 열려 있고 앞이 공백이 아니면
+/// 닫는다" 하나라서 언어와 무관하게 닫힌다 — 깨진 입력을 고치는 것이 목적이지
+/// 특정 언어를 돕는 것이 목적이 아니다.
+#[test]
+fn the_repair_is_not_language_specific() {
+    assert_eq!(tg(r#"the mark is **"what survives"**and not ours"#),
+               r#"the mark is <b>"what survives"</b>and not ours"#);
+    assert_eq!(tg("a **(note)**follows"), "a <b>(note)</b>follows");
+}
+
 /// CJK 판정은 **표시 폭과 다른 질문**이다. 한 함수로 쓰면 두 군데가 틀린다.
 #[test]
 fn cjk_padding_follows_cjk_not_width() {
