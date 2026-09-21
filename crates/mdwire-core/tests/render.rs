@@ -556,3 +556,19 @@ fn an_unpaired_backtick_run_is_text_and_what_follows_still_emphasizes() {
     let got = one("앞 ``코드 `안` 에`` 와 **굵게**", Channel::TelegramHtml);
     assert_eq!(got, "앞 <code>코드 `안` 에</code> 와 <b>굵게</b>");
 }
+
+/// 되돌려 다시 읽을 때 **줄 사이의 구분자도 그대로 있어야 한다.**
+///
+/// 줄바꿈·인용 접두사·항목 들여쓰기는 블록 층이 출력에 바로 쓴다. 코드 스팬 내용에
+/// 같이 안 남겨 두면 되돌릴 때 두 줄이 한 줄로 붙는다.
+#[test]
+fn replaying_an_unpaired_code_span_keeps_line_breaks() {
+    let got = one("앞 `foo\nbar **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 `foo\nbar <b>굵게</b>");
+
+    let got = one("> 인용 `foo\n> bar 뒤", Channel::SlackMarkdown);
+    assert_eq!(got, "> 인용 `foo\n> bar 뒤");
+
+    let got = one("- 항목 `foo\n  bar 뒤", Channel::Plain);
+    assert_eq!(got, "• 항목 `foo\n  bar 뒤");
+}

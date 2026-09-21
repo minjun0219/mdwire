@@ -51,7 +51,10 @@ pub(crate) struct Inline {
     /// 블록이 끝나도록 닫는 런이 안 오면 그 백틱은 코드가 아니라 글자였다는 뜻이다.
     /// 그때 삼킨 내용을 도로 꺼내 다시 읽으려고 들고 있는다. 코드 스팬은 겹쳐 열리지
     /// 않아서 하나면 충분하고, 비우기만 하고 버리지 않아 할당이 다시 들지 않는다.
-    code_src: String,
+    ///
+    /// `Vec<char>` 인 것은 다시 읽을 때 `render` 에 그대로 넘기기 위해서다 — `String`
+    /// 으로 두면 되돌릴 때마다 글자 벡터를 새로 만들어야 한다.
+    code_src: Vec<char>,
 }
 
 impl Inline {
@@ -60,7 +63,7 @@ impl Inline {
             open: Vec::new(),
             prev: None,
             scratch: String::new(),
-            code_src: String::new(),
+            code_src: Vec::new(),
         }
     }
 
@@ -85,6 +88,17 @@ impl Inline {
     /// 줄 하나가 끝났다. 다음 줄의 첫 글자에게 앞 글자는 줄바꿈이다.
     pub fn end_line(&mut self) {
         self.prev = Some('\n');
+    }
+
+    /// 블록 층이 `out` 에 바로 쓴 글자를 코드 스팬 내용에도 남긴다.
+    ///
+    /// **줄 사이의 구분자는 `render` 를 거치지 않는다.** 줄바꿈·인용 접두사·이어지는
+    /// 항목의 들여쓰기는 블록 층이 `out` 에 직접 쓴다. 코드 스팬이 열려 있는 동안
+    /// 그것을 안 남겨 두면, 되돌려 다시 읽을 때 두 줄이 한 줄로 붙는다.
+    pub fn note_raw(&mut self, s: &str) {
+        if self.open.last().is_some_and(|o| o.emph == Emph::Code) {
+            self.code_src.extend(s.chars());
+        }
     }
 
     /// 블록 접두사(`- `, `> ` 따위)를 건너뛴 뒤의 앞 글자를 세운다.
@@ -262,13 +276,16 @@ impl Inline {
         for _ in 0..open.run {
             out.push(open.ch);
         }
+        // 버퍼를 통째로 빌려 와서 다시 읽고 돌려준다. 새로 만들지 않는다.
         let src = std::mem::take(&mut self.code_src);
-        let chars: Vec<char> = src.chars().collect();
-        self.code_src = src;
-        self.code_src.clear();
         // 다시 읽는 내용은 백틱 바로 뒤에서 시작한다.
         self.prev = Some(open.ch);
-        self.render(&chars, out, v);
+        self.render(&src, out, v);
+        // 다시 읽는 동안 새 코드 스팬이 열렸으면 그쪽 버퍼를 지키고, 아니면 돌려준다.
+        if self.code_src.is_empty() {
+            self.code_src = src;
+            self.code_src.clear();
+        }
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
