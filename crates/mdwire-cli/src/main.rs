@@ -29,6 +29,7 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
   --stream              stdin 을 읽는 대로 내보낸다. 한도 분할은 하지 않는다
   --cjk auto|pad|never  CJK 인접 강조에 U+200B 를 끼우는 정책 (기본: auto)
   -h, --help            이 도움말
+  -V, --version         버전
 
 출력:
   조각이 여럿이면 NUL(\\0) 로 구분한다. --stream 은 한 덩어리로 흘린다.
@@ -53,6 +54,10 @@ fn run() -> Result<(), String> {
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or_else(|| format!("{arg} 에 값이 없다"));
         match arg.as_str() {
+            "-V" | "--version" => {
+                println!("mdwire {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "-h" | "--help" => {
                 print!("{USAGE}");
                 return Ok(());

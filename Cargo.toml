@@ -3,7 +3,7 @@ members = ["crates/mdwire-core", "crates/mdwire-cli", "crates/mdwire-bench", "cr
 resolver = "2"
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/minjun0219/mdwire"
