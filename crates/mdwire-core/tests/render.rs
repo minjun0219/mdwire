@@ -587,3 +587,16 @@ fn a_row_with_extra_cells_keeps_them() {
     let plain = one("| A | B |\n| --- | --- |\n| 하나 | 둘 |\n", Channel::Plain);
     assert!(plain.contains("하나") && plain.contains("둘"), "{plain}");
 }
+
+/// **역슬래시 탈출.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
+#[test]
+fn a_backslash_escape_makes_the_next_character_plain() {
+    assert_eq!(one(r"TEST\_VCLEFT\_FRONT", Channel::TelegramHtml), "TEST_VCLEFT_FRONT");
+    assert_eq!(one(r"2 \* 3 과 **굵게**", Channel::TelegramHtml), "2 * 3 과 <b>굵게</b>");
+    // 탈출된 대괄호는 링크를 열지 않는다.
+    assert_eq!(one(r"new createError\[code\](\[msg\])", Channel::Plain), "new createError[code]([msg])");
+    // 코드 스팬 안에서는 탈출이 없다. 역슬래시도 내용이다.
+    assert_eq!(one(r"`코드\_안`", Channel::TelegramHtml), r"<code>코드\_안</code>");
+    // 마크다운을 그대로 내보내는 채널은 탈출을 지킨다 — 벗기면 뜻이 바뀐다.
+    assert_eq!(one(r"2 \* 3", Channel::SlackMarkdown), r"2 \* 3");
+}

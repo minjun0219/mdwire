@@ -640,13 +640,19 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
 /// 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
 fn safe_cut(p: &[char]) -> usize {
     let mut k = p.len();
-    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | ' ' | '\t') {
+    // 역슬래시도 붙든다. 다음 글자를 봐야 **탈출인지 글자인지**가 갈린다.
+    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | '\\' | ' ' | '\t') {
         k -= 1;
     }
     if let Some(at) = p[..k].iter().rposition(|&c| c == '[') {
         if !p[at..k].contains(&')') {
             k = k.min(at);
         }
+    }
+    // **역슬래시와 그 다음 글자 사이에서는 끊지 않는다.** 위의 `[` 규칙이 `\[` 한가운데를
+    // 가르면, 역슬래시만 먼저 나가서 탈출이 풀리지 않는다.
+    while k > 0 && p[k - 1] == '\\' {
+        k -= 1;
     }
     k
 }

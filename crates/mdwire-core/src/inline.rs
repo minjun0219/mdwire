@@ -151,6 +151,20 @@ impl Inline {
                 }
             }
 
+            // **역슬래시 탈출.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다. 안 보면
+            // `TEST\_VCLEFT\_FRONT` 가 기울임이 되고 역슬래시까지 출력에 남는다 —
+            // 실제 문서에서 그러고 있었다.
+            if c == '\\' {
+                if let Some(&next) = line.get(i + 1) {
+                    if next.is_ascii_punctuation() {
+                        v.literal(next, out);
+                        self.prev = Some(next);
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+
             if c == '`' {
                 let run = run_len(line, i, '`');
                 let prev = self.prev_char(line, i);
