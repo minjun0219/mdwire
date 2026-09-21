@@ -640,7 +640,8 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
 /// 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
 fn safe_cut(p: &[char]) -> usize {
     let mut k = p.len();
-    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | ' ' | '\t') {
+    // 역슬래시도 붙든다. 다음 글자를 봐야 **탈출인지 글자인지**가 갈린다.
+    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | '\\' | ' ' | '\t') {
         k -= 1;
     }
     if let Some(at) = p[..k].iter().rposition(|&c| c == '[') {

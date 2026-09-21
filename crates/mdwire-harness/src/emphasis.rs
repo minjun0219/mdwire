@@ -268,6 +268,18 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
     while i < ch.len() {
         let c = ch[i];
 
+        // **역슬래시 탈출이 먼저다.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
+        // 코어가 그렇게 읽으므로 참조 구현도 같이 읽어야 한다.
+        if c == '\\' {
+            if let Some(&next) = ch.get(i + 1) {
+                if next.is_ascii_punctuation() {
+                    push_text(&mut stack, &mut root, &next.to_string());
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+
         // 코드 스팬이 먼저다. 그 안의 `*` 는 강조가 아니다.
         if c == '`' {
             let run = run_len(&ch, i, '`');

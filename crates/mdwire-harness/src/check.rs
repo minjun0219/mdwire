@@ -245,6 +245,18 @@ fn bare(text: &str, seam: Seam) -> String {
                 continue;
             }
         }
+        // 역슬래시 탈출은 뒷글자만 남긴다. 코어가 그렇게 내보내므로 셈도 같아야 한다.
+        if ch[i] == '\\' {
+            if let Some(&next) = ch.get(i + 1) {
+                if next.is_ascii_punctuation() {
+                    if !is_marker(next) {
+                        out.push(next);
+                    }
+                    i += 2;
+                    continue;
+                }
+            }
+        }
         // 폭 없는 공백도 지운다 — 우리가 일부러 끼운 것이라 낱말을 쪼개면 안 된다.
         if !is_marker(ch[i]) {
             out.push(ch[i]);
@@ -367,6 +379,15 @@ fn strip_urls(text: &str, seam: Seam) -> String {
                 }
                 continue;
             }
+        }
+        // **역슬래시로 탈출된 글자는 그대로 지나간다.** `\[` 는 대괄호 한 글자지
+        // 링크 라벨의 시작이 아니다. 여기서 가리지 않으면 `bare` 가 짝을 잃은
+        // 역슬래시를 만나 낱말이 갈린다.
+        if ch[i] == '\\' && ch.get(i + 1).is_some_and(|c| c.is_ascii_punctuation()) {
+            out.push(ch[i]);
+            out.push(ch[i + 1]);
+            i += 2;
+            continue;
         }
         // 링크 라벨의 대괄호. **경계인지 아닌지가 채널마다 갈린다** — 입력의
         // `See[패널` 은 대괄호가 지워진 출력에서 `See패널` 한 낱말이 된다. 지우는 쪽으로

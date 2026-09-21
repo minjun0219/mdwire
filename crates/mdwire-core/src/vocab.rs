@@ -143,6 +143,22 @@ impl Vocab {
         }
     }
 
+    /// 역슬래시로 탈출된 글자를 내보낸다.
+    ///
+    /// **마크다운을 그대로 내보내는 채널에서는 탈출을 지키고 나간다.** 벗겨서 맨몸
+    /// `*` 를 내보내면 저자가 글자로 쓴 별표가 그 채널에서 강조로 읽힌다 — 벗기는 것이
+    /// 오히려 뜻을 바꾼다. HTML 로 가는 채널은 마커라는 개념이 없으니 그냥 escape 한다.
+    pub fn literal(&self, c: char, out: &mut String) {
+        match self.channel {
+            Channel::TelegramHtml | Channel::Plain => self.escape_char(c, out),
+            _ if matches!(c, '*' | '_' | '~' | '`' | '\\') => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => self.escape_char(c, out),
+        }
+    }
+
     /// 불릿 마커. `SPEC.md` 8절의 표.
     pub fn bullet(&self) -> &'static str {
         match self.channel {
