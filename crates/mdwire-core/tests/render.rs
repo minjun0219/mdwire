@@ -538,3 +538,37 @@ fn an_over_limit_bare_link_is_not_written_twice() {
     let joined = parts.join("");
     assert_eq!(joined.matches("&amp;x=1").count(), 1, "주소가 두 번 나왔다");
 }
+
+/// **짝 없는 백틱 런은 글자다.**
+///
+/// 코드로 삼켜서 블록 끝까지 닫아 버리면, 뒤에 오던 강조가 통째로 코드 안에 갇힌다.
+/// 실제 문서에서 `앞 ``` 뒤에 **굵게**` 의 굵게가 사라지고 있었다.
+#[test]
+fn an_unpaired_backtick_run_is_text_and_what_follows_still_emphasizes() {
+    let got = one("앞부분 ``` 뒤에 **굵게** 가 온다", Channel::TelegramHtml);
+    assert_eq!(got, "앞부분 ``` 뒤에 <b>굵게</b> 가 온다");
+
+    // 짝이 맞는 런은 그대로 코드다.
+    let got = one("앞 `코드` 와 **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 <code>코드</code> 와 <b>굵게</b>");
+
+    // 긴 런도 짝이 맞으면 코드다.
+    let got = one("앞 ``코드 `안` 에`` 와 **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 <code>코드 `안` 에</code> 와 <b>굵게</b>");
+}
+
+/// 되돌려 다시 읽을 때 **줄 사이의 구분자도 그대로 있어야 한다.**
+///
+/// 줄바꿈·인용 접두사·항목 들여쓰기는 블록 층이 출력에 바로 쓴다. 코드 스팬 내용에
+/// 같이 안 남겨 두면 되돌릴 때 두 줄이 한 줄로 붙는다.
+#[test]
+fn replaying_an_unpaired_code_span_keeps_line_breaks() {
+    let got = one("앞 `foo\nbar **굵게**", Channel::TelegramHtml);
+    assert_eq!(got, "앞 `foo\nbar <b>굵게</b>");
+
+    let got = one("> 인용 `foo\n> bar 뒤", Channel::SlackMarkdown);
+    assert_eq!(got, "> 인용 `foo\n> bar 뒤");
+
+    let got = one("- 항목 `foo\n  bar 뒤", Channel::Plain);
+    assert_eq!(got, "• 항목 `foo\n  bar 뒤");
+}

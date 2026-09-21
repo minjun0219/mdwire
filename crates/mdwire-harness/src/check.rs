@@ -465,7 +465,20 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
             // 대신 **짝이 맞아야** 한다.
             let scan = emphasis::scan_markdown(&output.replace(PART_SEPARATOR, "\n"), Mode::Strict);
+            // **저자가 남긴 짝 없는 마커는 우리 잘못이 아니다.** 입력에 이미 짝 없이
+            // 서 있던 것을 그대로 내보내는 것은 충실한 전달이지 결함이 아니다. 종류별로
+            // 입력에 있던 만큼을 빼고, 출력에서 늘어난 것만 신고한다.
+            let mut budget: HashMap<String, usize> = HashMap::new();
+            for u in emphasis::scan_markdown(input, Mode::Strict).unpaired {
+                *budget.entry(u.marker).or_default() += 1;
+            }
             for u in scan.unpaired {
+                if let Some(n) = budget.get_mut(&u.marker) {
+                    if *n > 0 {
+                        *n -= 1;
+                        continue;
+                    }
+                }
                 out.push(Finding {
                     rule: Rule::StrayMarker,
                     detail: format!("짝 없는 `{}` — …{}…", u.marker, u.context),
@@ -967,6 +980,25 @@ mod tests {
         let ok = "앞 <b>굵게</b>\0<b>이어서</b> 뒤";
         let f = check("앞 **굵게 이어서** 뒤", ok, Channel::TelegramHtml);
         assert!(!f.iter().any(|x| x.rule == Rule::UnclosedTag), "{f:?}");
+    }
+
+    /// **저자가 남긴 짝 없는 마커는 우리 잘못이 아니다.** 입력에 이미 짝 없이 서 있던
+    /// 것을 그대로 내보내는 것은 충실한 전달이다 — 우리가 새로 만든 것만 신고한다.
+    #[test]
+    fn a_marker_already_unpaired_in_the_input_is_not_ours() {
+        let input = "앞 ``` 뒤에 **굵게** 가 온다";
+        let kept = "앞 ``` 뒤에 **굵게** 가 온다";
+        assert!(
+            !check(input, kept, Channel::SlackMarkdown)
+                .iter()
+                .any(|x| x.rule == Rule::StrayMarker),
+            "저자가 쓴 백틱을 그대로 냈을 뿐이다"
+        );
+
+        // 우리가 새로 만든 짝 없는 마커는 잡힌다.
+        let broke = "앞 ``` 뒤에 **굵게 가 온다";
+        let f = check(input, broke, Channel::SlackMarkdown);
+        assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
     }
 
 }

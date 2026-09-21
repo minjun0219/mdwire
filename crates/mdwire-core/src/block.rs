@@ -275,9 +275,11 @@ impl Engine {
                 // 여기서 항목을 끊으면 줄을 넘는 강조가 항목 안에서만 안 잡힌다 —
                 // 80열 wrap 은 불릿 안에서도 똑같이 일어나므로 그건 고장이다.
                 self.out.push('\n');
+                self.inline.note_raw("\n");
                 self.inline.end_line();
                 for _ in 0..prefix.min(8) {
                     self.out.push(' ');
+                    self.inline.note_raw(" ");
                 }
             }
             LineKind::Para => {
@@ -289,6 +291,7 @@ impl Engine {
                     // 문단 안의 줄바꿈은 살린다. **강조는 이 줄바꿈을 넘어 이어진다** —
                     // 80열 wrap 된 산문에서 그게 일상이고, 그것이 이 라이브러리의 첫 고장이었다.
                     self.out.push('\n');
+                    self.inline.note_raw("\n");
                     self.inline.end_line();
                 }
             }
@@ -306,9 +309,11 @@ impl Engine {
                     self.out.push_str(self.v.quote_open());
                 } else {
                     self.out.push('\n');
+                    self.inline.note_raw("\n");
                     self.inline.end_line();
                 }
                 self.out.push_str(self.v.quote_prefix());
+                self.inline.note_raw(self.v.quote_prefix());
                 self.inline.set_prev(None);
             }
             LineKind::Bullet(indent) | LineKind::Ordered(indent, _) => {
