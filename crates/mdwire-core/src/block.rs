@@ -766,8 +766,14 @@ impl Table {
                 // 위키링크 안의 `|` 가 칸을 갈라 놓는 것이 실제로 그랬다. 넘치는 것은
                 // 마지막 칸에 이어 붙인다.
                 if c + 1 == cols && row.len() > cols {
-                    let rest = row[c..].join(" | ");
-                    chars.extend(rest.chars());
+                    // 재사용 버퍼에 바로 이어 붙인다. `join` 으로 중간 문자열을
+                    // 만들면 넘치는 줄마다 할당이 하나씩 더 든다.
+                    for (k, cell) in row[c..].iter().enumerate() {
+                        if k > 0 {
+                            chars.extend(" | ".chars());
+                        }
+                        chars.extend(cell.chars());
+                    }
                 } else {
                     chars.extend(row.get(c).map(String::as_str).unwrap_or("").chars());
                 }
