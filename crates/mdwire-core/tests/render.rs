@@ -616,3 +616,26 @@ fn a_code_span_holding_a_backtick_widens_its_fence() {
     // 마커를 지우는 채널은 공백이 곧 낱말 경계라 벗기지 않는다.
     assert_eq!(one("백틱(`` ` ``)으로", Channel::Plain), "백틱( ` )으로");
 }
+
+/// 울타리를 늘린 코드 스팬도 **CJK 패딩을 똑같이 받는다.**
+///
+/// 여기서 빠뜨리면 같은 입력이 울타리 길이에 따라 패딩이 있다 없다 한다.
+#[test]
+fn a_widened_code_fence_still_gets_cjk_padding() {
+    let plain = render("한`코드`글", Channel::SlackMarkdown, CjkPolicy::Auto).join("");
+    let wide = render("한`` ` ``글", Channel::SlackMarkdown, CjkPolicy::Auto).join("");
+    let zwsp = '\u{200b}';
+    assert_eq!(
+        plain.matches(zwsp).count(),
+        wide.matches(zwsp).count(),
+        "울타리 길이에 따라 패딩이 달라졌다: {plain:?} vs {wide:?}"
+    );
+}
+
+/// 탭만 든 코드 스팬은 바깥 공백을 벗긴다. `trim` 은 탭도 털어서 못 가른다.
+#[test]
+fn a_tab_only_body_still_loses_its_padding_spaces() {
+    assert_eq!(one("가 ` \t ` 나", Channel::TelegramHtml), "가 <code>\t</code> 나");
+    // 진짜로 공백뿐이면 그대로 둔다 — 벗길 것이 내용밖에 없다.
+    assert_eq!(one("가 `  ` 나", Channel::TelegramHtml), "가 <code>  </code> 나");
+}

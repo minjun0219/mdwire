@@ -208,7 +208,7 @@ fn cut(
 }
 
 /// 지금 열려 있는 마크업. 조각을 끊을 때 닫고 다시 열려고 들고 있는다.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct Markup {
     /// 열린 HTML 태그. (이름, 여는 태그 전체)
     tags: Vec<(String, String)>,
@@ -220,6 +220,24 @@ struct Markup {
     /// 잘려 있어서 `<code class="…">` 하나가 두 번에 나뉘어 들어온다. 놓친 태그는
     /// 닫히지도 다시 열리지도 않아서, 조각 하나가 통째로 깨진 HTML 이 된다.
     partial: String,
+    /// 다음에 먹일 글자가 줄 첫머리인가.
+    ///
+    /// **인라인 코드 스팬의 울타리와 블록 펜스를 가르는 값이다.** 백틱을 담은 코드
+    /// 스팬은 ` ``` ` 로 감싸는데, 그것이 조각 단위로 들어오면 줄 첫머리의 펜스와
+    /// 구분되지 않는다. 그대로 두면 분할기가 없는 코드블록을 열고 닫는다.
+    at_line_start: bool,
+}
+
+impl Default for Markup {
+    fn default() -> Self {
+        Self {
+            tags: Vec::new(),
+            fence: None,
+            partial: String::new(),
+            // 블록은 줄 첫머리에서 시작한다.
+            at_line_start: true,
+        }
+    }
 }
 
 impl Markup {
@@ -279,7 +297,11 @@ impl Markup {
     }
 
     fn feed_fence(&mut self, s: &str) {
-        for line in s.split('\n') {
+        for (i, line) in s.split('\n').enumerate() {
+            // 줄 첫머리에 선 것만 펜스다. 문장 한가운데의 ` ``` ` 는 인라인 울타리다.
+            if i == 0 && !self.at_line_start {
+                continue;
+            }
             let t = line.trim_start();
             if t.starts_with("```") {
                 self.fence = match self.fence {
@@ -287,6 +309,9 @@ impl Markup {
                     None => Some(t.trim_start_matches('`').to_string()),
                 };
             }
+        }
+        if !s.is_empty() {
+            self.at_line_start = s.ends_with('\n');
         }
     }
 

@@ -347,7 +347,9 @@ impl Inline {
             if body.len() >= 2
                 && body.starts_with(' ')
                 && body.ends_with(' ')
-                && !body.trim().is_empty()
+                // `trim` 은 탭도 턴다. `<code> \t </code>` 의 바깥 공백은 벗겨야
+                // 하므로, "전부 공백인가"는 ASCII 공백만으로 본다.
+                && !body.chars().all(|c| c == ' ')
             {
                 out.truncate(out.len() - 1);
                 out.remove(open.at);
@@ -362,17 +364,27 @@ impl Inline {
             let longest = longest_run(body, '`');
             if longest > 0 {
                 let pad = body.starts_with('`') || body.ends_with('`');
+                // **한 번에 끼워 넣는다.** 한 글자씩 앞에 넣으면 넣을 때마다 내용
+                // 전체가 밀려서 런이 길수록 제곱으로 는다.
+                let mut fence = String::with_capacity(longest + 2);
+                for _ in 0..longest + 1 {
+                    fence.push('`');
+                }
                 if pad {
                     out.push(' ');
                 }
-                for _ in 0..longest + 1 {
-                    out.push('`');
-                }
+                out.push_str(&fence);
                 if pad {
-                    out.insert(open.at, ' ');
+                    fence.push(' ');
                 }
-                for _ in 0..longest + 1 {
-                    out.insert(open.at, '`');
+                out.insert_str(open.at, &fence);
+                // CJK 패딩은 기본 경로와 똑같이 붙인다. 여기서 빠뜨리면 같은 입력이
+                // 울타리 길이에 따라 패딩이 있다 없다 한다.
+                if open.pad {
+                    out.insert(open.at, ZWSP);
+                }
+                if v.pad && next.is_some_and(needs_cjk_padding) {
+                    out.push(ZWSP);
                 }
                 return;
             }
