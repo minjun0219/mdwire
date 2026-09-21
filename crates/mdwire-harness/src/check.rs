@@ -388,7 +388,14 @@ fn strip_urls(text: &str, seam: Seam) -> String {
             // **멈출 글자는 `bare` 가 남기는 것 중에서만 고른다.** 백틱처럼 `bare` 가
             // 지우는 글자에서 멈추면 반대쪽으로 어긋난다 — 입력의 `` `주소`이고 `` 는
             // `이고` 로 남는데 출력은 `주소이고` 한 낱말이라, 없던 손실이 생긴다.
-            while i < ch.len() && !ch[i].is_whitespace() && !")<>\"".contains(ch[i]) {
+            // **ASCII 밖에서도 멈춘다.** 주소에 한글이 날것으로 들어갈 수 없으니
+            // `…usb.zip에서` 의 `에서` 는 주소가 아니라 글이다. 안 멈추면 출력에서만
+            // 조사가 주소에 먹혀 없던 손실이 생긴다.
+            while i < ch.len()
+                && !ch[i].is_whitespace()
+                && ch[i].is_ascii()
+                && !"()<>\"".contains(ch[i])
+            {
                 // escape 된 형태에서도 같은 자리에서 멈춘다. 텔레그램 HTML 은 `<` 를
                 // `&lt;` 로 내보내므로, 엔티티를 안 보면 출력에서만 주소가 더 길어져
                 // 뒤에 붙은 글자를 먹어 버린다.
@@ -1147,6 +1154,20 @@ mod tests {
         // 경계에서 떨어진 내용이 빠지면 그대로 잡힌다.
         let f = check("도표: SQLite<br/>메타데이터 를 쓴다 뒷문장도 있다", out, Channel::TelegramHtml);
         assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+    }
+
+    /// 주소가 어디서 끝나는지를 **입력과 출력이 같은 자리에서** 봐야 한다.
+    #[test]
+    fn a_bare_address_ends_where_the_prose_starts() {
+        // 조사가 주소에 바로 붙는다. 입력은 `)` 로, 출력은 한글로 끝을 안다.
+        let input = "자세한 내용은 [https://example.com/a](https://example.com/a)에서 본다";
+        let out = "자세한 내용은 https://example.com/a에서 본다";
+        assert!(!check(input, out, Channel::Plain).iter().any(|x| x.rule == Rule::TextLoss));
+
+        // `(으)로` 처럼 괄호가 바로 붙는 경우도 같다.
+        let input = "[https://example.com/b](https://example.com/b)(으)로 간다";
+        let out = "https://example.com/b(으)로 간다";
+        assert!(!check(input, out, Channel::Plain).iter().any(|x| x.rule == Rule::TextLoss));
     }
 
 }
