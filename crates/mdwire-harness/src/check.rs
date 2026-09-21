@@ -207,6 +207,11 @@ fn seam_words(output: &str) -> HashSet<String> {
 ///
 /// 마커를 낱말 경계로 두면 `**금요일**에` 가 "금요일"+"에" 로 쪼개지는데 출력은
 /// `금요일에` 한 낱말이라 사라진 것으로 잡힌다. 한국어는 조사가 붙어서 특히 그렇다.
+/// 마커이거나 우리가 끼운 글자. 낱말을 셀 때는 없는 셈 친다.
+fn is_marker(c: char) -> bool {
+    matches!(c, '*' | '_' | '~' | '`' | '\u{200b}')
+}
+
 fn bare(text: &str, seam: Seam) -> String {
     let ch: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
@@ -226,7 +231,10 @@ fn bare(text: &str, seam: Seam) -> String {
                         if !quoted {
                             attrs.push(' ');
                         }
-                    } else if quoted {
+                    } else if quoted && !is_marker(c) {
+                        // 속성 값도 본문과 **같은 잣대로** 씻는다. 여기만 `_` 를 남기면
+                        // 입력의 `csrf_token` 이 출력에서는 `csrftoken` 이 되어, 멀쩡한
+                        // 낱말이 사라진 것으로 잡힌다.
                         attrs.push(c);
                     }
                 }
@@ -238,7 +246,7 @@ fn bare(text: &str, seam: Seam) -> String {
             }
         }
         // 폭 없는 공백도 지운다 — 우리가 일부러 끼운 것이라 낱말을 쪼개면 안 된다.
-        if !matches!(ch[i], '*' | '_' | '~' | '`' | '\u{200b}') {
+        if !is_marker(ch[i]) {
             out.push(ch[i]);
         }
         i += 1;
@@ -1168,6 +1176,18 @@ mod tests {
         let input = "[https://example.com/b](https://example.com/b)(으)로 간다";
         let out = "https://example.com/b(으)로 간다";
         assert!(!check(input, out, Channel::Plain).iter().any(|x| x.rule == Rule::TextLoss));
+    }
+
+    /// 속성 값도 본문과 **같은 잣대로** 씻는다.
+    ///
+    /// 여기만 `_` 를 남기면 입력의 `csrf_token` 이 출력에서는 `csrftoken` 이 되어,
+    /// 멀쩡한 낱말이 사라진 것으로 잡힌다.
+    #[test]
+    fn attribute_values_are_washed_like_prose() {
+        let input = "설명\n\n```html\n<input name = \"csrf_token\" value = \"tok_1234\" />\n```\n";
+        let out = "설명\n\n<pre><code class=\"language-html\">&lt;input name = \"csrf_token\" value = \"tok_1234\" /&gt;</code></pre>";
+        let f = check(input, out, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
     }
 
 }
