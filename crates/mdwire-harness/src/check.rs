@@ -125,8 +125,8 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     let input = resolve_escapes(input);
     // 조각 구분자는 살려 둔다 — 이음매를 만들 때 필요하다.
     let output = resolve_escapes(output);
-    let input = input.as_str();
-    let output = output.as_str();
+    let input: &str = &input;
+    let output: &str = &output;
     let joined = output.replace(PART_SEPARATOR, "\n");
 
     let mut have: HashMap<String, usize> = HashMap::new();
@@ -169,9 +169,10 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
 }
 
 /// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.
-fn resolve_escapes(text: &str) -> String {
+fn resolve_escapes(text: &str) -> std::borrow::Cow<'_, str> {
     if !text.contains('\\') {
-        return text.to_string();
+        // 역슬래시가 없으면 통째로 복사할 이유가 없다. 훑기는 문서 수천 개를 돈다.
+        return std::borrow::Cow::Borrowed(text);
     }
     let ch: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
@@ -185,7 +186,7 @@ fn resolve_escapes(text: &str) -> String {
         out.push(ch[i]);
         i += 1;
     }
-    out
+    std::borrow::Cow::Owned(out)
 }
 
 /// `have` 에서 몫을 못 찾은 낱말. 순서는 보고용으로 지키되 같은 낱말을 여러 번 싣지 않는다.
@@ -632,16 +633,28 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
             // **저자가 `\*` 로 탈출해 둔 마커는 글자다.** 코어가 탈출을 풀어 내보내므로
             // 출력에는 맨몸 `*` 로 남는데, 그건 우리가 변환 못 한 마커가 아니다.
             // 입력에 탈출된 만큼을 예산으로 두고 그만큼은 넘어간다.
-            let mut escaped: HashMap<char, usize> = HashMap::new();
+            // **런 길이까지 맞춰 센다.** 글자별 총량으로 두면 따로 떨어진 `\*` 두 개가
+            // 엉뚱한 자리의 `**` 하나를 면제해 준다.
+            let mut escaped: HashMap<(char, usize), usize> = HashMap::new();
             let ich: Vec<char> = input.chars().collect();
-            for (k, &c) in ich.iter().enumerate() {
-                if c == '\\' {
-                    if let Some(&next) = ich.get(k + 1) {
-                        if matches!(next, '*' | '_' | '~') {
-                            *escaped.entry(next).or_default() += 1;
-                        }
-                    }
+            let mut k = 0;
+            while k < ich.len() {
+                if ich[k] != '\\' {
+                    k += 1;
+                    continue;
                 }
+                let Some(&marker) = ich.get(k + 1) else { break };
+                if !matches!(marker, '*' | '_' | '~') {
+                    k += 2;
+                    continue;
+                }
+                // `\*\*\*` 처럼 이어진 것은 한 런이다.
+                let mut n = 0;
+                while ich.get(k) == Some(&'\\') && ich.get(k + 1) == Some(&marker) {
+                    n += 1;
+                    k += 2;
+                }
+                *escaped.entry((marker, n)).or_default() += 1;
             }
             let ch: Vec<char> = text.chars().collect();
             let mut i = 0;
@@ -669,9 +682,9 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
                     let could_be_emphasis = emphasis::can_open(prev, next)
                         || !prev.is_none_or(char::is_whitespace);
                     if could_be_emphasis {
-                        if let Some(n) = escaped.get_mut(&c) {
-                            if *n >= run {
-                                *n -= run;
+                        if let Some(n) = escaped.get_mut(&(c, run)) {
+                            if *n > 0 {
+                                *n -= 1;
                                 i += run;
                                 continue;
                             }
@@ -1251,6 +1264,11 @@ mod tests {
 
         // 탈출해 둔 것보다 많이 남으면 그건 우리 것이다.
         let f = check(r"곱하기는 2 \* 3 이고 **굵게** 다", "곱하기는 2 * 3 이고 **굵게 다", Channel::Plain);
+        assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
+
+        // **런 길이가 맞아야 면제된다.** 따로 떨어진 `\*` 둘이 엉뚱한 `**` 를 덮어 주면
+        // 안 된다.
+        let f = check(r"\* 과 \* 는 글자", "* 과 * 는 **글자", Channel::Plain);
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
     }
 

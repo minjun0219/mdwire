@@ -273,7 +273,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         if c == '\\' {
             if let Some(&next) = ch.get(i + 1) {
                 if next.is_ascii_punctuation() {
-                    push_text(&mut stack, &mut root, &next.to_string());
+                    push_char(&mut stack, &mut root, next);
                     i += 2;
                     continue;
                 }
@@ -430,6 +430,7 @@ fn push_text(stack: &mut [Open], root: &mut String, s: &str) {
         None => root.push_str(s),
     }
 }
+
 
 /// `](` 뒤의 닫는 괄호 다음 위치.
 fn link_end(ch: &[char], at: usize) -> Option<usize> {

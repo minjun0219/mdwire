@@ -151,7 +151,15 @@ impl Vocab {
     pub fn literal(&self, c: char, out: &mut String) {
         match self.channel {
             Channel::TelegramHtml | Channel::Plain => self.escape_char(c, out),
-            _ if matches!(c, '*' | '_' | '~' | '`' | '\\') => {
+            // **그 채널의 마크다운이 읽는 글자면 탈출을 지킨다.** 강조 마커만 지키면
+            // `\# 제목` 이 제목이 되고 `\[x\](url)` 이 링크가 된다 — 저자가 글자로
+            // 쓴 것을 채널이 구문으로 읽어 버린다.
+            _ if matches!(
+                c,
+                '*' | '_' | '~' | '`' | '\\' | '[' | ']' | '(' | ')' | '#' | '>' | '|' | '-'
+                    | '+' | '.' | '!'
+            ) =>
+            {
                 out.push('\\');
                 out.push(c);
             }
