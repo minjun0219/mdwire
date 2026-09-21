@@ -11,7 +11,7 @@
 //! 여기 적힌 짝짓기 규칙이 **정본**이다. 코어는 이 규칙을 한 번 순회로 구현한 것이다.
 
 /// 강조의 종류. 채널마다 표기는 달라도 의미는 같다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     Bold,
     Italic,
