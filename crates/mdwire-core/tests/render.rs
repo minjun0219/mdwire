@@ -67,8 +67,10 @@ fn underscores_inside_identifiers_survive() {
 /// 잘못 닫힌다. CommonMark 스펙 테스트의 입력을 빌려 돌리다 잡았다.
 #[test]
 fn a_code_span_closes_on_a_run_of_the_same_length() {
-    assert_eq!(tg("` foo `` bar `"), "<code> foo `` bar </code>");
-    assert_eq!(tg("` `` `"), "<code> `` </code>");
+    // 앞뒤 공백 하나는 마커와 떼어 놓으려고 끼운 것이라 내용이 아니다 — CommonMark 가
+    // 한 쌍을 벗기라고 한다.
+    assert_eq!(tg("` foo `` bar `"), "<code>foo `` bar</code>");
+    assert_eq!(tg("` `` `"), "<code>``</code>");
     assert_eq!(tg("``백틱 ` 포함`` 밖"), "<code>백틱 ` 포함</code> 밖");
 }
 
@@ -599,4 +601,18 @@ fn a_backslash_escape_makes_the_next_character_plain() {
     assert_eq!(one(r"`코드\_안`", Channel::TelegramHtml), r"<code>코드\_안</code>");
     // 마크다운을 그대로 내보내는 채널은 탈출을 지킨다 — 벗기면 뜻이 바뀐다.
     assert_eq!(one(r"2 \* 3", Channel::SlackMarkdown), r"2 \* 3");
+}
+
+/// 백틱을 담은 코드 스팬. **울타리를 늘리고 앞뒤 공백 하나를 벗긴다.**
+#[test]
+fn a_code_span_holding_a_backtick_widens_its_fence() {
+    // 마크다운 채널: 백틱 하나로 감싸면 ``` 가 되어 코드 블록으로 읽힌다.
+    let got = one("백틱(`` ` ``)으로", Channel::SlackMarkdown);
+    assert_eq!(got, "백틱(`` ` ``)으로");
+
+    // HTML 채널: 울타리가 필요 없고 공백만 벗긴다.
+    assert_eq!(one("백틱(`` ` ``)으로", Channel::TelegramHtml), "백틱(<code>`</code>)으로");
+
+    // 마커를 지우는 채널은 공백이 곧 낱말 경계라 벗기지 않는다.
+    assert_eq!(one("백틱(`` ` ``)으로", Channel::Plain), "백틱( ` )으로");
 }

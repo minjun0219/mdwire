@@ -337,6 +337,46 @@ impl Inline {
             return;
         }
 
+        // **코드 스팬은 앞뒤 공백 하나를 벗긴다.** `` ` `` 처럼 내용이 백틱으로
+        // 시작하거나 끝날 때 마커와 붙지 않게 끼워 넣는 공백이라, 내용이 아니다
+        // (CommonMark). 안 벗기면 `<code> ` </code>` 처럼 없던 공백이 남는다.
+        // 마커를 지우는 채널에서는 벗기지 않는다. 마커가 없으면 그 공백이 곧 낱말
+        // 경계라, 벗기면 앞뒤 글자가 붙어 버린다.
+        if open.emph == Emph::Code && !v.is_plain() {
+            let body = &out[open.at..];
+            if body.len() >= 2
+                && body.starts_with(' ')
+                && body.ends_with(' ')
+                && !body.trim().is_empty()
+            {
+                out.truncate(out.len() - 1);
+                out.remove(open.at);
+            }
+        }
+        // **내용에 백틱이 있으면 울타리를 늘린다.** 마크다운을 그대로 내보내는
+        // 채널에서 백틱 하나로 감싸면 ``` ``` ``` 가 되어 코드 블록으로 읽힌다.
+        // 내용 안의 가장 긴 런보다 하나 긴 울타리를 쓰고, 내용이 백틱으로 시작하거나
+        // 끝나면 공백을 하나 끼워 마커와 떼어 놓는다(CommonMark).
+        if open.emph == Emph::Code && v.open(Emph::Code) == "`" {
+            let body = &out[open.at..];
+            let longest = longest_run(body, '`');
+            if longest > 0 {
+                let pad = body.starts_with('`') || body.ends_with('`');
+                if pad {
+                    out.push(' ');
+                }
+                for _ in 0..longest + 1 {
+                    out.push('`');
+                }
+                if pad {
+                    out.insert(open.at, ' ');
+                }
+                for _ in 0..longest + 1 {
+                    out.insert(open.at, '`');
+                }
+                return;
+            }
+        }
         out.insert_str(open.at, v.open(open.emph));
         if open.pad {
             out.insert(open.at, ZWSP);
@@ -381,6 +421,21 @@ fn find_link(line: &[char], at: usize) -> Option<((usize, usize), usize, usize)>
     }
     let k = line[j + 2..].iter().position(|&c| c == ')')? + j + 2;
     Some(((at + 1, j), j + 2, k))
+}
+
+/// 같은 글자가 이어진 가장 긴 길이.
+fn longest_run(s: &str, c: char) -> usize {
+    let mut best = 0;
+    let mut cur = 0;
+    for x in s.chars() {
+        if x == c {
+            cur += 1;
+            best = best.max(cur);
+        } else {
+            cur = 0;
+        }
+    }
+    best
 }
 
 fn run_len(line: &[char], at: usize, c: char) -> usize {
