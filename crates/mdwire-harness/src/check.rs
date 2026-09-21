@@ -405,6 +405,63 @@ fn over_limit(output: &str, channel: Channel, out: &mut Vec<Finding>) {
 ///
 /// 입력 쪽 기준은 `emphasis` 의 참조 짝짓기다. 코어와 따로 쓴 구현이라,
 /// 둘이 같은 답을 내는 것 자체가 검증이 된다.
+/// 조각 경계에서 갈라진 마크업을 도로 잇는다.
+///
+/// **정상적인 분할을 "범위가 좁다"로 세지 않기 위해서다.** 한도를 넘겨 나눌 때 열린
+/// 태그는 조각 끝에서 닫고 다음 조각 앞머리에서 다시 연다. 그대로 읽으면 범위 하나가
+/// 둘로 보인다 — `reverseForm(options?: ReverseFormOptions): string` 이 둘로 잘린 것이
+/// 실제로 그렇게 잡히고 있었다.
+///
+/// 이어 붙인 자리에는 아무것도 넣지 않는다. 끊긴 자리가 곧 원문에서 이어지던 자리다.
+fn rejoin_parts(output: &str) -> String {
+    let mut out = String::with_capacity(output.len());
+    for (i, part) in output.split(PART_SEPARATOR).enumerate() {
+        if i == 0 {
+            out.push_str(part);
+            continue;
+        }
+        let mut rest = part;
+        let mut stitched = false;
+        // 조각이 여러 겹으로 다시 열렸으면 그만큼 벗긴다.
+        while let Some((name, end)) = opening_tag(rest) {
+            // HTML 태그 이름은 대소문자를 가리지 않는다. `parse_tag` 가 소문자로
+            // 맞춰 주므로 견주는 쪽도 맞춰야 한다 — 다른 구현이 `</CODE>` 를 내면
+            // 여기서 못 알아보고 다시 거짓 경보가 난다.
+            let close = format!("</{name}>");
+            // 바이트로 끊어 보는 자리라 글자 경계를 먼저 확인한다 — 한글 한 글자가
+            // 세 바이트라, 안 보고 자르면 그 자리에서 죽는다.
+            let Some(at) = out.len().checked_sub(close.len()) else { break };
+            if !out.is_char_boundary(at) || !out[at..].eq_ignore_ascii_case(&close) {
+                break;
+            }
+            out.truncate(at);
+            rest = &rest[end..];
+            stitched = true;
+        }
+        if !stitched {
+            out.push('\n');
+        }
+        out.push_str(rest);
+    }
+    out
+}
+
+/// 글 맨 앞이 여는 태그면 그 이름과 끝 자리(`>` 다음)를 준다.
+fn opening_tag(s: &str) -> Option<(String, usize)> {
+    // **태그 하나만큼만 읽는다.** 조각 전체를 글자 벡터로 만들면 경계마다 조각 크기의
+    // 할당이 든다.
+    if !s.starts_with('<') {
+        return None;
+    }
+    let close = s.find('>')?;
+    let ch: Vec<char> = s[..=close].chars().collect();
+    let (name, closing, _) = emphasis::parse_tag(&ch, 0)?;
+    if closing || name.is_empty() {
+        return None;
+    }
+    Some((name, close + 1))
+}
+
 fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     if channel == Channel::Plain {
         // 마크업을 지우는 채널이라 잴 것이 없다. 여기서 억지로 재면 규칙이 거짓말을 한다.
@@ -414,11 +471,31 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     if want.is_empty() {
         return;
     }
-    let plain = output.replace(PART_SEPARATOR, "\n");
-    let got = match channel {
-        Channel::TelegramHtml => emphasis::scan_html(&plain).spans,
-        _ => emphasis::scan_markdown(&plain, Mode::Strict).spans,
+    let scan = |text: &str| match channel {
+        Channel::TelegramHtml => emphasis::scan_html(text).spans,
+        _ => emphasis::scan_markdown(text, Mode::Strict).spans,
     };
+    let plain = output.replace(PART_SEPARATOR, "\n");
+    let mut got = scan(&plain);
+    // **조각 경계에서 갈라진 범위도 후보로 넣는다.** 한도를 넘겨 나눌 때 열린 태그는
+    // 조각 끝에서 닫고 다음 조각에서 다시 열리므로, 범위 하나가 둘로 보인다. 이어 붙인
+    // 쪽을 *더해* 둔다 — 바꿔치기하면 경계에서 우연히 이웃한 두 범위가 하나로 붙어,
+    // 이번에는 멀쩡한 범위가 "넓다"로 잡힌다.
+    //
+    // **이어 붙여서 새로 생긴 것만 더한다.** 그대로인 범위까지 한 번 더 넣으면 같은
+    // 범위 하나가 원문의 두 자리를 채워서, 정작 강조를 잃은 쪽이 통과한다.
+    if channel == Channel::TelegramHtml && output.contains(PART_SEPARATOR) {
+        let mut before: HashMap<(emphasis::Kind, String), usize> = HashMap::new();
+        for g in &got {
+            *before.entry((g.kind, g.text.clone())).or_default() += 1;
+        }
+        for g in scan(&rejoin_parts(output)) {
+            match before.get_mut(&(g.kind, g.text.clone())) {
+                Some(n) if *n > 0 => *n -= 1,
+                _ => got.push(g),
+            }
+        }
+    }
 
     let mut pool: Vec<&Span> = got.iter().collect();
     for w in &want {
@@ -999,6 +1076,38 @@ mod tests {
         let broke = "앞 ``` 뒤에 **굵게 가 온다";
         let f = check(input, broke, Channel::SlackMarkdown);
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
+    }
+
+    /// **조각 경계에서 갈라진 범위는 좁아진 것이 아니다.** 한도를 넘겨 나눌 때 열린
+    /// 태그는 조각 끝에서 닫고 다음 조각에서 다시 열린다.
+    #[test]
+    fn a_span_split_at_a_part_boundary_is_not_narrower() {
+        let input = "`reverseForm(options?: ReverseFormOptions): string` 를 쓴다";
+        let split = "<code>reverseForm(options?: </code>\0<code>ReverseFormOptions): string</code> 를 쓴다";
+        let f = check(input, split, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+
+        // 경계와 무관하게 진짜로 좁아진 것은 그대로 잡힌다.
+        let cut = "<code>reverseForm(options?: </code> 를 쓴다";
+        let f = check(input, cut, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+    }
+
+    /// 경계에서 우연히 이웃한 두 범위를 **하나로 붙여 읽으면 안 된다.**
+    #[test]
+    fn two_spans_meeting_at_a_boundary_stay_separate() {
+        let input = "**앞 제목:**\n\n**뒤 제목:** 내용";
+        let split = "<b>앞 제목:</b>\0<b>뒤 제목:</b> 내용";
+        let f = check(input, split, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+    }
+
+    /// 이어 붙인 쪽을 더할 때 **그대로인 범위까지 한 번 더 넣으면 안 된다.**
+    /// 같은 범위 하나가 원문의 두 자리를 채워서, 정작 강조를 잃은 쪽이 통과한다.
+    #[test]
+    fn a_span_is_not_counted_twice_across_parts() {
+        let f = check("**굵게** 그리고 **굵게**", "<b>굵게</b>\0그리고 굵게", Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
     }
 
 }
