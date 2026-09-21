@@ -120,12 +120,12 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     // **출현 횟수까지 센다.** 집합으로 보면 한 번만 남아 있어도 통과라서, 같은 말이
     // 반복되는 문단이나 목록의 뒤쪽만 잘라 내는 구현을 놓친다.
     let mut have: HashMap<String, usize> = HashMap::new();
-    for w in words(&bare(&strip_urls(&output.replace(PART_SEPARATOR, "\n"), Seam::Glue))) {
+    for w in words(&bare(&strip_urls(&output.replace(PART_SEPARATOR, "\n"), Seam::Glue), Seam::Glue)) {
         *have.entry(w).or_default() += 1;
     }
     let seam = seam_words(output);
 
-    let missing = missing_words(&prose_only(input, Seam::Glue), &have, &seam);
+    let missing = missing_words(&prose_only(input, Seam::Glue), Seam::Glue, &have, &seam);
     if missing.is_empty() {
         return;
     }
@@ -133,7 +133,14 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     // 정한다 — `[안전 시트](주소)의` 를 텔레그램은 `안전 시트의` 로 붙여 내지만, 표
     // 안에서는 `안전 시트 (주소)의` 로 띄어서 낸다. 한쪽 읽기로만 보면 다른 쪽이
     // 통째로 거짓 경보가 된다. 둘 다에서 빠졌을 때만 손실로 센다.
-    let split = missing_words(&prose_only(input, Seam::Split), &have, &seam);
+    let split = missing_words(&prose_only(input, Seam::Split), Seam::Split, &have, &seam);
+    // **두 읽기에서 모두 빠진 낱말만 손실로 센다.**
+    //
+    // 두 읽기는 낱말을 다르게 쪼갠다 — 붙여 읽은 `SQLite메타데이터` 는 띄어 읽으면
+    // `SQLite` 와 `메타데이터` 다. 그래서 **경계 바로 옆의 낱말은 이 규칙이 못 잡는다**.
+    // 부분 문자열로 느슨하게 견줘 봤더니 CJK 두 글자 조각이 아무 낱말에나 걸려서
+    // 거짓 경보가 배로 늘었다(실측 9 → 45). 못 잡는 자리를 남기더라도 조용한 쪽을
+    // 골랐다 — 절단은 경계와 무관하게 통째로 빠지므로 그대로 잡힌다.
     let missing: Vec<String> = missing.into_iter().filter(|w| split.contains(w)).collect();
     if missing.is_empty() {
         return;
@@ -152,11 +159,16 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
 }
 
 /// `have` 에서 몫을 못 찾은 낱말. 순서는 보고용으로 지키되 같은 낱말을 여러 번 싣지 않는다.
-fn missing_words(text: &str, have: &HashMap<String, usize>, seam: &HashSet<String>) -> Vec<String> {
+fn missing_words(
+    text: &str,
+    read: Seam,
+    have: &HashMap<String, usize>,
+    seam: &HashSet<String>,
+) -> Vec<String> {
     let mut have = have.clone();
     let mut missing = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    for w in words(&bare(text)) {
+    for w in words(&bare(text, read)) {
         match have.get_mut(&w) {
             // 남은 몫이 있으면 하나 쓴다. 두 번 나온 말은 두 번 남아 있어야 한다.
             Some(n) if *n > 0 => *n -= 1,
@@ -186,7 +198,7 @@ fn seam_words(output: &str) -> HashSet<String> {
         let left: Vec<char> = pair[0].chars().collect();
         let tail: String = left[left.len().saturating_sub(EDGE)..].iter().collect();
         let head: String = pair[1].chars().take(EDGE).collect();
-        out.extend(words(&bare(&strip_urls(&format!("{tail}{head}"), Seam::Glue))));
+        out.extend(words(&bare(&strip_urls(&format!("{tail}{head}"), Seam::Glue), Seam::Glue)));
     }
     out
 }
@@ -195,7 +207,7 @@ fn seam_words(output: &str) -> HashSet<String> {
 ///
 /// 마커를 낱말 경계로 두면 `**금요일**에` 가 "금요일"+"에" 로 쪼개지는데 출력은
 /// `금요일에` 한 낱말이라 사라진 것으로 잡힌다. 한국어는 조사가 붙어서 특히 그렇다.
-fn bare(text: &str) -> String {
+fn bare(text: &str, seam: Seam) -> String {
     let ch: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     // 속성 값은 본문 흐름에 끼워 넣지 않고 뒤에 따로 모은다. 태그 자리에 무엇이든
@@ -219,6 +231,9 @@ fn bare(text: &str) -> String {
                     }
                 }
                 i = end;
+                if seam == Seam::Split {
+                    out.push(' ');
+                }
                 continue;
             }
         }
@@ -311,6 +326,11 @@ fn prose_only(input: &str, seam: Seam) -> String {
 }
 
 /// 걷어낸 자리를 어떻게 읽을 것인가.
+///
+/// 주소뿐 아니라 **태그를 지운 자리도 같다.** `<b>굵게</b>이다` 는 붙여 읽어야
+/// `굵게이다` 한 낱말이 되고, 코드 안의 `SQLite<br/>메타데이터` 는 띄어 읽어야
+/// 출력(`SQLite&lt;br/&gt;메타데이터`)과 낱말이 맞는다. 어느 쪽인지는 그 자리만
+/// 봐서는 모른다.
 #[derive(Clone, Copy, PartialEq)]
 enum Seam {
     /// 양옆을 붙여 읽는다. `[안전 시트](주소)의` → `안전 시트의`
@@ -1108,6 +1128,25 @@ mod tests {
     fn a_span_is_not_counted_twice_across_parts() {
         let f = check("**굵게** 그리고 **굵게**", "<b>굵게</b>\0그리고 굵게", Channel::TelegramHtml);
         assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+    }
+
+    /// 태그를 지운 자리도 **붙여 읽을지 띄어 읽을지 그 자리만 봐서는 모른다.**
+    #[test]
+    fn a_removed_tag_boundary_is_read_both_ways() {
+        // 코드 안의 `<br/>` 은 글자다. 출력은 escape 해서 내보내므로 낱말이 갈린다.
+        let input = "도표: SQLite<br/>메타데이터 를 쓴다";
+        let out = "도표: SQLite&lt;br/&gt;메타데이터 를 쓴다";
+        let f = check(input, out, Channel::TelegramHtml);
+        assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
+
+        // 강조 태그는 붙여 읽어야 맞는다.
+        assert!(!check("**굵게**이다", "<b>굵게</b>이다", Channel::TelegramHtml)
+            .iter()
+            .any(|x| x.rule == Rule::TextLoss));
+
+        // 경계에서 떨어진 내용이 빠지면 그대로 잡힌다.
+        let f = check("도표: SQLite<br/>메타데이터 를 쓴다 뒷문장도 있다", out, Channel::TelegramHtml);
+        assert!(f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
     }
 
 }

@@ -572,3 +572,18 @@ fn replaying_an_unpaired_code_span_keeps_line_breaks() {
     let got = one("- 항목 `foo\n  bar 뒤", Channel::Plain);
     assert_eq!(got, "• 항목 `foo\n  bar 뒤");
 }
+
+/// **표에서 넘치는 칸을 버리지 않는다.**
+///
+/// 칸 안의 `|` 가 칸을 가르면 머리글보다 칸이 많아지는데, GFM 은 넘치는 것을 잘라
+/// 낸다. 그러면 저자가 쓴 마지막 칸이 소리 없이 사라진다.
+#[test]
+fn a_row_with_extra_cells_keeps_them() {
+    let input = "| A | B |\n| --- | --- |\n| `x|y` | 뒤쪽 내용 |\n";
+    let got = one(input, Channel::Plain);
+    assert!(got.contains("뒤쪽 내용"), "넘친 칸이 사라졌다: {got}");
+
+    // 칸 수가 맞는 표는 그대로다.
+    let plain = one("| A | B |\n| --- | --- |\n| 하나 | 둘 |\n", Channel::Plain);
+    assert!(plain.contains("하나") && plain.contains("둘"), "{plain}");
+}

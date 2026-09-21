@@ -761,7 +761,16 @@ impl Table {
             for c in 0..cols {
                 self.cell.clear();
                 chars.clear();
-                chars.extend(row.get(c).map(String::as_str).unwrap_or("").chars());
+                // **남는 칸을 버리지 않는다.** 머리글보다 칸이 많은 줄을 GFM 은 잘라
+                // 내지만, 그러면 저자가 쓴 내용이 소리 없이 사라진다 — 코드 스팬이나
+                // 위키링크 안의 `|` 가 칸을 갈라 놓는 것이 실제로 그랬다. 넘치는 것은
+                // 마지막 칸에 이어 붙인다.
+                if c + 1 == cols && row.len() > cols {
+                    let rest = row[c..].join(" | ");
+                    chars.extend(rest.chars());
+                } else {
+                    chars.extend(row.get(c).map(String::as_str).unwrap_or("").chars());
+                }
                 inline.render(&chars, &mut self.cell, &plain);
                 inline.finish_block(&mut self.cell, &plain);
                 inline.reset();
