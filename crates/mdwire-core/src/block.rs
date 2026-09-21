@@ -512,6 +512,14 @@ enum Decision {
     Whole(WholeKind),
 }
 
+/// 마커 뒤에 올 수 있는 공백. **탭도 공백이다.**
+///
+/// 실제 문서에서 나왔다 — `*<TAB>ws` 로 쓴 목록을 문단으로 읽으면, 줄마다 앞에 선 `*`
+/// 가 강조 마커로 짝지어져 **불릿이 통째로 사라진다.**
+fn marker_space(c: char) -> bool {
+    c == ' ' || c == '\t'
+}
+
 /// 받은 데까지로 줄의 종류를 정해 본다.
 ///
 /// **못 정할 때만 기다린다.** `#` 뒤에 공백이 올지 글자가 올지, `--` 가 구분선이 될지
@@ -532,7 +540,9 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
                 return para;
             }
             match t.get(n) {
-                Some(' ') => Decision::Prefix(LineKind::Heading(n), indent + n + 1),
+                Some(c) if marker_space(*c) => {
+                    Decision::Prefix(LineKind::Heading(n), indent + n + 1)
+                }
                 Some(_) => para,
                 None => at_end(Decision::NeedMore),
             }
@@ -568,7 +578,7 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
             }
         }
         '+' | '•' => match t.get(1) {
-            Some(' ') => Decision::Prefix(LineKind::Bullet(indent), indent + 2),
+            Some(c) if marker_space(*c) => Decision::Prefix(LineKind::Bullet(indent), indent + 2),
             Some(_) => para,
             None => at_end(Decision::NeedMore),
         },
@@ -576,14 +586,16 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
             let n = run(t, c);
             if n == 1 && c != '_' {
                 return match t.get(1) {
-                    Some(' ') => Decision::Prefix(LineKind::Bullet(indent), indent + 2),
+                    Some(c) if marker_space(*c) => {
+                        Decision::Prefix(LineKind::Bullet(indent), indent + 2)
+                    }
                     Some(_) => para,
                     None => at_end(Decision::NeedMore),
                 };
             }
             // 같은 글자가 이어진다. 구분선은 그 글자와 공백만으로 된 줄이고,
             // 그게 아니면 `**굵게` 처럼 강조로 시작하는 문단이다.
-            if t[n..].iter().any(|&x| x != c && x != ' ') {
+            if t[n..].iter().any(|&x| x != c && !marker_space(x)) {
                 return para;
             }
             if eol {
@@ -602,7 +614,7 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
                 return para;
             }
             match (t.get(d), t.get(d + 1)) {
-                (Some('.' | ')'), Some(' ')) => {
+                (Some('.' | ')'), Some(c)) if marker_space(*c) => {
                     let mut n = 0usize;
                     for c in &t[..d] {
                         n = n * 10 + (*c as usize - '0' as usize);
