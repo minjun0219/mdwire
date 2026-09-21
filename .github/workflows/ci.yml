@@ -41,3 +41,19 @@ jobs:
       # 코어는 바인딩 층 없이도 wasm 으로 서야 한다. 호스트 빌드만으로는 안 걸린다.
       - name: wasm 빌드
         run: cargo build -p mdwire-wasm --target wasm32-unknown-unknown --locked
+
+      # 공식 설치 스크립트로 받는다. `cargo install` 은 매번 몇 분씩 컴파일한다.
+      - name: wasm-pack 설치
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+
+      # 올릴 패키지가 실제로 만들어지는지 본다.
+      - name: npm 패키지 빌드
+        run: ./scripts/build-npm.sh
+
+      # **빌드만으로는 경계 너머가 안 잡힌다.** 같은 바인딩을 nodejs 타깃으로 한 번 더
+      # 만들어 실제로 불러 본다 — bundler 타깃은 번들러 없이 못 불러서다.
+      - name: npm 스모크
+        run: |
+          wasm-pack build crates/mdwire-wasm --release --target nodejs \
+            --out-dir ../../pkg-node --out-name mdwire
+          node scripts/smoke.mjs
