@@ -3,10 +3,12 @@
 //! **`wasm-bindgen` 은 이 crate 에만 있다**(`SPEC.md` 3절). 코어를 쓰는 쪽은
 //! 의존 없이 남는다.
 //!
-//! ```js
-//! import init, { render, Streamer } from "mdwire";
+//! 올리는 것은 **bundler 타깃**이다(`scripts/build-npm.sh`). 번들러가 wasm 초기화를
+//! 맡으므로 `init()` 을 부르지 않는다 — `web` 타깃으로 직접 쓸 때만 필요하다.
 //!
-//! await init();
+//! ```js
+//! import { render, Streamer } from "mdwire";
+//!
 //! const parts = render(markdown, "telegram-html", "auto");
 //!
 //! const s = new Streamer("slack-markdown", "auto");

@@ -9,7 +9,7 @@ const s = new Streamer("telegram-html", "auto");
 let acc = "";
 for (const chunk of ["**굵", "게** 이어", "서 `코드`"]) {
   acc += s.push(chunk);
-  JSON.stringify(acc + s.closeOpen());   // 중간 송출이 죽지 않는지
+  s.closeOpen();   // 중간 송출 경로가 죽지 않는지 — 돌려주는 값은 여기서 안 본다
 }
 acc += s.finish();
 assert.equal(acc, "<b>굵게</b> 이어서 <code>코드</code>");

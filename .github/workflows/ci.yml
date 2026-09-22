@@ -42,9 +42,11 @@ jobs:
       - name: wasm 빌드
         run: cargo build -p mdwire-wasm --target wasm32-unknown-unknown --locked
 
-      # 공식 설치 스크립트로 받는다. `cargo install` 은 매번 몇 분씩 컴파일한다.
+      # **`curl | sh` 를 쓰지 않는다.** 검증 안 된 원격 스크립트를 게이트 안에서
+      # 실행하는 셈이고, 이 워크플로가 액션조차 안 쓰는 이유와 어긋난다. `--locked` 는
+      # 체크섬과 잠긴 의존으로 받는다 — 몇 분 더 걸리는 값은 낸다.
       - name: wasm-pack 설치
-        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+        run: cargo install wasm-pack --locked
 
       # 올릴 패키지가 실제로 만들어지는지 본다.
       - name: npm 패키지 빌드
