@@ -42,7 +42,7 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import { render, Streamer } from "mdwire";   // npm, bundler target — no init call
+import { render, Streamer } from "mdwire";   // npm — works under a bundler and in plain Node
 
 const parts = render(markdown, "telegram-html", "auto");
 
@@ -83,14 +83,31 @@ Three gaps in what exists today, each measured rather than assumed:
   per channel. A port in another language is correct when it passes the corpus. This is
   how consistency survives more than one implementation.
 
+## Installing
+
+Every release carries its own artifacts — no registry needed:
+
+```sh
+# npm package (works under a bundler and in plain Node)
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-0.1.0.tgz
+
+# CLI binary
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+```
+
+Or from source: `cargo install --path crates/mdwire-cli`.
+
 ## Building
 
 ```sh
 ./scripts/build-npm.sh     # the npm package into pkg/ (needs `cargo install wasm-pack`)
+./scripts/smoke.sh         # install it into a scratch project and call it from Node + TypeScript
 ```
 
-The wasm bundle is 87 KB, release with `wasm-opt`. The script renames the package to
-`mdwire`: the crate has to stay `mdwire-wasm` because the core's library is already named
+The wasm bundle is 87 KB, release with `wasm-opt`. The package carries two builds and
+picks by `exports` condition: `node` gets a CommonJS build that loads the wasm from disk,
+everything else gets the ESM bundler build. The script writes the root `package.json`
+itself: the crate has to stay `mdwire-wasm` because the core's library is already named
 `mdwire`, and wasm-pack takes the npm name from the crate.
 
 ```sh

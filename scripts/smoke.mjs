@@ -1,5 +1,6 @@
 // npm 패키지가 실제로 도는지 본다. 빌드만으로는 경계 너머가 안 잡힌다.
-import { render, limit, Streamer } from "../pkg-node/mdwire.js";
+// `mdwire` 로 부른다 — `exports` 맵을 거쳐야 진짜 소비자와 같은 길이다.
+import { render, limit, Streamer } from "mdwire";
 import { strict as assert } from "node:assert";
 
 assert.equal(limit("telegram-html"), 4096);

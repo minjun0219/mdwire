@@ -2,4 +2,5 @@ target/
 *.wasm
 .DS_Store
 pkg/
-pkg-node/
+*.tgz
+dist/
