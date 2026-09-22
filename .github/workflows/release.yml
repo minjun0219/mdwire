@@ -26,6 +26,10 @@ env:
 
 jobs:
   # 릴리스는 한 곳에서 한 번만 만든다. 산출물 잡들이 각자 만들면 서로 경합한다.
+  #
+  # **초안으로 만들고, 산출물이 다 붙은 뒤에 공개한다.** 바로 공개하면 뒤의 빌드·스모크·
+  # 업로드 어느 하나가 죽어도 비었거나 반쪽인 릴리스가 Latest 로 보인다 — v0.1.0 이
+  # 그랬다(CLI 만 붙고 npm 은 실패). 초안이면 실패한 판은 사용자 눈에 안 띈 채 고칠 수 있다.
   release:
     runs-on: ubuntu-latest
     steps:
@@ -39,7 +43,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then exit 0; fi
           # 본문은 CHANGELOG 의 그 버전 항목이다 — git-cliff 가 커밋에서 만든 것.
           awk -v v="${TAG#v}" '$0 ~ "^## " v " " {p=1; next} /^## /{if (p) exit} p' CHANGELOG.md > notes.md
-          gh release create "$TAG" --title "mdwire ${TAG#v}" --notes-file notes.md
+          gh release create "$TAG" --draft --title "mdwire ${TAG#v}" --notes-file notes.md
 
   cli:
     needs: release
@@ -98,3 +102,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$ASSET" --clobber
+
+  # 산출물 잡이 전부 성공했을 때만 공개한다. 이미 공개된 릴리스(workflow_dispatch 로
+  # 다시 붙인 경우)에는 아무 일도 하지 않는다.
+  publish:
+    needs: [cli, npm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 릴리스 공개
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
