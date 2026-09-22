@@ -1,29 +1,57 @@
 # 변경 기록
 
-무엇이 바뀌었는지가 아니라 **쓰는 쪽에서 무엇이 달라지는지**를 적는다. 자세한 근거는
-커밋과 `SPEC.md`·`DESIGN.md` 에 있다.
+커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
-## 0.1.0
+## 0.1.0 — 2026-09-22
 
-첫 릴리스.
+### 새로 할 수 있는 것
 
-**내보내는 곳** — Telegram HTML · Slack `markdown_text` · Plain. 채널마다 표기가 갈리는
-자리(취소선, CJK 인접 패딩, 링크, 표)는 전부 채널이 정한다.
+- **wasm** — npm 패키지를 만들고 CI 가 실제로 불러 본다 ([#18](https://github.com/minjun0219/mdwire/pull/18))
+- **harness** — 내용이 사라졌는지 재는 규칙 ([#7](https://github.com/minjun0219/mdwire/pull/7))
+- **core** — 스트리밍 중간 스냅샷을 보낼 수 있게 close_open
+- **wasm** — 브라우저·npm 바인딩
+- **cli** — 인자 파싱과 스트리밍 모드
+- **core** — 파서·채널 렌더러·안전 분할·스트리밍
+- mdwire 뼈대 — 스트리밍 마크다운 채널 렌더러
 
-**스트리밍** — 조각을 넣으면 지금 안전하게 낼 수 있는 만큼만 돌려준다. 문단을 붙들지
-않고, 산문 경로는 버퍼가 자란 뒤 할당이 0 이다. 중간에 보내야 하는 쪽을 위해
-`close_open` 이 지금 열린 것만 닫아 준다.
+### 고친 것
 
-**깨진 마크다운을 고쳐서 낸다** — 줄을 넘는 강조를 하나로 보고, 짝 없는 백틱 런은
-글자로 되돌리고, 안 닫힌 펜스를 닫는다. CJK 에 붙은 강조는 CommonMark 가 못 여는
-자리라 따로 복구한다.
+- **core** — 백틱을 담은 코드 스팬을 제대로 감싼다 ([#15](https://github.com/minjun0219/mdwire/pull/15))
+- **core** — 역슬래시 탈출을 읽는다 ([#14](https://github.com/minjun0219/mdwire/pull/14))
+- **core** — 표에서 넘치는 칸을 버리지 않는다 ([#13](https://github.com/minjun0219/mdwire/pull/13))
+- **review** — 조각 경계에서 갈라진 범위를 좁아졌다고 세지 않는다 ([#12](https://github.com/minjun0219/mdwire/pull/12))
+- **core** — 짝 없는 백틱 런은 글자로 되돌린다 ([#11](https://github.com/minjun0219/mdwire/pull/11))
+- **core** — 마커 뒤의 탭도 공백으로 친다 ([#10](https://github.com/minjun0219/mdwire/pull/10))
+- **core** — 한도보다 긴 주소는 링크로 내지 않는다 ([#9](https://github.com/minjun0219/mdwire/pull/9))
+- **core** — 태그 한가운데서 조각을 끊지 않는다 ([#8](https://github.com/minjun0219/mdwire/pull/8))
+- **core** — CJK 판정을 표시 폭과 분리한다 ([#6](https://github.com/minjun0219/mdwire/pull/6))
+- **core** — 코드 스팬이 백틱 런 안쪽에서 잘못 닫히던 것 ([#5](https://github.com/minjun0219/mdwire/pull/5))
+- **harness** — void 요소를 안 닫혔다고 세던 것 ([#3](https://github.com/minjun0219/mdwire/pull/3))
+- 실제 문서 2281개를 훑어 나온 고장들 ([#2](https://github.com/minjun0219/mdwire/pull/2))
+- **core** — 슬랙 취소선을 `~~` 로 낸다
+- **harness** — 채점기가 정상 출력을 고장으로 신고하던 다섯
+- **core** — 실제 문서 229개를 돌려 잡은 셋
+- **core** — 구두점 뒤에 오는 닫는 마커가 안 닫히던 것
+- **core** — CRLF 잔재와 세 개짜리 마커 런
 
-**한도를 절단이 아니라 분할로 다룬다** — 조각 하나하나가 그 자체로 유효하다. 태그
-한가운데서 끊지 않고, 열린 마크업은 끊는 자리에서 닫고 다음 조각에서 다시 연다.
+### 성능
 
-**쓰는 법** — `mdwire` CLI, `mdwire` npm 패키지(WASM), Rust crate.
+- **bench** — 디렉토리를 받아 실제 문서로 재는 모드
+- **bench** — 스트리밍 서명 후보를 재는 계측 리그
 
-### 알려진 한계
+### 문서
 
-`SPEC.md` 12절에 "정해서 미룬 것"으로 모아 뒀다 — 인용 안의 표·코드펜스, 앞에 `|` 가
-없는 표, YAML frontmatter, Telegram MarkdownV2 와 슬랙 레거시 `mrkdwn`.
+- 변경 기록을 만든다
+- **spec** — frontmatter 를 떼지 않는 이유를 적는다 ([#17](https://github.com/minjun0219/mdwire/pull/17))
+- **spec** — 인용 안에서 블록이 다시 열리지 않는 것을 적는다 ([#16](https://github.com/minjun0219/mdwire/pull/16))
+- **design** — CJK 정책 "제각각"에 수치를 붙인다 ([#4](https://github.com/minjun0219/mdwire/pull/4))
+- **spec** — 처리량을 절대값 대신 상대비로 적는다
+- v0.1 확정안 — 채널 셋, 정규화는 복구+정돈까지, 표는 고정폭
+
+### 테스트
+
+- **harness** — 코퍼스 실행기와 구현 중립 채점기
+
+### 유지
+
+- PR 에서 게이트를 자동으로 돌린다 ([#1](https://github.com/minjun0219/mdwire/pull/1))
