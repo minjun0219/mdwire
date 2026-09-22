@@ -1,0 +1,84 @@
+# 릴리스에 산출물을 붙인다 — CLI 바이너리와 npm 패키지 tarball.
+#
+# 레지스트리(npm · crates.io)에 올리지 않아도 여기서 바로 가져다 쓸 수 있다:
+#   npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-0.1.0.tgz
+#   curl -L …/mdwire-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+#
+# 태그를 밀면 돈다. 이미 있는 릴리스에 다시 붙이려면 `workflow_dispatch` 로 태그를 넘긴다.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 산출물을 붙일 태그 (예 v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: 툴체인
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+      - name: 빌드
+        run: cargo build --release --locked -p mdwire-cli --target ${{ matrix.target }}
+      - name: 묶기
+        run: |
+          TAG=${{ inputs.tag || github.ref_name }}
+          NAME=mdwire-$TAG-${{ matrix.target }}
+          mkdir -p dist/$NAME
+          cp target/${{ matrix.target }}/release/mdwire README.md LICENSE CHANGELOG.md dist/$NAME/
+          tar -C dist -czf dist/$NAME.tar.gz $NAME
+          echo "ASSET=dist/$NAME.tar.gz" >> "$GITHUB_ENV"
+      - name: 릴리스에 붙이기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=${{ inputs.tag || github.ref_name }}
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "mdwire ${TAG#v}" --generate-notes
+          gh release upload "$TAG" "$ASSET" --clobber
+
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: 툴체인
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack --locked
+      - name: 패키지
+        run: |
+          ./scripts/build-npm.sh
+          npm install -g typescript
+          ./scripts/smoke.sh
+          npm pack ./pkg
+          echo "ASSET=$(ls mdwire-*.tgz)" >> "$GITHUB_ENV"
+      - name: 릴리스에 붙이기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=${{ inputs.tag || github.ref_name }}
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "mdwire ${TAG#v}" --generate-notes
+          gh release upload "$TAG" "$ASSET" --clobber

@@ -83,10 +83,25 @@ Three gaps in what exists today, each measured rather than assumed:
   per channel. A port in another language is correct when it passes the corpus. This is
   how consistency survives more than one implementation.
 
+## Installing
+
+Every release carries its own artifacts — no registry needed:
+
+```sh
+# npm package (works under a bundler and in plain Node)
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-0.1.0.tgz
+
+# CLI binary
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+```
+
+Or from source: `cargo install --path crates/mdwire-cli`.
+
 ## Building
 
 ```sh
 ./scripts/build-npm.sh     # the npm package into pkg/ (needs `cargo install wasm-pack`)
+./scripts/smoke.sh         # install it into a scratch project and call it from Node + TypeScript
 ```
 
 The wasm bundle is 87 KB, release with `wasm-opt`. The package carries two builds and
