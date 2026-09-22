@@ -10,5 +10,7 @@ repository.workspace = true
 name = "mdwire"
 path = "src/main.rs"
 
+# **버전을 같이 적는다.** crates.io 에 올릴 때 `path` 는 지워지고 버전만 남는다 — 없으면
+# `cargo package` 가 여기서 멈춘다.
 [dependencies]
-mdwire-core = { path = "../mdwire-core" }
+mdwire-core = { path = "../mdwire-core", version = "0.1.0" }
