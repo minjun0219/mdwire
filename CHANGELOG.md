@@ -2,6 +2,12 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.1 — 2026-09-22
+
+### 새로 할 수 있는 것
+
+- **wasm** — npm 패키지가 맨 Node 에서도 돌고 릴리스에 산출물이 붙는다 ([#20](https://github.com/minjun0219/mdwire/pull/20))
+
 ## 0.1.0 — 2026-09-22
 
 ### 새로 할 수 있는 것
@@ -41,7 +47,6 @@
 
 ### 문서
 
-- 변경 기록을 만든다
 - **spec** — frontmatter 를 떼지 않는 이유를 적는다 ([#17](https://github.com/minjun0219/mdwire/pull/17))
 - **spec** — 인용 안에서 블록이 다시 열리지 않는 것을 적는다 ([#16](https://github.com/minjun0219/mdwire/pull/16))
 - **design** — CJK 정책 "제각각"에 수치를 붙인다 ([#4](https://github.com/minjun0219/mdwire/pull/4))
@@ -55,3 +60,4 @@
 ### 유지
 
 - PR 에서 게이트를 자동으로 돌린다 ([#1](https://github.com/minjun0219/mdwire/pull/1))
+

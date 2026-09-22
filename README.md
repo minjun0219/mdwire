@@ -89,10 +89,10 @@ Every release carries its own artifacts — no registry needed:
 
 ```sh
 # npm package (works under a bundler and in plain Node)
-npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-0.1.0.tgz
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-0.1.1.tgz
 
 # CLI binary
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.0/mdwire-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-v0.1.1-aarch64-apple-darwin.tar.gz | tar xz
 ```
 
 Or from source: `cargo install --path crates/mdwire-cli`.
