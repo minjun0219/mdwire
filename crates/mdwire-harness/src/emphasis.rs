@@ -490,8 +490,10 @@ fn snippet(s: &str) -> String {
     }
 }
 
+/// `snake_case` 판정용 — ASCII 만 단어 글자다. 규칙은 코어와 같다: 한글 사이의 `_` 는
+/// 식별자가 아니라 조사 앞의 닫는 마커다.
 fn is_word(c: char) -> bool {
-    c.is_alphanumeric()
+    c.is_ascii_alphanumeric()
 }
 
 /// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).

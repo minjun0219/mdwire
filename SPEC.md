@@ -43,7 +43,7 @@ mdwire/
 | 채널 | 받는 것 | 한도 | v0.1 |
 |---|---|---|---|
 | Telegram HTML | `b i u s code pre a blockquote tg-spoiler` | 4096 | **넣는다** |
-| Slack `markdown_text` | 표준 마크다운 그대로 | 12,000 | **넣는다** |
+| Slack `markdown_text` | 표준 마크다운 그대로 | 12,000 | 안 넣는다 — 실측 |
 | Plain | 마크업 제거. 폴백 | — | **넣는다** |
 | Telegram MarkdownV2 | 이스케이프 18자 | 4096 | 이후 |
 | Slack `mrkdwn` (레거시) | `*굵게*` `_기울임_` `<url\|text>` | 12,000 | 이후 |
@@ -114,6 +114,10 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 텔레그램도 슬랙 레거시도 표 구문이 없다. **고정폭 블록으로 간다** — `<pre>` 안에서 열을 맞춘다. 좁은 화면에서 가로로 밀리지만
 표라는 것이 남고, 무엇보다 **이 라이브러리 안에서 끝난다.**
 
+**표를 직접 그리는 채널은 그대로 낸다.** 슬랙 `markdown_text` 는 표준 마크다운 표를 네이티브로
+그린다(Slack markdown block 문서). 거기서 고정폭으로 내리면 화면에 표가 아니라 코드가 보인다 —
+GFM 그대로, 정렬 표시와 셀 안의 마크업까지 살려서 낸다.
+
 기각한 둘:
 
 - **줄글로 펴기** — 정렬을 잃는다. 열이 셋만 넘어가도 무엇이 무엇인지 알 수 없다
@@ -134,7 +138,7 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 | 번호 | `1. ` | `1. ` | `1. ` |
 | 인용 | `<blockquote>`로 감싼다 | `> ` | `> ` |
 | 코드펜스 | `<pre>` / `<pre><code class="language-…">` | ` ``` ` 유지 | 펜스 제거, 내용만 |
-| 표 | `<pre>` 안 고정폭 | ` ``` ` 안 고정폭 | 고정폭 |
+| 표 | `<pre>` 안 고정폭 | GFM 그대로 | 고정폭 |
 | 구분선 | `──────────` | `---` | `──────────` |
 | 링크 | `<a href>` | `[텍스트](url)` | `텍스트 (url)` |
 
@@ -223,7 +227,7 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 
 - 채널 셋: Telegram HTML · Slack `markdown_text` · Plain
 - 정규화: 복구 + 정돈
-- 표: 고정폭 블록 (표시 폭 기준)
+- 표: 고정폭 블록 (표시 폭 기준) · 직접 그리는 채널은 GFM 그대로
 - 분할: 길이 한도 + 스트리밍 경계
 - CJK 정책: 채널별 기본값 + 오버라이드
 - CLI + WASM 바인딩

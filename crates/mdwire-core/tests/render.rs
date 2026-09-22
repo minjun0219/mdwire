@@ -266,7 +266,8 @@ fn the_repair_is_not_language_specific() {
 /// CJK 판정은 **표시 폭과 다른 질문**이다. 한 함수로 쓰면 두 군데가 틀린다.
 #[test]
 fn cjk_padding_follows_cjk_not_width() {
-    let pad = |s: &str| render(s, Channel::SlackMarkdown, CjkPolicy::Auto).remove(0);
+    // 기본값으로 끼우는 채널은 레거시 mrkdwn 뿐이다(아래 `cjk_policy_is_per_channel_with_override`).
+    let pad = |s: &str| render(s, Channel::SlackMrkdwn, CjkPolicy::Auto).remove(0);
     // 반각 가타카나 — 폭은 1이지만 CJK 다. 끼워야 한다
     assert_eq!(pad("**강조**ｱｲｳ"), "**강조**\u{200b}ｱｲｳ");
     // 이모지 — 폭은 2지만 CJK 가 아니다. 끼우면 안 된다
@@ -346,21 +347,35 @@ fn leading_and_trailing_blank_lines_go_away() {
 #[test]
 fn cjk_policy_is_per_channel_with_override() {
     let input = "채널**이다";
-    // 슬랙은 마크다운을 채널 파서가 다시 읽는다 — 끼운다.
-    assert_eq!(
-        render(input, Channel::SlackMarkdown, CjkPolicy::Auto)[0],
-        "채널\u{200b}**이다**"
-    );
+    // 슬랙 `markdown_text` 는 한글 옆 `**` 를 그대로 굵게 그린다(실측 2026-09-22) — 안 끼운다.
+    assert_eq!(render(input, Channel::SlackMarkdown, CjkPolicy::Auto)[0], "채널**이다**");
+    // 레거시 mrkdwn 은 그 실측 밖이다 — 끼운다.
+    assert!(render(input, Channel::SlackMrkdwn, CjkPolicy::Auto)[0].starts_with("채널\u{200b}"));
     // 텔레그램 HTML 은 태그로 나가니 끼울 이유가 없다.
     assert_eq!(render(input, Channel::TelegramHtml, CjkPolicy::Auto)[0], "채널<b>이다</b>");
     // 오버라이드가 먹는다. **이게 기존 변환기에 없던 것이다.**
-    assert_eq!(render(input, Channel::SlackMarkdown, CjkPolicy::Never)[0], "채널**이다**");
+    assert_eq!(
+        render(input, Channel::SlackMarkdown, CjkPolicy::AlwaysPad)[0],
+        "채널\u{200b}**이다**"
+    );
+    assert!(!render(input, Channel::SlackMrkdwn, CjkPolicy::Never)[0].contains('\u{200b}'));
     assert_eq!(
         render(input, Channel::TelegramHtml, CjkPolicy::AlwaysPad)[0],
         "채널\u{200b}<b>이다</b>"
     );
     // 영문 옆에는 끼우지 않는다. 필요가 없고, 넣으면 복사할 때 딸려간다.
     assert_eq!(render("ab**cd", Channel::SlackMarkdown, CjkPolicy::Auto)[0], "ab**cd**");
+}
+
+/// **슬랙 `markdown_text` 의 기울임은 `*` 다.** `_기울임_가` 는 슬랙이 글자 그대로 두고
+/// `*기울임*가` 는 기울인다(실측 2026-09-22). 패딩 없이 조사를 붙이려면 마커를 바꿔야 한다.
+#[test]
+fn slack_markdown_text_italic_uses_asterisk() {
+    assert_eq!(one("_진료_가 있다", Channel::SlackMarkdown), "*진료*가 있다");
+    assert_eq!(one("*진료*가 있다", Channel::SlackMarkdown), "*진료*가 있다");
+    assert_eq!(one("~~취소~~가 있다", Channel::SlackMarkdown), "~~취소~~가 있다");
+    // 다른 마크다운 채널은 그대로 `_` 다.
+    assert_eq!(one("_진료_가 있다", Channel::TelegramMarkdownV2), "_진료_가 있다");
 }
 
 // ── 분할 ────────────────────────────────────────────────────────────────
@@ -622,8 +637,8 @@ fn a_code_span_holding_a_backtick_widens_its_fence() {
 /// 여기서 빠뜨리면 같은 입력이 울타리 길이에 따라 패딩이 있다 없다 한다.
 #[test]
 fn a_widened_code_fence_still_gets_cjk_padding() {
-    let plain = render("한`코드`글", Channel::SlackMarkdown, CjkPolicy::Auto).join("");
-    let wide = render("한`` ` ``글", Channel::SlackMarkdown, CjkPolicy::Auto).join("");
+    let plain = render("한`코드`글", Channel::SlackMrkdwn, CjkPolicy::Auto).join("");
+    let wide = render("한`` ` ``글", Channel::SlackMrkdwn, CjkPolicy::Auto).join("");
     let zwsp = '\u{200b}';
     assert_eq!(
         plain.matches(zwsp).count(),
@@ -638,4 +653,17 @@ fn a_tab_only_body_still_loses_its_padding_spaces() {
     assert_eq!(one("가 ` \t ` 나", Channel::TelegramHtml), "가 <code>\t</code> 나");
     // 진짜로 공백뿐이면 그대로 둔다 — 벗길 것이 내용밖에 없다.
     assert_eq!(one("가 `  ` 나", Channel::TelegramHtml), "가 <code>  </code> 나");
+}
+
+/// **슬랙 `markdown_text` 는 표를 직접 그린다.** 고정폭으로 내리면 화면에서 코드로 보인다.
+/// GFM 그대로 낸다 — 정렬 표시와 셀 안의 마크업, `\|` 까지.
+#[test]
+fn slack_markdown_text_keeps_tables_as_gfm() {
+    let input = "| 항목 | 값 | 비고 |\n|:--|--:|:-:|\n| **마통** | 0원 | a\\|b |\n";
+    assert_eq!(
+        one(input, Channel::SlackMarkdown),
+        "| 항목 | 값 | 비고 |\n| --- | ---: | :---: |\n| **마통** | 0원 | a\\|b |"
+    );
+    // 못 그리는 채널은 여전히 고정폭이다.
+    assert!(one(input, Channel::TelegramHtml).starts_with("<pre>"));
 }

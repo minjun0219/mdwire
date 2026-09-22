@@ -29,11 +29,22 @@ impl Vocab {
         let pad = match cjk {
             CjkPolicy::AlwaysPad => true,
             CjkPolicy::Never => false,
-            // 채널별 기본값. 마크다운을 채널 파서가 다시 읽는 곳만 끼운다 —
-            // 태그로 나가는 텔레그램 HTML 은 한글 옆이어도 파서가 헷갈릴 일이 없다.
-            CjkPolicy::Auto => matches!(channel, Channel::SlackMarkdown | Channel::SlackMrkdwn),
+            // 채널별 기본값. **한글 옆 마커를 못 읽는 파서에만** 끼운다. 슬랙
+            // `markdown_text` 는 실측(2026-09-22)에서 CommonMark 그대로였다 — `*` `**`
+            // `~~` 는 한글 조사가 붙어도 닫히고, `_` 만 단어 안이라 못 닫는다. 그래서
+            // 이 채널은 기울임을 `*` 로 내보내고(`open`) 패딩은 끈다. 끼우면 보이지
+            // 않는 글자만 남는다. 레거시 `mrkdwn` 은 그 실측 밖이라 그대로 둔다.
+            CjkPolicy::Auto => matches!(channel, Channel::SlackMrkdwn),
         };
         Self { channel, pad }
+    }
+
+    /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
+    ///
+    /// 슬랙 `markdown_text` 는 표준 마크다운 표를 네이티브로 그린다(Slack markdown block
+    /// 문서). 고정폭 코드블록으로 바꾸면 화면에서 표가 아니라 코드로 보인다.
+    pub fn tables_native(&self) -> bool {
+        matches!(self.channel, Channel::SlackMarkdown)
     }
 
     /// 마크업 문법 자체가 없는 채널인가. 강조도 표도 글자로 내려앉는다.
@@ -54,6 +65,10 @@ impl Vocab {
             (Channel::SlackMrkdwn | Channel::TelegramMarkdownV2, Emph::Strike) => "~",
             (_, Emph::Strike) => "~~",
             (_, Emph::Bold) => "**",
+            // 슬랙 `markdown_text` 는 `_기울임_가` 를 글자 그대로 두고 `*기울임*가` 는
+            // 기울인다(실측 2026-09-22, CommonMark 의 단어 안 `_` 규칙). 한글은 조사가
+            // 붙는 것이 기본이라 `_` 로 내면 기울임이 자주 죽는다 — 이 채널만 `*` 다.
+            (Channel::SlackMarkdown, Emph::Italic) => "*",
             (_, Emph::Italic) => "_",
             (_, Emph::Code) => "`",
         }

@@ -843,6 +843,20 @@ fn context(ch: &[char], at: usize) -> String {
 ///
 /// 문자 수로 맞춘 구현은 한글이 든 표에서 반드시 어긋난다. 이 규칙이 그것을 잡는다.
 fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
+    // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 는 GFM 표를
+    // 그대로 받으므로 열이 글자로 맞아 있을 이유가 없다. 대신 **표가 표로 남았는가**를
+    // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
+    if channel == Channel::SlackMarkdown {
+        let want = gfm_table_count(input);
+        let got = output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>();
+        if got < want {
+            out.push(Finding {
+                rule: Rule::TableMisaligned,
+                detail: format!("표가 표로 남지 않았다 — 원문 {want}개, 출력 {got}개"),
+            });
+        }
+        return;
+    }
     // **코드 블록 안의 표는 표가 아니다.** 마크다운 표를 코드로 보여 주는 문서가 있고,
     // 그건 원문 그대로 나가는 것이 맞다. 여기를 안 걸러내면 정상 통과를 고장으로 신고한다.
     // 입력에서 코드였던 줄을 기억해 두었다가, 그 줄로 시작하는 덩어리는 건너뛴다.
@@ -884,6 +898,38 @@ fn tables_in_part(
         }
         i = j.max(i + 1);
     }
+}
+
+/// GFM 표의 개수 — 머리글 줄 바로 다음에 구분선이 오는 자리를 센다.
+///
+/// 펜스 안은 세지 않는다. 입력에서는 코드 블록에 적힌 표가 출력에서도 코드로 남는 것이
+/// 맞아서고, 출력에서는 고정폭으로 내려간 표가 바로 펜스 안에 있어서다 — 그걸 세면
+/// 표를 잃은 출력이 통과한다.
+fn gfm_table_count(text: &str) -> usize {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut n = 0;
+    let mut fenced = false;
+    let mut in_table = false;
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            fenced = !fenced;
+            in_table = false;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        if !line.contains('|') {
+            in_table = false;
+            continue;
+        }
+        if !in_table && is_delimiter(line) && i > 0 && lines[i - 1].contains('|') {
+            n += 1;
+            in_table = true;
+        }
+    }
+    n
 }
 
 fn is_delimiter(line: &str) -> bool {
@@ -1027,6 +1073,24 @@ mod tests {
 
         let by_width = "환경       | 재현  \n---------- | ------\n스테이징   | 예    \n로컬       | 아니오\n";
         let f = check("", by_width, Channel::Plain);
+        assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+    }
+
+    /// 표를 직접 그리는 채널 — 폭이 아니라 표가 남았는지를 본다.
+    #[test]
+    fn native_table_channel_wants_the_table_kept() {
+        let input = "| 환경 | 재현 |\n|---|---|\n| 스테이징 | 예 |\n";
+        let kept = "| 환경 | 재현 |\n| --- | --- |\n| 스테이징 | 예 |";
+        let f = check(input, kept, Channel::SlackMarkdown);
+        assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+
+        let fenced = "```\n환경     | 재현\n-------- | ----\n스테이징 | 예\n```";
+        let f = check(input, fenced, Channel::SlackMarkdown);
+        assert!(f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+
+        // 코드 블록 안에 적힌 표는 표가 아니다 — 그대로 코드로 나가면 정상이다.
+        let quoted = "```\n| a | b |\n|---|---|\n| 1 | 2 |\n```\n";
+        let f = check(quoted, quoted, Channel::SlackMarkdown);
         assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
     }
 

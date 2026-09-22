@@ -454,8 +454,13 @@ fn run_len(line: &[char], at: usize, c: char) -> usize {
     line[at..].iter().take_while(|&&x| x == c).count()
 }
 
+/// `snake_case` 판정용 — **ASCII 만** 단어 글자다.
+///
+/// 식별자는 ASCII 로 쓴다. 한글 사이의 `_` 를 여기 넣으면 `_진료_가` 의 닫는 `_` 가
+/// 식별자로 읽혀 기울임이 블록 끝까지 번진다 — 조사가 붙는 한국어에서는 닫는 마커
+/// 뒤에 글자가 오는 것이 기본이다.
 fn is_word(c: char) -> bool {
-    c.is_alphanumeric()
+    c.is_ascii_alphanumeric()
 }
 
 /// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).
