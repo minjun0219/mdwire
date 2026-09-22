@@ -1,10 +1,10 @@
 //! 공개 API 의 행동. 코퍼스가 "실제로 겪은 고장"을 지킨다면, 여기는 규칙이 규칙대로
 //! 도는지를 본다.
 
-use mdwire::{render, Channel, CjkPolicy, Streamer};
+use mdwire::{render, Channel, Streamer};
 
 fn one(input: &str, channel: Channel) -> String {
-    let parts = render(input, channel, CjkPolicy::Auto);
+    let parts = render(input, channel);
     assert!(parts.len() <= 1, "이 입력은 나뉠 길이가 아니다: {parts:?}");
     parts.into_iter().next().unwrap_or_default()
 }
@@ -162,7 +162,7 @@ fn strikethrough_uses_each_channels_own_syntax() {
 fn an_oversized_fence_keeps_its_tags_across_parts() {
     let body = (0..400).map(|i| format!("줄 {i} 내용이 길게 이어진다\n")).collect::<String>();
     let input = format!("```markdown\n{body}```\n");
-    let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+    let parts = render(&input, Channel::TelegramHtml);
     assert!(parts.len() > 1);
     for part in &parts {
         assert!(part.chars().count() <= Channel::TelegramHtml.limit(), "{}자", part.chars().count());
@@ -263,21 +263,6 @@ fn the_repair_is_not_language_specific() {
     assert_eq!(tg("a **(note)**follows"), "a <b>(note)</b>follows");
 }
 
-/// CJK 판정은 **표시 폭과 다른 질문**이다. 한 함수로 쓰면 두 군데가 틀린다.
-#[test]
-fn cjk_padding_follows_cjk_not_width() {
-    // 기본값으로 끼우는 채널은 레거시 mrkdwn 뿐이다(아래 `cjk_policy_is_per_channel_with_override`).
-    let pad = |s: &str| render(s, Channel::SlackMrkdwn, CjkPolicy::Auto).remove(0);
-    // 반각 가타카나 — 폭은 1이지만 CJK 다. 끼워야 한다
-    assert_eq!(pad("**강조**ｱｲｳ"), "**강조**\u{200b}ｱｲｳ");
-    // 이모지 — 폭은 2지만 CJK 가 아니다. 끼우면 안 된다
-    assert_eq!(pad("**강조**🚀"), "**강조**🚀");
-    // 조합형(NFD) 한글 — 중성·종성은 폭 0이어도 CJK 다
-    assert_eq!(pad("**강조**\u{1103}\u{1161}"), "**강조**\u{200b}\u{1103}\u{1161}");
-    // 영문 옆에는 안 끼운다 — 복사할 때 딸려간다
-    assert_eq!(pad("**강조**abc"), "**강조**abc");
-}
-
 // ── 블록 매핑 (SPEC 8절) ────────────────────────────────────────────────
 
 #[test]
@@ -344,27 +329,18 @@ fn leading_and_trailing_blank_lines_go_away() {
 
 // ── CJK 정책 ────────────────────────────────────────────────────────────
 
+/// **한글 옆 마커에 아무것도 끼우지 않는다.** 슬랙 `markdown_text` 는 `**마통**이` 를
+/// 그대로 굵게 그리고(실측 2026-09-22), 텔레그램 HTML 은 태그로 나간다 — 목표 채널 어디에도
+/// U+200B 가 필요 없다. 끼우면 보이지 않는 글자가 복사에 딸려갈 뿐이다.
 #[test]
-fn cjk_policy_is_per_channel_with_override() {
-    let input = "채널**이다";
-    // 슬랙 `markdown_text` 는 한글 옆 `**` 를 그대로 굵게 그린다(실측 2026-09-22) — 안 끼운다.
-    assert_eq!(render(input, Channel::SlackMarkdown, CjkPolicy::Auto)[0], "채널**이다**");
-    // 레거시 mrkdwn 은 그 실측 밖이다 — 끼운다.
-    assert!(render(input, Channel::SlackMrkdwn, CjkPolicy::Auto)[0].starts_with("채널\u{200b}"));
-    // 텔레그램 HTML 은 태그로 나가니 끼울 이유가 없다.
-    assert_eq!(render(input, Channel::TelegramHtml, CjkPolicy::Auto)[0], "채널<b>이다</b>");
-    // 오버라이드가 먹는다. **이게 기존 변환기에 없던 것이다.**
-    assert_eq!(
-        render(input, Channel::SlackMarkdown, CjkPolicy::AlwaysPad)[0],
-        "채널\u{200b}**이다**"
-    );
-    assert!(!render(input, Channel::SlackMrkdwn, CjkPolicy::Never)[0].contains('\u{200b}'));
-    assert_eq!(
-        render(input, Channel::TelegramHtml, CjkPolicy::AlwaysPad)[0],
-        "채널\u{200b}<b>이다</b>"
-    );
-    // 영문 옆에는 끼우지 않는다. 필요가 없고, 넣으면 복사할 때 딸려간다.
-    assert_eq!(render("ab**cd", Channel::SlackMarkdown, CjkPolicy::Auto)[0], "ab**cd**");
+fn nothing_is_padded_next_to_cjk() {
+    let input = "채널**이다** 그리고 **강조**ｱｲｳ 와 `코드`글";
+    for channel in Channel::all() {
+        let out = render(input, channel).join("");
+        assert!(!out.contains('\u{200b}'), "{}: {out:?}", channel.name());
+    }
+    assert_eq!(one("채널**이다", Channel::SlackMarkdown), "채널**이다**");
+    assert_eq!(one("채널**이다", Channel::TelegramHtml), "채널<b>이다</b>");
 }
 
 /// **슬랙 `markdown_text` 의 기울임은 `*` 다.** `_기울임_가` 는 슬랙이 글자 그대로 두고
@@ -374,8 +350,7 @@ fn slack_markdown_text_italic_uses_asterisk() {
     assert_eq!(one("_진료_가 있다", Channel::SlackMarkdown), "*진료*가 있다");
     assert_eq!(one("*진료*가 있다", Channel::SlackMarkdown), "*진료*가 있다");
     assert_eq!(one("~~취소~~가 있다", Channel::SlackMarkdown), "~~취소~~가 있다");
-    // 다른 마크다운 채널은 그대로 `_` 다.
-    assert_eq!(one("_진료_가 있다", Channel::TelegramMarkdownV2), "_진료_가 있다");
+    assert_eq!(one("_진료_가 있다", Channel::TelegramHtml), "<i>진료</i>가 있다");
 }
 
 // ── 분할 ────────────────────────────────────────────────────────────────
@@ -384,7 +359,7 @@ fn slack_markdown_text_italic_uses_asterisk() {
 fn parts_stay_within_the_limit_and_keep_markup_whole() {
     let block = "**굵은 문단**이 하나 있고 `코드`도 있다. 이 문단은 길이 한도를 넘기려고 반복된다.\n\n";
     let input = block.repeat(80);
-    let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+    let parts = render(&input, Channel::TelegramHtml);
     assert!(parts.len() > 1, "한도를 넘겼는데 안 나뉘었다");
     for part in &parts {
         assert!(part.chars().count() <= Channel::TelegramHtml.limit(), "조각이 한도를 넘는다");
@@ -399,7 +374,7 @@ fn parts_stay_within_the_limit_and_keep_markup_whole() {
 fn a_single_oversized_block_is_cut_with_tags_closed_and_reopened() {
     // 한 블록이 통째로 한도를 넘는 경우. 자르는 자리에서 닫고 다음 조각에서 다시 연다.
     let input = format!("> **{}**", "한글 ".repeat(3000));
-    let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+    let parts = render(&input, Channel::TelegramHtml);
     assert!(parts.len() > 1);
     for part in &parts {
         assert!(part.chars().count() <= Channel::TelegramHtml.limit());
@@ -412,7 +387,7 @@ fn a_single_oversized_block_is_cut_with_tags_closed_and_reopened() {
 
 #[test]
 fn chunk_boundary_inside_markup_does_not_leak() {
-    let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    let mut s = Streamer::new(Channel::TelegramHtml);
     let mut out = String::new();
     out.push_str(s.push("앞말 **굵"));
     // 강조가 아직 안 닫혔다. 여는 태그도 내용도 나가면 안 된다 —
@@ -427,7 +402,7 @@ fn chunk_boundary_inside_markup_does_not_leak() {
 fn streaming_never_emits_half_a_tag() {
     let input = "# 제목\n\n**굵게** 있는 문단과 `코드` 그리고\n이어지는 **줄 넘는 강조**다.\n";
     for size in 1..=12 {
-        let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+        let mut s = Streamer::new(Channel::TelegramHtml);
         let mut seen = String::new();
         for chunk in input.as_bytes().chunks(size) {
             // 바이트로 자르면 UTF-8 이 깨지므로 문자 단위로 다시 맞춘다.
@@ -445,7 +420,7 @@ fn streaming_never_emits_half_a_tag() {
         }
         seen.push_str(s.push(&buf));
         seen.push_str(s.finish());
-        assert_eq!(seen, render(input, Channel::TelegramHtml, CjkPolicy::Auto).join(""));
+        assert_eq!(seen, render(input, Channel::TelegramHtml).join(""));
     }
 }
 
@@ -457,7 +432,7 @@ fn streaming_never_emits_half_a_tag() {
 #[test]
 fn any_mid_stream_snapshot_is_sendable() {
     let input = "# 제목\n\n> 인용 안의 **강조**와\n> 이어지는 줄\n\n```rust\nlet a = 1;\nlet b = 2;\n```\n\n| 열 | 값 |\n|---|---|\n| 가 | 1 |\n\n끝 문단 **굵게**";
-    let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    let mut s = Streamer::new(Channel::TelegramHtml);
     let mut acc = String::new();
     let mut checked = 0;
     let mut raw_broken = 0;
@@ -518,8 +493,8 @@ fn balanced(html: &str) -> bool {
 
 #[test]
 fn empty_input_produces_nothing() {
-    assert!(render("", Channel::TelegramHtml, CjkPolicy::Auto).is_empty());
-    assert!(render("   \n\n  \n", Channel::TelegramHtml, CjkPolicy::Auto).is_empty());
+    assert!(render("", Channel::TelegramHtml).is_empty());
+    assert!(render("   \n\n  \n", Channel::TelegramHtml).is_empty());
 }
 
 /// **한도보다 긴 주소는 링크로 내지 않는다.**
@@ -530,7 +505,7 @@ fn empty_input_produces_nothing() {
 #[test]
 fn an_address_longer_than_the_limit_becomes_text() {
     let url = format!("https://example.com/{}", "x".repeat(5000));
-    let parts = render(&format!("[아주 긴 링크]({url}) 뒤에 오는 글"), Channel::TelegramHtml, CjkPolicy::Auto);
+    let parts = render(&format!("[아주 긴 링크]({url}) 뒤에 오는 글"), Channel::TelegramHtml);
 
     let joined = parts.join("");
     let preview: String = joined.chars().take(80).collect();
@@ -543,7 +518,7 @@ fn an_address_longer_than_the_limit_becomes_text() {
     }
 
     // 한도 안쪽 주소는 그대로 링크다.
-    let ok = render("[링크](https://example.com/x) 뒤", Channel::TelegramHtml, CjkPolicy::Auto);
+    let ok = render("[링크](https://example.com/x) 뒤", Channel::TelegramHtml);
     assert!(ok[0].contains("<a href=\"https://example.com/x\">링크</a>"), "{:?}", ok[0]);
 }
 
@@ -551,7 +526,7 @@ fn an_address_longer_than_the_limit_becomes_text() {
 #[test]
 fn an_over_limit_bare_link_is_not_written_twice() {
     let url = format!("https://example.com/?q={}&x=1", "y".repeat(5000));
-    let parts = render(&format!("[{url}]({url})"), Channel::TelegramHtml, CjkPolicy::Auto);
+    let parts = render(&format!("[{url}]({url})"), Channel::TelegramHtml);
     let joined = parts.join("");
     assert_eq!(joined.matches("&amp;x=1").count(), 1, "주소가 두 번 나왔다");
 }
@@ -632,21 +607,6 @@ fn a_code_span_holding_a_backtick_widens_its_fence() {
     assert_eq!(one("백틱(`` ` ``)으로", Channel::Plain), "백틱( ` )으로");
 }
 
-/// 울타리를 늘린 코드 스팬도 **CJK 패딩을 똑같이 받는다.**
-///
-/// 여기서 빠뜨리면 같은 입력이 울타리 길이에 따라 패딩이 있다 없다 한다.
-#[test]
-fn a_widened_code_fence_still_gets_cjk_padding() {
-    let plain = render("한`코드`글", Channel::SlackMrkdwn, CjkPolicy::Auto).join("");
-    let wide = render("한`` ` ``글", Channel::SlackMrkdwn, CjkPolicy::Auto).join("");
-    let zwsp = '\u{200b}';
-    assert_eq!(
-        plain.matches(zwsp).count(),
-        wide.matches(zwsp).count(),
-        "울타리 길이에 따라 패딩이 달라졌다: {plain:?} vs {wide:?}"
-    );
-}
-
 /// 탭만 든 코드 스팬은 바깥 공백을 벗긴다. `trim` 은 탭도 털어서 못 가른다.
 #[test]
 fn a_tab_only_body_still_loses_its_padding_spaces() {
@@ -666,4 +626,48 @@ fn slack_markdown_text_keeps_tables_as_gfm() {
     );
     // 못 그리는 채널은 여전히 고정폭이다.
     assert!(one(input, Channel::TelegramHtml).starts_with("<pre>"));
+}
+
+/// **`<https://…>` 오토링크.** mrkdwn 습관이 남은 LLM 이 자주 쓴다(한 표본에서 124건).
+/// 텔레그램은 `&lt;` 로 escape 하면 화면에 꺾쇠가 글자로 보인다 — 링크로 낸다.
+#[test]
+fn angle_autolink_becomes_a_link() {
+    let input = "주소는 <https://a.com/x_y_z?q=1&r=2> 다";
+    assert_eq!(
+        one(input, Channel::TelegramHtml),
+        "주소는 <a href=\"https://a.com/x_y_z?q=1&amp;r=2\">https://a.com/x_y_z?q=1&amp;r=2</a> 다"
+    );
+    assert_eq!(one(input, Channel::SlackMarkdown), "주소는 <https://a.com/x_y_z?q=1&r=2> 다");
+    assert_eq!(one(input, Channel::Plain), "주소는 https://a.com/x_y_z?q=1&r=2 다");
+    // 안에 공백이 있으면 링크가 아니다.
+    assert_eq!(one("<https://a.com/x y>", Channel::Plain), "<https://a.com/x y>");
+    // `<url|텍스트>` — 슬랙 레거시 링크. 슬랙에서 긁어 온 글에 그대로 남는다.
+    let legacy = "<https://a.com/p|문서 보기> 참고";
+    assert_eq!(one(legacy, Channel::SlackMarkdown), "[문서 보기](https://a.com/p) 참고");
+    assert_eq!(one(legacy, Channel::TelegramHtml), "<a href=\"https://a.com/p\">문서 보기</a> 참고");
+    assert_eq!(one(legacy, Channel::Plain), "문서 보기 (https://a.com/p) 참고");
+}
+
+/// **마크다운에 없는 표현을 메운 HTML 은 태그만 벗긴다.** `<sub>`·`<br>` 이 실측된
+/// 것들이다. 텔레그램은 모르는 태그에 400 을 주고, 슬랙 `markdown_text` 도 그리지 않는다.
+/// 벗기지 않으면 화면에 `<sub>` 가 글자로 보인다. 모르는 꺾쇠(`Vec<T>`, `1 < 2`)는 글이다.
+#[test]
+fn known_html_tags_are_stripped_and_unknown_angles_kept() {
+    let input = "H<sub>2</sub>O 와 <B>굵</B> Vec<T> 1 < 2 <!-- 주석 --> 끝";
+    assert_eq!(one(input, Channel::TelegramHtml), "H2O 와 굵 Vec&lt;T&gt; 1 &lt; 2  끝");
+    assert_eq!(one(input, Channel::SlackMarkdown), "H2O 와 굵 Vec<T> 1 < 2  끝");
+    // `<br>` 은 줄바꿈이다. 벗겨 버리면 두 줄이 붙는다.
+    assert_eq!(one("첫째<br>둘째<br/>셋째", Channel::TelegramHtml), "첫째\n둘째\n셋째");
+    // 링크 태그는 벗기지 않는다 — 벗기면 주소가 사라진다.
+    assert_eq!(one("<a href=\"u\">t</a>", Channel::SlackMarkdown), "<a href=\"u\">t</a>");
+}
+
+/// **`** 띄운 굵게 **` 는 글자다.** 열 수도 닫을 수도 없는 마커 둘이라 CommonMark 도
+/// 슬랙도 글자로 둔다. 전에는 닫는 쪽만 삼켜 `** 띄운 굵게  는` 이 됐다 — 내용 손실이다.
+#[test]
+fn spaced_bold_markers_stay_as_text() {
+    assert_eq!(one("** 배포 ** 는 금지", Channel::SlackMarkdown), "** 배포 ** 는 금지");
+    assert_eq!(one("** 배포 ** 는 금지", Channel::TelegramHtml), "** 배포 ** 는 금지");
+    // 앞이 글자인 닫기는 여전히 닫는다 — `**굵게 **` 는 관대하게 굵게다.
+    assert_eq!(one("**굵게 ** 끝", Channel::TelegramHtml), "<b>굵게 </b> 끝");
 }

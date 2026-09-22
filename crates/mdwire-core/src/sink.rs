@@ -359,10 +359,9 @@ impl Markup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::CjkPolicy;
 
     fn html(limit: usize, text: &str) -> Vec<String> {
-        split_hard(text, limit, &Vocab::new(Channel::TelegramHtml, CjkPolicy::Auto))
+        split_hard(text, limit, &Vocab::new(Channel::TelegramHtml))
     }
 
     /// 조각 하나가 곧 메시지 하나다 — 태그가 그 안에서 열리고 닫혀야 한다.

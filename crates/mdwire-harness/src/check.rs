@@ -252,21 +252,43 @@ fn bare(text: &str, seam: Seam) -> String {
     let mut i = 0;
     while i < ch.len() {
         if ch[i] == '<' {
+            // **주석은 내용이 아니다.** `<!-- … -->` 안의 낱말은 화면에 안 보이는
+            // 것이 맞으니, 지운 출력을 손실로 세지 않는다.
+            if ch[i..].starts_with(&['<', '!', '-', '-']) {
+                if let Some(len) = ch[i + 4..].windows(3).position(|w| w == ['-', '-', '>']) {
+                    i += 4 + len + 3;
+                    continue;
+                }
+            }
             if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
                 // 태그는 지우되 **속성 값은 남긴다.** `<a href="…">` 의 주소는 화면에
                 // 안 보여도 실제로 배달되는 내용이다. 지우면 링크가 사라진 것으로 잡힌다.
+                // **내용을 실은 속성만 남긴다** — `href`·`src`·`alt`·`title`. `align="center"`
+                // 나 `style="…"` 은 화면에 글자로 안 보이니, 태그를 벗긴 출력에서 그
+                // 값이 빠졌다고 손실로 세면 안 된다.
                 let mut quoted = false;
+                let mut keep = false;
+                let mut name = String::new();
                 for &c in &ch[i..end] {
                     if c == '"' {
                         quoted = !quoted;
-                        if !quoted {
+                        if quoted {
+                            keep = matches!(name.trim_end_matches('='), "href" | "src" | "alt" | "title");
+                        } else {
                             attrs.push(' ');
+                            name.clear();
                         }
-                    } else if quoted && !is_marker(c) {
+                    } else if quoted {
                         // 속성 값도 본문과 **같은 잣대로** 씻는다. 여기만 `_` 를 남기면
                         // 입력의 `csrf_token` 이 출력에서는 `csrftoken` 이 되어, 멀쩡한
                         // 낱말이 사라진 것으로 잡힌다.
-                        attrs.push(c);
+                        if keep && !is_marker(c) {
+                            attrs.push(c);
+                        }
+                    } else if c.is_ascii_alphabetic() || c == '=' {
+                        name.push(c.to_ascii_lowercase());
+                    } else {
+                        name.clear();
                     }
                 }
                 i = end;
@@ -408,6 +430,34 @@ fn strip_urls(text: &str, seam: Seam) -> String {
                 out.push(' ');
             }
             continue;
+        }
+        // `<url>` · `<url|텍스트>` — 오토링크와 슬랙 레거시 링크. 주소는 빼고 텍스트만
+        // 남긴다. 텍스트가 주소 그대로면 아무것도 안 남긴다 — 출력은 `<url>` 이나
+        // `<a href>` 로 나가서 어차피 주소만 있고, 남기면 입력에만 낱말이 생긴다.
+        if ch[i] == '<'
+            && (ch[i + 1..].starts_with(&['h', 't', 't', 'p', ':', '/', '/'])
+                || ch[i + 1..].starts_with(&['h', 't', 't', 'p', 's', ':', '/', '/']))
+        {
+            if let Some(close) = ch[i + 1..].iter().position(|&c| c == '>') {
+                let body = &ch[i + 1..i + 1 + close];
+                let (url, label) = match body.iter().position(|&c| c == '|') {
+                    Some(bar) => (&body[..bar], Some(&body[bar + 1..])),
+                    None => (body, None),
+                };
+                // 공백은 텍스트에는 와도 주소에는 못 온다.
+                if !url.iter().any(|c| c.is_whitespace()) {
+                    if let Some(label) = label {
+                        if label != url {
+                            out.extend(label.iter());
+                        }
+                    }
+                    i += 1 + close + 1;
+                    if seam == Seam::Split {
+                        out.push(' ');
+                    }
+                    continue;
+                }
+            }
         }
         // 맨몸 URL 과 앵커.
         //
@@ -604,7 +654,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
 /// 그래서 이 불변식을 테스트에 박아 둔다.
 fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
-        Channel::SlackMarkdown | Channel::SlackMrkdwn => {
+        Channel::SlackMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
             // 대신 **짝이 맞아야** 한다.
             let scan = emphasis::scan_markdown(&output.replace(PART_SEPARATOR, "\n"), Mode::Strict);
@@ -975,6 +1025,14 @@ fn unescape_for_width(text: &str, channel: Channel) -> String {
     let mut i = 0;
     while i < ch.len() {
         if ch[i] == '<' {
+            // **주석은 내용이 아니다.** `<!-- … -->` 안의 낱말은 화면에 안 보이는
+            // 것이 맞으니, 지운 출력을 손실로 세지 않는다.
+            if ch[i..].starts_with(&['<', '!', '-', '-']) {
+                if let Some(len) = ch[i + 4..].windows(3).position(|w| w == ['-', '-', '>']) {
+                    i += 4 + len + 3;
+                    continue;
+                }
+            }
             if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
                 i = end;
                 continue;

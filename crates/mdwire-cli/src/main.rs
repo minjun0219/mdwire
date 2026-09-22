@@ -11,7 +11,7 @@
 //! 분할 결과는 **NUL 로 구분**한다(`SPEC.md` 5절). 셸에서 다루기 가장 쉽고,
 //! 마크다운 본문에 안 나오는 바이트다.
 
-use mdwire::{Channel, CjkPolicy, Streamer};
+use mdwire::{Channel, Streamer};
 use std::io::{self, BufRead, Read, Write};
 use std::process::ExitCode;
 
@@ -19,7 +19,7 @@ const USAGE: &str = "\
 mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸다
 
 사용법:
-  mdwire --channel <채널> [--stream] [--cjk auto|pad|never]
+  mdwire --channel <채널> [--stream]
 
 채널:
   telegram-html · slack-markdown · plain
@@ -27,7 +27,6 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
 옵션:
   --channel <이름>      필수
   --stream              stdin 을 읽는 대로 내보낸다. 한도 분할은 하지 않는다
-  --cjk auto|pad|never  CJK 인접 강조에 U+200B 를 끼우는 정책 (기본: auto)
   -h, --help            이 도움말
   -V, --version         버전
 
@@ -47,7 +46,6 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let mut channel: Option<Channel> = None;
-    let mut cjk = CjkPolicy::Auto;
     let mut stream = false;
 
     let mut args = std::env::args().skip(1);
@@ -69,14 +67,6 @@ fn run() -> Result<(), String> {
                     Channel::parse(&v).ok_or_else(|| format!("모르는 채널: {v}\n\n{USAGE}"))?,
                 );
             }
-            "--cjk" => {
-                cjk = match value()?.as_str() {
-                    "auto" => CjkPolicy::Auto,
-                    "pad" => CjkPolicy::AlwaysPad,
-                    "never" => CjkPolicy::Never,
-                    other => return Err(format!("모르는 --cjk 값: {other}")),
-                };
-            }
             other => return Err(format!("모르는 인자: {other}\n\n{USAGE}")),
         }
     }
@@ -86,12 +76,12 @@ fn run() -> Result<(), String> {
     let mut out = stdout.lock();
 
     if stream {
-        return stream_stdin(channel, cjk, &mut out).map_err(|e| e.to_string());
+        return stream_stdin(channel, &mut out).map_err(|e| e.to_string());
     }
 
     let mut input = String::new();
     io::stdin().read_to_string(&mut input).map_err(|e| e.to_string())?;
-    let parts = mdwire::render(&input, channel, cjk);
+    let parts = mdwire::render(&input, channel);
     for (i, part) in parts.iter().enumerate() {
         if i > 0 {
             out.write_all(b"\0").map_err(|e| e.to_string())?;
@@ -103,8 +93,8 @@ fn run() -> Result<(), String> {
 
 /// 읽는 대로 내보낸다. 버퍼는 재사용한다 — 조각마다 할당하지 않는 것이
 /// 이 라이브러리가 서명을 그렇게 고른 이유다(`SPEC.md` 5절).
-fn stream_stdin(channel: Channel, cjk: CjkPolicy, out: &mut impl Write) -> io::Result<()> {
-    let mut streamer = Streamer::new(channel, cjk);
+fn stream_stdin(channel: Channel, out: &mut impl Write) -> io::Result<()> {
+    let mut streamer = Streamer::new(channel);
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let mut rendered = String::new();

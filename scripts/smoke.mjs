@@ -4,9 +4,9 @@ import { render, limit, Streamer } from "mdwire";
 import { strict as assert } from "node:assert";
 
 assert.equal(limit("telegram-html"), 4096);
-assert.deepEqual(render("**굵게** 다", "telegram-html", "auto"), ["<b>굵게</b> 다"]);
+assert.deepEqual(render("**굵게** 다", "telegram-html"), ["<b>굵게</b> 다"]);
 
-const s = new Streamer("telegram-html", "auto");
+const s = new Streamer("telegram-html");
 let acc = "";
 for (const chunk of ["**굵", "게** 이어", "서 `코드`"]) {
   acc += s.push(chunk);
@@ -15,5 +15,5 @@ for (const chunk of ["**굵", "게** 이어", "서 `코드`"]) {
 acc += s.finish();
 assert.equal(acc, "<b>굵게</b> 이어서 <code>코드</code>");
 
-assert.throws(() => render("x", "없는채널", "auto"), /모르는 채널/);
+assert.throws(() => render("x", "없는채널"), /모르는 채널/);
 console.log("npm 스모크 통과");

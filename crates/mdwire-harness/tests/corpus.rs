@@ -1,6 +1,6 @@
 //! 코퍼스가 정본이다. 이 테스트가 그 말을 강제한다.
 
-use mdwire::{Channel, CjkPolicy, Streamer};
+use mdwire::{Channel, Streamer};
 use mdwire_harness::adapter::Mdwire;
 use mdwire_harness::corpus;
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ fn corpus_dir() -> PathBuf {
 /// 케이스 × 채널 전부. 기대 출력 대조와 불변식 채점을 함께 본다.
 #[test]
 fn corpus_passes() {
-    let outcomes = corpus::run_corpus(&corpus_dir(), &Mdwire::default(), &Channel::v0_1())
+    let outcomes = corpus::run_corpus(&corpus_dir(), &Mdwire, &Channel::all())
         .expect("코퍼스를 읽어야 한다");
     assert!(!outcomes.is_empty(), "케이스가 없다");
     if !corpus::report(&outcomes, false) {
@@ -29,8 +29,8 @@ fn corpus_passes() {
 fn streaming_agrees_with_batch() {
     let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
     for case in &cases {
-        for channel in Channel::v0_1() {
-            let parts = mdwire::render(&case.input, channel, CjkPolicy::Auto);
+        for channel in Channel::all() {
+            let parts = mdwire::render(&case.input, channel);
             // **한도를 넘겨 나뉜 케이스는 건너뛴다.** 조각은 저마다 메시지 하나라 앞머리
             // 줄바꿈을 털어 내고 시작한다 — 도로 이어 붙이면 스트리밍과 달라지는 것이
             // 정상이다. 스트리밍은 한도를 모른다(`SPEC.md` 5절).
@@ -39,7 +39,7 @@ fn streaming_agrees_with_batch() {
             }
             let batch = parts.join("");
             for size in [1usize, 2, 3, 7, 64] {
-                let mut s = Streamer::new(channel, CjkPolicy::Auto);
+                let mut s = Streamer::new(channel);
                 let mut got = String::new();
                 for chunk in chunks(&case.input, size) {
                     s.push_into(chunk, &mut got);
@@ -63,8 +63,8 @@ fn streaming_agrees_with_batch() {
 fn borrowed_and_owned_signatures_agree() {
     let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
     for case in &cases {
-        let mut a = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
-        let mut b = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+        let mut a = Streamer::new(Channel::TelegramHtml);
+        let mut b = Streamer::new(Channel::TelegramHtml);
         let (mut got_a, mut got_b) = (String::new(), String::new());
         for chunk in chunks(&case.input, 11) {
             got_a.push_str(a.push(chunk));

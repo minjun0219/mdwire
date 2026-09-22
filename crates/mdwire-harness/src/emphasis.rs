@@ -280,6 +280,28 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             }
         }
 
+        // `<url>` · `<url|텍스트>` — 오토링크와 슬랙 레거시 링크. 강조 안의 본문은
+        // 텍스트(없으면 주소)다. 출력은 `[텍스트](url)` 이나 `<a href>` 로 나가고 그쪽은
+        // 이미 텍스트만 남기므로, 입력도 같은 모양으로 읽어야 범위가 맞는다.
+        if c == '<'
+            && (ch[i + 1..].starts_with(&['h', 't', 't', 'p', ':', '/', '/'])
+                || ch[i + 1..].starts_with(&['h', 't', 't', 'p', 's', ':', '/', '/']))
+        {
+            if let Some(close) = ch[i + 1..].iter().position(|&c| c == '>') {
+                let body = &ch[i + 1..i + 1 + close];
+                let (url, label) = match body.iter().position(|&c| c == '|') {
+                    Some(bar) => (&body[..bar], &body[bar + 1..]),
+                    None => (body, body),
+                };
+                // 공백은 텍스트에는 와도 주소에는 못 온다.
+                if !url.iter().any(|c| c.is_whitespace()) {
+                    push_text(&mut stack, &mut root, &label.iter().collect::<String>());
+                    i += 1 + close + 1;
+                    continue;
+                }
+            }
+        }
+
         // 코드 스팬이 먼저다. 그 안의 `*` 는 강조가 아니다.
         if c == '`' {
             let run = run_len(&ch, i, '`');
@@ -342,16 +364,19 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         let prev = if i > 0 { Some(ch[i - 1]) } else { None };
         let next = ch.get(i + take).copied();
 
-        // `snake_case` 의 밑줄은 강조가 아니다.
-        if c == '_' && prev.is_some_and(is_word) && next.is_some_and(is_word) {
+        let after_space = prev.is_none_or(char::is_whitespace);
+        let open_same = stack.iter().rposition(|o| o.kind == kind);
+
+        // 글자 뒤의 `_` 는 열지 못한다 — `snake_case` 도 `2026-04-29_제목` 도 글자다.
+        // 열린 기울임이 있으면 닫는다(`_진료_가`). 규칙은 코어와 같다.
+        let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
+        if intraword && open_same.is_none() {
             push_text(&mut stack, &mut root, &marker);
             i += take;
             continue;
         }
 
-        let left = can_open(prev, next);
-        let after_space = prev.is_none_or(char::is_whitespace);
-        let open_same = stack.iter().rposition(|o| o.kind == kind);
+        let left = can_open(prev, next) && !intraword;
 
         match open_same {
             // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
@@ -364,6 +389,9 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     scan.unpaired.push(unpaired(&ch, i, take));
                 }
             }
+            // 앞도 뒤도 공백이고 열린 것도 추측이었다 — `** 띄운 굵게 **` 는 둘 다 글자다.
+            // 규칙은 코어와 같다.
+            Some(at) if stack[at].guess => push_text(&mut stack, &mut root, &marker),
             Some(at) => close_to(&mut stack, &mut root, at, scan),
             None if left => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
             // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
@@ -488,12 +516,6 @@ fn snippet(s: &str) -> String {
         Some((i, _)) => format!("{}…", &t[..i]),
         None => t,
     }
-}
-
-/// `snake_case` 판정용 — ASCII 만 단어 글자다. 규칙은 코어와 같다: 한글 사이의 `_` 는
-/// 식별자가 아니라 조사 앞의 닫는 마커다.
-fn is_word(c: char) -> bool {
-    c.is_ascii_alphanumeric()
 }
 
 /// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).
@@ -722,5 +744,16 @@ mod tests {
     fn html_entities_are_decoded_before_comparing() {
         let scan = scan_html("<b>a &amp; b</b>");
         assert_eq!(bolds(&scan), vec!["a & b"]);
+    }
+}
+
+#[cfg(test)]
+mod angle_tests {
+    use super::*;
+
+    #[test]
+    fn angle_link_label_is_the_span_text() {
+        let scan = scan_markdown("**<https://a.com/p|TS 7 RC>** 다", Mode::Repair);
+        assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "TS 7 RC".into() }]);
     }
 }

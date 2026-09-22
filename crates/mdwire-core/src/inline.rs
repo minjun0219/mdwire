@@ -18,7 +18,7 @@
 //! ([`Inline::safe_len`]). 여는 마크업은 짝이 맞는 순간 그 자리에 끼워 넣는다.
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
-use crate::vocab::{needs_cjk_padding, Emph, Vocab, ZWSP};
+use crate::vocab::{Emph, Vocab};
 
 struct Open {
     emph: Emph,
@@ -35,8 +35,6 @@ struct Open {
     /// 공백이면 원래 글자였으므로 되돌리고, `…온다*` 처럼 앞이 글자면 짝 잃은 닫는
     /// 마커이므로 버린다 — 되돌려 놓으면 출력에 마커가 남는다.
     after_space: bool,
-    /// 여는 쪽 CJK 패딩이 필요한가.
-    pad: bool,
 }
 
 pub(crate) struct Inline {
@@ -124,7 +122,7 @@ impl Inline {
                 if top.emph == Emph::Code {
                     let run = if line[i] == '`' { run_len(line, i, '`') } else { 0 };
                     if run == top.run {
-                        self.close_at(self.open.len() - 1, out, v, line.get(i + run).copied());
+                        self.close_at(self.open.len() - 1, out, v);
                         i += run;
                     } else {
                         // **안 맞는 백틱 런은 통째로 건너뛴다.** 한 글자씩 넘기면 길이 N+1 인
@@ -147,6 +145,13 @@ impl Inline {
                 if let Some((text, url_from, url_to)) = find_link(line, i) {
                     self.render_link(&line[text.0..text.1], &line[url_from..url_to], out, v);
                     i = url_to + 1;
+                    continue;
+                }
+            }
+
+            if c == '<' {
+                if let Some(step) = self.angle(line, i, out, v) {
+                    i += step;
                     continue;
                 }
             }
@@ -176,7 +181,6 @@ impl Inline {
                     ch: '`',
                     guess: false,
                     after_space: prev.is_none_or(char::is_whitespace),
-                    pad: v.pad && prev.is_some_and(needs_cjk_padding),
                 });
                 i += run;
                 continue;
@@ -214,8 +218,16 @@ impl Inline {
             let prev = self.prev_char(line, i);
             let next = line.get(i + take).copied();
 
-            // `snake_case` 의 밑줄은 강조가 아니다.
-            if c == '_' && prev.is_some_and(is_word) && next.is_some_and(is_word) {
+            let after_space = prev.is_none_or(char::is_whitespace);
+            let same = self.open.iter().rposition(|o| o.emph == emph);
+
+            // **글자 뒤의 `_` 는 열지 못한다**(CommonMark 의 단어 안 `_`). `snake_case` 도
+            // `2026-04-29_제목` 도 여기서 글자로 남는다 — 스크립트를 가리지 않는다. 한글 뒤
+            // `_` 를 열어 주면 날짜 붙은 파일 이름이 기울임을 열고 블록 끝까지 삼킨다.
+            // 대신 **닫는 것은 된다.** `_진료_가` 의 둘째 `_` 는 열린 기울임을 닫는다 —
+            // CommonMark 는 못 닫지만, 조사가 붙는 한국어에서는 그게 저자의 뜻이다.
+            let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
+            if intraword && same.is_none() {
                 for _ in 0..take {
                     v.escape_char(c, out);
                 }
@@ -223,18 +235,23 @@ impl Inline {
                 continue;
             }
 
-            let left = can_open(prev, next);
-            let after_space = prev.is_none_or(char::is_whitespace);
-            let same = self.open.iter().rposition(|o| o.emph == emph);
-            let pad = v.pad && prev.is_some_and(needs_cjk_padding);
+            let left = can_open(prev, next) && !intraword;
 
             match same {
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
-                Some(at) if !after_space => self.close_at(at, out, v, next),
+                Some(at) if !after_space => self.close_at(at, out, v),
                 // 앞이 공백인데 뒤로는 열 수 있다 — 줄 첫머리에 온 여는 마커다.
                 // **여기서 닫으면 강조 범위가 뒤집힌다.** 겹쳐 열지도 않고 버린다. 규칙 2.
                 Some(_) if left => {}
-                Some(at) => self.close_at(at, out, v, next),
+                // 앞도 뒤도 공백이고 열린 것도 추측이었다 — `** 띄운 굵게 **` 다.
+                // 추측을 닫아 주면 여는 쪽은 글자로 되돌아가고 닫는 쪽만 사라진다.
+                // 둘 다 글자다.
+                Some(at) if self.open[at].guess => {
+                    for _ in 0..take {
+                        v.escape_char(c, out);
+                    }
+                }
+                Some(at) => self.close_at(at, out, v),
                 None if left => self.open.push(Open {
                     emph,
                     at: out.len(),
@@ -242,7 +259,6 @@ impl Inline {
                     ch: c,
                     guess: false,
                     after_space,
-                    pad,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
                 None => self.open.push(Open {
@@ -252,7 +268,6 @@ impl Inline {
                     ch: c,
                     guess: true,
                     after_space,
-                    pad,
                 }),
             }
             i += take;
@@ -271,7 +286,7 @@ impl Inline {
                 self.revert_code_span(out, v);
                 continue;
             }
-            self.close_at(self.open.len() - 1, out, v, None);
+            self.close_at(self.open.len() - 1, out, v);
         }
         self.prev = None;
     }
@@ -311,15 +326,15 @@ impl Inline {
     }
 
     /// `at` 번째 열린 마커를 닫는다. 그 위에 열린 것들은 먼저 정리한다.
-    fn close_at(&mut self, at: usize, out: &mut String, v: &Vocab, next: Option<char>) {
+    fn close_at(&mut self, at: usize, out: &mut String, v: &Vocab) {
         while self.open.len() > at + 1 {
-            self.finalize(out, v, None);
+            self.finalize(out, v);
         }
-        self.finalize(out, v, next);
+        self.finalize(out, v);
     }
 
     /// 맨 위 마커 하나를 확정한다 — 닫거나, 글자로 되돌리거나.
-    fn finalize(&mut self, out: &mut String, v: &Vocab, next: Option<char>) {
+    fn finalize(&mut self, out: &mut String, v: &Vocab) {
         let Some(open) = self.open.pop() else { return };
 
         // 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
@@ -378,25 +393,74 @@ impl Inline {
                     fence.push(' ');
                 }
                 out.insert_str(open.at, &fence);
-                // CJK 패딩은 기본 경로와 똑같이 붙인다. 여기서 빠뜨리면 같은 입력이
-                // 울타리 길이에 따라 패딩이 있다 없다 한다.
-                if open.pad {
-                    out.insert(open.at, ZWSP);
-                }
-                if v.pad && next.is_some_and(needs_cjk_padding) {
-                    out.push(ZWSP);
-                }
                 return;
             }
         }
         out.insert_str(open.at, v.open(open.emph));
-        if open.pad {
-            out.insert(open.at, ZWSP);
-        }
         out.push_str(v.close(open.emph));
-        if v.pad && next.is_some_and(needs_cjk_padding) {
-            out.push(ZWSP);
+    }
+
+    /// `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
+    /// 돌려주고, 아니면 `None` 이라 `<` 는 글자로 나간다.
+    ///
+    /// **LLM 산출물에서 실측된 셋이다.** `<https://…>` 는 mrkdwn 습관이 남은 링크
+    /// (한 표본에서 124건)고, `<sub>`·`<br>` 은 마크다운에 없는 표현을 HTML 로 메운
+    /// 것(74건)이다. 텔레그램은 모르는 태그를 받으면 400 이라 escape 해 왔는데, 그러면
+    /// 화면에 `&lt;sub&gt;` 가 글자로 보인다. 태그는 벗기고 내용은 둔다 — 각색이 아니라
+    /// 표처럼 **타깃에 그 구문이 없어서**다. `<br>` 만 줄바꿈으로 남긴다.
+    ///
+    /// 아는 태그만 벗긴다. `Vec<T>` 의 `<T>` 나 `1 < 2` 를 태그로 읽으면 글이 사라진다.
+    fn angle(&mut self, line: &[char], i: usize, out: &mut String, v: &Vocab) -> Option<usize> {
+        let rest = &line[i..];
+        if starts_with(rest, "<!--") {
+            let end = find_seq(&rest[4..], "-->")? + 4;
+            return Some(end + 3);
         }
+        let close = rest.iter().position(|&c| c == '>')?;
+        if starts_with(&rest[1..], "http://") || starts_with(&rest[1..], "https://") {
+            let body = &rest[1..close];
+            // `<url|텍스트>` 는 슬랙 레거시 링크다. 슬랙에서 긁어 온 글에 그대로 남는다 —
+            // 한 표본의 124건이 전부 이 모양이었다. 주소와 텍스트를 가른다.
+            let (url, label) = match body.iter().position(|&c| c == '|') {
+                Some(bar) => (&body[..bar], &body[bar + 1..]),
+                None => (body, body),
+            };
+            if url.iter().any(|c| c.is_whitespace()) {
+                return None;
+            }
+            // 오토링크의 텍스트는 인라인으로 다시 읽지 않는다 — 주소 안의 `_` 가
+            // 기울임이 되면 안 된다.
+            let mut href = String::with_capacity(url.len());
+            href.extend(url.iter());
+            let mut text = std::mem::take(&mut self.scratch);
+            text.clear();
+            for &c in label {
+                v.escape_char(c, &mut text);
+            }
+            v.link(&text, &href, out);
+            self.scratch = text;
+            self.prev = Some('>');
+            return Some(close + 1);
+        }
+        let closing = rest.get(1) == Some(&'/');
+        let name_at = if closing { 2 } else { 1 };
+        let mut j = name_at;
+        while j < close && rest[j].is_ascii_alphanumeric() {
+            j += 1;
+        }
+        let name = &rest[name_at..j];
+        // 이름 뒤는 속성(공백)이거나 `/>` 거나 바로 `>` 다. 아니면 태그 모양이 아니다.
+        if name.is_empty() || !(rest[j] == '>' || rest[j] == '/' || rest[j].is_whitespace()) {
+            return None;
+        }
+        if !is_known_tag(name) {
+            return None;
+        }
+        if !closing && eq_ignore_case(name, "br") {
+            out.push('\n');
+            self.prev = Some('\n');
+        }
+        Some(close + 1)
     }
 
     fn render_link(&mut self, text: &[char], url: &[char], out: &mut String, v: &Vocab) {
@@ -435,6 +499,29 @@ fn find_link(line: &[char], at: usize) -> Option<((usize, usize), usize, usize)>
     Some(((at + 1, j), j + 2, k))
 }
 
+fn starts_with(chars: &[char], s: &str) -> bool {
+    let mut it = chars.iter();
+    s.chars().all(|c| it.next() == Some(&c))
+}
+
+fn find_seq(chars: &[char], s: &str) -> Option<usize> {
+    (0..chars.len()).find(|&k| starts_with(&chars[k..], s))
+}
+
+fn eq_ignore_case(chars: &[char], s: &str) -> bool {
+    chars.len() == s.len() && chars.iter().zip(s.chars()).all(|(a, b)| a.eq_ignore_ascii_case(&b))
+}
+
+/// 벗겨도 되는 HTML 태그. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때 쓰는 것들이다.
+/// 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
+fn is_known_tag(name: &[char]) -> bool {
+    const KNOWN: [&str; 21] = [
+        "br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span",
+        "div", "p", "small", "mark", "kbd", "font", "center", "details",
+    ];
+    KNOWN.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "summary")
+}
+
 /// 같은 글자가 이어진 가장 긴 길이.
 fn longest_run(s: &str, c: char) -> usize {
     let mut best = 0;
@@ -452,15 +539,6 @@ fn longest_run(s: &str, c: char) -> usize {
 
 fn run_len(line: &[char], at: usize, c: char) -> usize {
     line[at..].iter().take_while(|&&x| x == c).count()
-}
-
-/// `snake_case` 판정용 — **ASCII 만** 단어 글자다.
-///
-/// 식별자는 ASCII 로 쓴다. 한글 사이의 `_` 를 여기 넣으면 `_진료_가` 의 닫는 `_` 가
-/// 식별자로 읽혀 기울임이 블록 끝까지 번진다 — 조사가 붙는 한국어에서는 닫는 마커
-/// 뒤에 글자가 오는 것이 기본이다.
-fn is_word(c: char) -> bool {
-    c.is_ascii_alphanumeric()
 }
 
 /// 이 마커가 **열 수 있는가**(CommonMark 의 좌측 flanking).

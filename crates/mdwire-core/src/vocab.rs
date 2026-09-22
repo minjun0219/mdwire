@@ -4,8 +4,7 @@
 //! 손대는 곳이 이 파일이어야 한다는 뜻이고, 그게 `SPEC.md` 4절과 8절의 표가 코드에
 //! 대응하는 방식이다.
 
-use crate::width::is_cjk;
-use crate::{Channel, CjkPolicy};
+use crate::Channel;
 
 /// 인라인 강조의 종류.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,23 +19,11 @@ pub(crate) enum Emph {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Vocab {
     pub channel: Channel,
-    /// CJK 인접 강조에 폭 없는 공백(U+200B)을 끼울 것인가.
-    pub pad: bool,
 }
 
 impl Vocab {
-    pub fn new(channel: Channel, cjk: CjkPolicy) -> Self {
-        let pad = match cjk {
-            CjkPolicy::AlwaysPad => true,
-            CjkPolicy::Never => false,
-            // 채널별 기본값. **한글 옆 마커를 못 읽는 파서에만** 끼운다. 슬랙
-            // `markdown_text` 는 실측(2026-09-22)에서 CommonMark 그대로였다 — `*` `**`
-            // `~~` 는 한글 조사가 붙어도 닫히고, `_` 만 단어 안이라 못 닫는다. 그래서
-            // 이 채널은 기울임을 `*` 로 내보내고(`open`) 패딩은 끈다. 끼우면 보이지
-            // 않는 글자만 남는다. 레거시 `mrkdwn` 은 그 실측 밖이라 그대로 둔다.
-            CjkPolicy::Auto => matches!(channel, Channel::SlackMrkdwn),
-        };
-        Self { channel, pad }
+    pub fn new(channel: Channel) -> Self {
+        Self { channel }
     }
 
     /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
@@ -59,17 +46,12 @@ impl Vocab {
             (Channel::TelegramHtml, Emph::Strike) => "<s>",
             (Channel::TelegramHtml, Emph::Code) => "<code>",
             (Channel::Plain, _) => "",
-            // 취소선 표기는 채널마다 갈린다. 슬랙 `markdown_text` 는 표준 마크다운이라
-            // `~~` 고, 레거시 `mrkdwn` 과 텔레그램 MarkdownV2 는 `~` 하나다.
-            // 하나로 뭉뚱그리면 한쪽은 취소선이 안 걸리고 물결표만 보인다.
-            (Channel::SlackMrkdwn | Channel::TelegramMarkdownV2, Emph::Strike) => "~",
             (_, Emph::Strike) => "~~",
             (_, Emph::Bold) => "**",
-            // 슬랙 `markdown_text` 는 `_기울임_가` 를 글자 그대로 두고 `*기울임*가` 는
-            // 기울인다(실측 2026-09-22, CommonMark 의 단어 안 `_` 규칙). 한글은 조사가
-            // 붙는 것이 기본이라 `_` 로 내면 기울임이 자주 죽는다 — 이 채널만 `*` 다.
-            (Channel::SlackMarkdown, Emph::Italic) => "*",
-            (_, Emph::Italic) => "_",
+            // 기울임은 `_` 가 아니라 `*` 다. 슬랙 `markdown_text` 는 `_기울임_가` 를 글자
+            // 그대로 두고 `*기울임*가` 는 기울인다(실측 2026-09-22, CommonMark 의 단어 안
+            // `_` 규칙). 한글은 조사가 붙는 것이 기본이라 `_` 로 내면 기울임이 자주 죽는다.
+            (_, Emph::Italic) => "*",
             (_, Emph::Code) => "`",
         }
     }
@@ -149,6 +131,14 @@ impl Vocab {
                 }
             }
             _ => {
+                // 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다.
+                // 스킴이 있어야 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
+                if text == url && url.contains("://") {
+                    out.push('<');
+                    out.push_str(url);
+                    out.push('>');
+                    return;
+                }
                 out.push('[');
                 out.push_str(text);
                 out.push_str("](");
@@ -185,7 +175,7 @@ impl Vocab {
     /// 불릿 마커. `SPEC.md` 8절의 표.
     pub fn bullet(&self) -> &'static str {
         match self.channel {
-            Channel::SlackMarkdown | Channel::SlackMrkdwn | Channel::TelegramMarkdownV2 => "- ",
+            Channel::SlackMarkdown => "- ",
             _ => "• ",
         }
     }
@@ -225,8 +215,7 @@ impl Vocab {
             // 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다.
             // 그러니 더 깊이 적을 값이 없다 — 셋에서 끊는다.
             Channel::SlackMarkdown => 3,
-            Channel::TelegramHtml | Channel::TelegramMarkdownV2 | Channel::SlackMrkdwn
-            | Channel::Plain => 0,
+            Channel::TelegramHtml | Channel::Plain => 0,
         }
     }
 
@@ -268,18 +257,6 @@ impl Vocab {
         }
     }
 }
-
-/// 이 글자 옆에 폭 없는 공백을 끼워야 하는가.
-///
-/// 이름이 정책을 가리킨다 — 판정 자체는 `width::is_cjk` 가 하고, 여기서는 그것이
-/// **패딩의 기준**이라는 사실만 말한다. 전에는 `is_wide`(표시 폭 2)였는데 그건
-/// 다른 질문이었다: 반각 가타카나는 폭 1이지만 끼워야 하고 이모지는 폭 2지만 아니다.
-pub(crate) fn needs_cjk_padding(c: char) -> bool {
-    is_cjk(c)
-}
-
-/// 폭 없는 공백. CJK 인접 강조를 살린다.
-pub(crate) const ZWSP: char = '\u{200b}';
 
 /// escape 하고 나면 몇 글자가 되는가. **재기만 하고 만들지는 않는다** — 스트리밍
 /// 경로에서 링크마다 문자열을 하나씩 더 만들 수는 없다.
