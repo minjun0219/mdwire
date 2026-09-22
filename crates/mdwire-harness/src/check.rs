@@ -554,6 +554,15 @@ fn rejoin_parts(output: &str) -> String {
             rest = &rest[end..];
             stitched = true;
         }
+        // 마크다운 채널은 마커로 닫고 다시 연다 — 조각 끝과 다음 조각 앞머리에 같은
+        // 마커가 마주 보면 그 자리가 이음매다. 안쪽부터 여러 겹일 수 있다.
+        while let Some(m) =
+            ["``", "`", "**", "~~", "*"].into_iter().find(|m| rest.starts_with(m) && out.ends_with(m))
+        {
+            out.truncate(out.len() - m.len());
+            rest = &rest[m.len()..];
+            stitched = true;
+        }
         if !stitched {
             out.push('\n');
         }
@@ -600,7 +609,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     //
     // **이어 붙여서 새로 생긴 것만 더한다.** 그대로인 범위까지 한 번 더 넣으면 같은
     // 범위 하나가 원문의 두 자리를 채워서, 정작 강조를 잃은 쪽이 통과한다.
-    if channel == Channel::TelegramHtml && output.contains(PART_SEPARATOR) {
+    if channel != Channel::Plain && output.contains(PART_SEPARATOR) {
         let mut before: HashMap<(emphasis::Kind, String), usize> = HashMap::new();
         for g in &got {
             *before.entry((g.kind, g.text.clone())).or_default() += 1;
@@ -656,8 +665,12 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
     match channel {
         Channel::SlackMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
-            // 대신 **짝이 맞아야** 한다.
-            let scan = emphasis::scan_markdown(&output.replace(PART_SEPARATOR, "\n"), Mode::Strict);
+            // 대신 **짝이 맞아야** 한다 — **조각마다.** 조각은 각각 메시지 하나라, 이어
+            // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
+            let mut scan = emphasis::Scan::default();
+            for part in output.split(PART_SEPARATOR) {
+                scan.unpaired.extend(emphasis::scan_markdown(part, Mode::Strict).unpaired);
+            }
             // **저자가 남긴 짝 없는 마커는 우리 잘못이 아니다.** 입력에 이미 짝 없이
             // 서 있던 것을 그대로 내보내는 것은 충실한 전달이지 결함이 아니다. 종류별로
             // 입력에 있던 만큼을 빼고, 출력에서 늘어난 것만 신고한다.

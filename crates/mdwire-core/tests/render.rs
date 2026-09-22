@@ -194,9 +194,12 @@ fn a_table_can_start_right_after_any_block() {
 
 #[test]
 fn a_run_of_three_markers_leaves_nothing_behind() {
-    // `***x***` 에서 두 개만 집으면 별표 하나가 출력에 남는다. 남은 마커는 실패다.
-    assert_eq!(tg("***세 개 별표***"), "<b>세 개 별표</b>");
-    assert_eq!(tg("***여는 쪽만 셋**"), "<b>여는 쪽만 셋</b>");
+    // `***x***` 는 굵게 안에 기울임이다. 셋 중 무엇을 집든 별표가 출력에 남으면 실패다.
+    assert_eq!(tg("***세 개 별표***"), "<b><i>세 개 별표</i></b>");
+    assert_eq!(one("***세 개 별표***", Channel::SlackMarkdown), "***세 개 별표***");
+    // 따로 적은 것과 같은 답이다.
+    assert_eq!(tg("_**둘 다**_"), "<i><b>둘 다</b></i>");
+    assert_eq!(tg("***여는 쪽만 셋**"), "<b><i>여는 쪽만 셋</i></b>");
     assert_eq!(tg("**닫는 쪽만 셋***"), "<b>닫는 쪽만 셋</b>");
 }
 
@@ -670,4 +673,24 @@ fn spaced_bold_markers_stay_as_text() {
     assert_eq!(one("** 배포 ** 는 금지", Channel::TelegramHtml), "** 배포 ** 는 금지");
     // 앞이 글자인 닫기는 여전히 닫는다 — `**굵게 **` 는 관대하게 굵게다.
     assert_eq!(one("**굵게 ** 끝", Channel::TelegramHtml), "<b>굵게 </b> 끝");
+}
+
+/// **슬랙 조각도 스팬 한가운데서 갈리지 않는다.** 12,000자 분할이 `` `main → main` ``
+/// 의 공백에 떨어지면 두 메시지 다 백틱이 홀로 남았다 — 텔레그램 태그와 같은 규칙으로
+/// 끊는 자리에서 닫고 다음 조각에서 다시 연다.
+#[test]
+fn slack_parts_close_and_reopen_spans() {
+    let filler = "가나다 ".repeat(2997); // 11,988자 — 그 뒤의 공백은 스팬 안에만 있다
+    let tail = "가".repeat(40);
+    for span in [format!("`main → {tail}`"), format!("**굵은 말 {tail}**"), format!("~~취소 {tail}~~")] {
+        let input = format!("{filler}{span}\n");
+        let parts = render(&input, Channel::SlackMarkdown);
+        assert!(parts.len() >= 2, "{span}: 나뉘어야 한다");
+        for p in &parts {
+            assert!(p.chars().count() <= Channel::SlackMarkdown.limit());
+            assert_eq!(p.matches('`').count() % 2, 0, "백틱이 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
+            assert_eq!(p.matches("**").count() % 2, 0, "`**` 가 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
+            assert_eq!(p.matches("~~").count() % 2, 0, "`~~` 가 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
+        }
+    }
 }

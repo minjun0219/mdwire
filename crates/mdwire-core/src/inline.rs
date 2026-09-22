@@ -196,6 +196,23 @@ impl Inline {
             // 출력에 남고, 남은 마커는 곧 실패다. 중첩 강조를 살리는 것보다
             // 마커를 안 남기는 것이 먼저다 — 실측에서 중첩 강조는 나오지 않았다.
             let take = run_len(line, i, c);
+            // **`***` 는 `**` 와 `*` 다** — 굵게 안에 기울임. 통째로 굵게로 읽으면 기울임을
+            // 잃고, `_**x**_` 처럼 따로 적은 것과 답이 달라진다. 열 때는 굵게를 먼저
+            // 열고(바깥), 닫을 때는 기울임이 열려 있으면 그것부터 닫는다(안쪽). 나머지
+            // 마커는 다음 바퀴에서 자기 자리로 읽힌다.
+            let take = if c != '~' && take == 3 {
+                if self.open.iter().any(|o| o.emph == Emph::Italic) {
+                    1
+                } else if self.open.iter().any(|o| o.emph == Emph::Bold) {
+                    // 굵게만 열려 있는데 셋이 왔다 — `**닫는 쪽만 셋***`. 통째로 닫는
+                    // 마커다. 둘만 집으면 별표 하나가 남는다.
+                    3
+                } else {
+                    2
+                }
+            } else {
+                take
+            };
             let emph = match (c, take) {
                 ('~', _) => Emph::Strike,
                 (_, 1) => Emph::Italic,

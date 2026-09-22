@@ -112,6 +112,9 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
     let mut cur = String::new();
     let mut len = 0usize;
     let mut markup = Markup::default();
+    if v.channel != Channel::TelegramHtml && !v.is_plain() {
+        markup.spans = std::rc::Rc::from(scan_spans(text));
+    }
 
     for line in text.split_inclusive('\n') {
         for word in line.split_inclusive(' ') {
@@ -226,6 +229,203 @@ struct Markup {
     /// 스팬은 ` ``` ` 로 감싸는데, 그것이 조각 단위로 들어오면 줄 첫머리의 펜스와
     /// 구분되지 않는다. 그대로 두면 분할기가 없는 코드블록을 열고 닫는다.
     at_line_start: bool,
+    /// 마크다운 채널의 인라인 스팬 — 코드 스팬과 `**` `*` `~~`. 블록 전체를 미리 훑어
+    /// **짝이 맞는 것만** 적어 둔다(글자 위치 기준).
+    ///
+    /// **슬랙에서 조각이 코드 스팬 한가운데서 갈리던 것을 막는다.** 12,000자 분할이
+    /// `` `main → main` `` 의 공백에 떨어지면 앞 조각은 백틱이 열린 채 끝나고 뒤 조각은
+    /// 백틱 하나로 시작한다 — 두 메시지 다 코드가 깨진다. 태그와 같은 규칙으로, 끊는
+    /// 자리에서 닫고 다음 조각에서 다시 연다.
+    ///
+    /// 단어 단위로 먹으면서 여닫기를 따라가는 대신 미리 훑는 이유는 **짝 없는 마커가
+    /// 출력에 글자로 남기 때문**이다. 렌더러가 안 닫힌 백틱 런을 글자로 되돌리므로,
+    /// 따라가기만 하면 그 ``` 를 열린 코드 스팬으로 알고 조각마다 펜스를 찍어 낸다.
+    spans: std::rc::Rc<[Span]>,
+    /// 지금까지 먹인 글자 수. `spans` 의 위치와 맞춰 본다.
+    pos: usize,
+    /// 다시 열 수 없어 버린 뒤다. 그 뒤로는 스팬을 닫지도 열지도 않는다.
+    dropped: bool,
+}
+
+/// 짝이 맞는 인라인 스팬 하나. 위치는 글자 단위다.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Span {
+    kind: SpanKind,
+    /// 여는 마커의 첫 글자 위치.
+    start: usize,
+    /// 닫는 마커 다음 위치.
+    end: usize,
+}
+
+/// 여는 마커. 코드 스팬은 백틱 런 길이, 강조는 마커 글자다.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SpanKind {
+    Code(usize),
+    Emph(&'static str),
+}
+
+impl SpanKind {
+    fn write(self, out: &mut String) {
+        match self {
+            SpanKind::Code(run) => {
+                for _ in 0..run {
+                    out.push('`');
+                }
+            }
+            SpanKind::Emph(m) => out.push_str(m),
+        }
+    }
+
+    fn len(self) -> usize {
+        match self {
+            SpanKind::Code(run) => run,
+            SpanKind::Emph(m) => m.len(),
+        }
+    }
+}
+
+/// 마크다운 출력 한 블록의 인라인 스팬을 찾는다.
+///
+/// 우리 렌더러가 낸 출력이라 마커는 짝이 맞고 겹침도 바르다(굵게 바깥, 기울임 안).
+/// 글자로 남은 마커(`2 ** 3`, `\*`, 되돌린 백틱)는 짝이 안 맞아 여기서 걸러진다 —
+/// 여는 쪽은 뒤가 글자, 닫는 쪽은 앞이 글자여야 하고, 코드 스팬은 같은 길이의 런이
+/// 뒤에 있어야 한다. 펜스 안은 보지 않는다.
+fn scan_spans(text: &str) -> Vec<Span> {
+    let ch: Vec<char> = text.chars().collect();
+    // 펜스 줄과 그 안은 스팬이 아니고, **스팬이 그 너머와 짝을 맺지도 못한다.** 백틱
+    // 런의 짝을 찾을 때 펜스를 넘어가면 글자로 남은 ``` 가 코드블록의 펜스와 짝이 된다.
+    let mut fenced = vec![false; ch.len()];
+    {
+        let mut fence = false;
+        let mut i = 0;
+        while i < ch.len() {
+            let mut j = i;
+            while j < ch.len() && (ch[j] == ' ' || ch[j] == '\t') {
+                j += 1;
+            }
+            let line_end = ch[i..].iter().position(|&x| x == '\n').map_or(ch.len(), |p| i + p);
+            let is_fence = ch[j..].starts_with(&['`', '`', '`']);
+            if is_fence || fence {
+                for f in &mut fenced[i..line_end] {
+                    *f = true;
+                }
+            }
+            if is_fence {
+                fence = !fence;
+            }
+            i = line_end + 1;
+        }
+    }
+    let mut spans = Vec::new();
+    let mut open: Vec<(SpanKind, usize)> = Vec::new();
+    let mut i = 0;
+    while i < ch.len() {
+        let c = ch[i];
+        if fenced[i] {
+            i += 1;
+            continue;
+        }
+        // **줄이 바뀌면서 새 항목이 시작되면 열린 강조는 없던 일이다.** 조각 하나에 목록
+        // 항목 여럿이 담기는데, 렌더러는 항목마다 인라인을 확정한다. 여기서 항목을 넘어
+        // 짝을 맺으면 A 항목의 글자 `*` 가 B 항목의 `*` 와 스팬이 된다.
+        if c == '\n' {
+            let mut j = i + 1;
+            while j < ch.len() && (ch[j] == ' ' || ch[j] == '\t') {
+                j += 1;
+            }
+            let next = &ch[j..];
+            let item = next.is_empty()
+                || next[0] == '\n'
+                || matches!(next, ['-' | '*' | '+' | '>' | '#', ' ', ..])
+                || (next[0].is_ascii_digit()
+                    && next.iter().skip(1).find(|c| !c.is_ascii_digit()).is_some_and(|c| *c == '.'));
+            if item {
+                open.clear();
+            }
+            i += 1;
+            continue;
+        }
+        if c == '\\' {
+            i += 2;
+            continue;
+        }
+        if c == '`' {
+            let run = ch[i..].iter().take_while(|&&x| x == '`').count();
+            // **셋 이상의 런은 스팬으로 보지 않는다.** 렌더러는 내용에 백틱이 있을 때만
+            // 울타리를 늘리는데 그건 드물고, 산문에 글자로 남은 ``` (한 줄에 쏟아낸 가짜
+            // 펜스)는 흔하다. 그 둘이 짝을 맺으면 조각마다 펜스가 찍힌다 — 실측이다.
+            if run >= 3 {
+                i += run;
+                continue;
+            }
+            // 같은 길이의 런이 이 블록 안에 더 있어야 코드 스팬이다. 없으면 글자다.
+            let mut j = i + run;
+            let close = loop {
+                // **코드 스팬은 줄을 넘지 않는다.** 렌더러는 넘기지만, 짝 없이 글자로
+                // 남은 백틱이 여러 항목 뒤의 다른 백틱과 스팬을 맺는 쪽이 훨씬 흔하다 —
+                // 실측에서 그 가짜 스팬이 항목 여럿을 덮고 조각마다 백틱을 찍었다.
+                match ch[j..].iter().position(|&x| x == '`' || x == '\n') {
+                    None => break None,
+                    Some(p) if ch[j + p] == '\n' => break None,
+                    // 펜스에 닿았다 — 짝은 없다.
+                    Some(p) if fenced[j + p] => break None,
+                    Some(p) => {
+                        let at = j + p;
+                        let n = ch[at..].iter().take_while(|&&x| x == '`').count();
+                        if n == run {
+                            break Some(at);
+                        }
+                        j = at + n;
+                    }
+                }
+            };
+            match close {
+                Some(at) => {
+                    spans.push(Span { kind: SpanKind::Code(run), start: i, end: at + run });
+                    i = at + run;
+                }
+                None => i += run,
+            }
+            continue;
+        }
+        if !matches!(c, '*' | '~') {
+            i += 1;
+            continue;
+        }
+        let run = ch[i..].iter().take_while(|&&x| x == c).count();
+        let prev = if i > 0 { Some(ch[i - 1]) } else { None };
+        let next = ch.get(i + run).copied();
+        let opens = next.is_some_and(|n| !n.is_whitespace());
+        let closes = prev.is_some_and(|p| !p.is_whitespace());
+        // `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
+        let markers: &[&'static str] = match (c, run) {
+            ('~', 2) => &["~~"],
+            ('*', 1) => &["*"],
+            ('*', 2) => &["**"],
+            ('*', 3) => {
+                if open.last().map(|o| o.0) == Some(SpanKind::Emph("*")) {
+                    &["*", "**"]
+                } else {
+                    &["**", "*"]
+                }
+            }
+            _ => &[],
+        };
+        let mut at = i;
+        for m in markers {
+            let kind = SpanKind::Emph(m);
+            if closes && open.last().map(|o| o.0) == Some(kind) {
+                let (_, start) = open.pop().expect("방금 확인했다");
+                spans.push(Span { kind, start, end: at + m.len() });
+            } else if opens {
+                open.push((kind, at));
+            }
+            at += m.len();
+        }
+        i += run;
+    }
+    spans.sort_by_key(|s| s.start);
+    spans
 }
 
 impl Default for Markup {
@@ -236,6 +436,9 @@ impl Default for Markup {
             partial: String::new(),
             // 블록은 줄 첫머리에서 시작한다.
             at_line_start: true,
+            spans: std::rc::Rc::from(Vec::new()),
+            pos: 0,
+            dropped: false,
         }
     }
 }
@@ -246,7 +449,15 @@ impl Markup {
             self.feed_html(s);
         } else {
             self.feed_fence(s);
+            self.pos += s.chars().count();
         }
+    }
+
+    /// 지금 위치에서 열려 있는 스팬. 바깥부터 순서대로.
+    fn open_spans(&self) -> impl Iterator<Item = &Span> {
+        let pos = self.pos;
+        let dropped = self.dropped;
+        self.spans.iter().filter(move |sp| !dropped && sp.start < pos && pos < sp.end)
     }
 
     fn feed_html(&mut self, s: &str) {
@@ -311,7 +522,10 @@ impl Markup {
             }
         }
         if !s.is_empty() {
-            self.at_line_start = s.ends_with('\n');
+            // 공백만 먹었으면 아직 줄 첫머리다. 들여쓴 펜스(`  ```json`)는 단어 단위로
+            // 들어올 때 공백이 먼저 오는데, 여기서 첫머리를 잃으면 펜스를 못 알아보고
+            // 스팬 추적이 그 ``` 를 코드 스팬 열기로 읽는다.
+            self.at_line_start = s.ends_with('\n') || (self.at_line_start && s.trim().is_empty());
         }
     }
 
@@ -322,11 +536,18 @@ impl Markup {
             // 닫는 펜스 + 다시 여는 펜스.
             n += 4 + 4 + info.chars().count();
         }
+        // 스팬은 닫는 마커와 다시 여는 마커, 두 번.
+        n += self.open_spans().map(|sp| sp.kind.len() * 2).sum::<usize>();
         let _ = v;
         n
     }
 
     fn close_all(&self, out: &mut String, v: &Vocab) {
+        // 안쪽부터 — 늦게 열린 것이 안쪽이다.
+        let open: Vec<&Span> = self.open_spans().collect();
+        for sp in open.iter().rev() {
+            sp.kind.write(out);
+        }
         for (name, _) in self.tags.iter().rev() {
             out.push_str("</");
             out.push_str(name);
@@ -342,6 +563,7 @@ impl Markup {
         self.tags.clear();
         self.fence = None;
         self.partial.clear();
+        self.dropped = true;
     }
 
     fn reopen(&self, out: &mut String, _v: &Vocab) {
@@ -352,6 +574,9 @@ impl Markup {
         }
         for (_, full) in &self.tags {
             out.push_str(full);
+        }
+        for sp in self.open_spans() {
+            sp.kind.write(out);
         }
     }
 }

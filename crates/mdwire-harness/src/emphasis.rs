@@ -346,7 +346,19 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         }
 
         // 런은 통째로 소비한다. 규칙은 코어와 같다 — 구현만 따로다.
+        // `***` 는 `**` 와 `*` 다. 열 때는 굵게 먼저, 닫을 때는 열린 기울임 먼저.
         let take = run_len(&ch, i, c);
+        let take = if c != '~' && take == 3 {
+            if stack.iter().any(|o| o.kind == Kind::Italic) {
+                1
+            } else if stack.iter().any(|o| o.kind == Kind::Bold) {
+                3
+            } else {
+                2
+            }
+        } else {
+            take
+        };
         let kind = match (c, take) {
             ('~', _) => Kind::Strike,
             (_, 1) => Kind::Italic,
