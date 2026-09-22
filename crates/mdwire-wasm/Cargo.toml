@@ -14,3 +14,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 mdwire-core = { path = "../mdwire-core" }
 wasm-bindgen = "0.2"
+
+# **`wasm-opt` 에 bulk memory 를 켜 준다.** wasm-pack 이 들고 오는 `wasm-opt` 는
+# 기본값이 옛 명세라, 요즘 rustc 가 내는 `memory.fill` 을 보고 검증에서 죽는다.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-O', '--enable-bulk-memory']

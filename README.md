@@ -42,7 +42,17 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import init, { render, Streamer } from "mdwire";
+import { render, Streamer } from "mdwire";   // npm, bundler target — no init call
+
+const parts = render(markdown, "telegram-html", "auto");
+
+const s = new Streamer("telegram-html", "auto");
+let acc = "";
+for await (const chunk of tokens) {
+  acc += s.push(chunk);
+  await edit(acc + s.closeOpen());   // closeOpen is for sending mid-stream; keep acc as is
+}
+acc += s.finish();
 ```
 
 The streamer holds back only what it must: a prefix it cannot classify yet, a marker run
@@ -74,6 +84,14 @@ Three gaps in what exists today, each measured rather than assumed:
   how consistency survives more than one implementation.
 
 ## Building
+
+```sh
+./scripts/build-npm.sh     # the npm package into pkg/ (needs `cargo install wasm-pack`)
+```
+
+The wasm bundle is 87 KB, release with `wasm-opt`. The script renames the package to
+`mdwire`: the crate has to stay `mdwire-wasm` because the core's library is already named
+`mdwire`, and wasm-pack takes the npm name from the crate.
 
 ```sh
 cargo test --workspace     # unit tests, the corpus, and the allocation gate
