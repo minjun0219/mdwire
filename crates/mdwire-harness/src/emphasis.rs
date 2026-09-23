@@ -391,19 +391,48 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         let left = can_open(prev, next) && !intraword;
 
         match open_same {
+            // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
+            Some(at) if stack[at].guess && (!left || !after_space) => push_text(&mut stack, &mut root, &marker),
+            // 여는 자리의 마커가 왔는데 열린 것이 추측이다 — 추측이 틀렸다. 되돌리고 연다.
+            Some(at) if stack[at].guess => {
+                // 위에 열린 것들을 먼저 정리한다 — 아래만 빼면 순서가 깨진다. 규칙은 코어와 같다.
+                while stack.len() > at + 1 {
+                    let inner = stack.pop().expect("at 보다 위에 있다");
+                    if !inner.guess && !inner.buf.trim().is_empty() {
+                        scan.spans.push(Span { kind: inner.kind, text: normalize_ws(&inner.buf) });
+                    }
+                    let text = if inner.guess { format!("{}{}", inner.marker, inner.buf) } else { inner.buf };
+                    push_text(&mut stack, &mut root, &text);
+                }
+                let old = stack.pop().expect("at 은 유효한 인덱스다");
+                let restored = format!("{}{}", old.marker, old.buf);
+                push_text(&mut stack, &mut root, &restored);
+                stack.push(Open { kind, marker, guess: false, buf: String::new() });
+            }
             // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
             Some(at) if !after_space => close_to(&mut stack, &mut root, at, scan),
-            // 이미 같은 종류가 열려 있는데 또 여는 마커가 왔다. 줄바꿈에 걸린 강조에서
-            // 실제로 나오는 모양이다 — 겹쳐 열지 않고 버린다. 여기서 "닫기"로 읽으면
-            // 강조 범위가 뒤집힌다. 그 고장이 원본이다.
+            // 여는 자리의 마커가 또 왔다 — 먼저 열린 쪽이 진다. 마커는 버린다(엄격 모드에서는
+            // 짝 없음). 규칙은 코어와 같다.
+            Some(at) if left && at + 1 == stack.len() => {
+                let old = stack.pop().expect("at 은 유효한 인덱스다");
+                if old.guess {
+                    let restored = format!("{}{}", old.marker, old.buf);
+                    push_text(&mut stack, &mut root, &restored);
+                } else {
+                    if mode == Mode::Strict {
+                        scan.unpaired.push(Unpaired { marker: old.marker.clone(), context: snippet(&old.buf) });
+                    }
+                    let buf = old.buf;
+                    push_text(&mut stack, &mut root, &buf);
+                }
+                stack.push(Open { kind, marker, guess: false, buf: String::new() });
+            }
+            // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
             Some(_) if left => {
                 if mode == Mode::Strict {
                     scan.unpaired.push(unpaired(&ch, i, take));
                 }
             }
-            // 앞도 뒤도 공백이고 열린 것도 추측이었다 — `** 띄운 굵게 **` 는 둘 다 글자다.
-            // 규칙은 코어와 같다.
-            Some(at) if stack[at].guess => push_text(&mut stack, &mut root, &marker),
             Some(at) => close_to(&mut stack, &mut root, at, scan),
             None if left => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
             // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
@@ -539,8 +568,10 @@ fn snippet(s: &str) -> String {
 /// 닫는 쪽은 우측 flanking 을 쓰지 않는다 — 이유는 코어의 같은 이름 함수에 적어 뒀다.
 /// 규칙은 코어와 같고 구현만 따로다.
 pub(crate) fn can_open(prev: Option<char>, next: Option<char>) -> bool {
+    // 앞이 글자·숫자가 아니면 열 수 있다 — 기호·이모지 뒤의 `**` 도. `①` 은 유니코드
+    // 숫자라 알파벳과 ASCII 숫자만 글자로 친다. 규칙은 코어와 같다.
     next.is_some_and(|n| {
-        !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| p.is_whitespace() || is_punct(p)))
+        !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| !(p.is_alphabetic() || p.is_ascii_digit())))
     })
 }
 
@@ -694,12 +725,16 @@ mod tests {
         scan.spans.iter().filter(|s| s.kind == Kind::Bold).map(|s| s.text.clone()).collect()
     }
 
-    /// 코퍼스 케이스 그대로. **이 한 줄이 이 저장소의 존재 이유다.**
+    /// 코퍼스 케이스 그대로. **줄 첫머리의 `**` 는 닫기가 아니다** — 여기가 뒤집히면
+    /// 그게 이 저장소가 존재하는 이유인 바로 그 고장이다. 열기로 읽고 먼저 열린 쪽을 물린다.
     #[test]
     fn emphasis_across_linebreak_pairs_outward() {
         let input = "공개 채널**이다. 글 내용이 아니라\n**신분 공개 + 시점의 조합**이 판단 대상";
         let scan = scan_markdown(input, Mode::Repair);
-        assert_eq!(bolds(&scan), vec!["이다. 글 내용이 아니라 신분 공개 + 시점의 조합"]);
+        assert_eq!(bolds(&scan), vec!["신분 공개 + 시점의 조합"]);
+        // 실제 모양 — 여는 마커는 보통 자리, 닫는 마커는 다음 줄. 범위 하나다.
+        let scan = scan_markdown("결론은 **배포를 금요일에\n하지 않는다** 이고", Mode::Repair);
+        assert_eq!(bolds(&scan), vec!["배포를 금요일에 하지 않는다"]);
     }
 
     /// 정규식 변환기가 내놓던 뒤집힌 범위는 **입력과 다른 범위**로 잡혀야 한다.
@@ -728,9 +763,10 @@ mod tests {
 
     #[test]
     fn wrapped_open_marker_is_repaired() {
-        // 80열 wrap 이 만드는 모양: 여는 마커가 줄 끝에 남는다.
+        // 줄 끝에 홀로 남은 `**` 는 추측이고, 다음 줄의 `**` 가 그것을 닫지 않는다 —
+        // 추측은 확정되지 않는다. 둘 다 글자로 남고 강조는 없다(CommonMark 와 같다).
         let scan = scan_markdown("글 내용이 아니라 **\n신분 공개 + 시점의 조합**이 판단", Mode::Repair);
-        assert_eq!(bolds(&scan), vec!["신분 공개 + 시점의 조합"]);
+        assert_eq!(bolds(&scan), Vec::<String>::new());
     }
 
     #[test]
