@@ -270,7 +270,7 @@ impl Inline {
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
                 // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
-                Some(at) if self.open[at].guess => self.reopen_at(at, out, take, c, emph, after_space),
+                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space)),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
                 Some(at) if !after_space => self.close_at(at, out, v),
                 // 앞이 공백인데 뒤로는 열 수 있다 — 여는 마커가 또 왔다. **먼저 열린 쪽이
@@ -279,7 +279,7 @@ impl Inline {
                 // 열린 마커는 앞이 공백이었으면 글자로 되돌리고, 글자였으면 버린다. 여기서
                 // "닫기"로 읽으면 강조 범위가 뒤집힌다 — 그 고장이 원본이다. 규칙 2.
                 Some(at) if left && at + 1 == self.open.len() => {
-                    self.reopen_at(at, out, take, c, emph, after_space)
+                    self.reopen_at(at, out, v, (emph, take, c, after_space))
                 }
                 // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
                 Some(_) if left => {}
@@ -354,8 +354,15 @@ impl Inline {
     /// 홑마커는 글자로 되돌린다(글롭·주석·각주). `**` 는 추측이었고 앞이 공백이었을 때만
     /// 되돌린다(`2 ** 3`) — 진짜 여는 마커였다가 진 `**` 는 짝 잃은 마커라 버린다. 되돌리면
     /// 텔레그램 화면에 `**` 가 글자로 남는다.
-    fn reopen_at(&mut self, at: usize, out: &mut String, take: usize, c: char, emph: Emph, after_space: bool) {
-        debug_assert_eq!(at + 1, self.open.len());
+    ///
+    /// `fresh` 는 새로 열 마커 — (종류, 런 길이, 글자, 앞이 공백이었는가).
+    fn reopen_at(&mut self, at: usize, out: &mut String, v: &Vocab, fresh: (Emph, usize, char, bool)) {
+        let (emph, take, c, after_space) = fresh;
+        // `at` 위에 열린 것들은 먼저 정리한다 — `a*** **x` 처럼 추측 둘이 겹쳐 있을 때
+        // 아래쪽이 물러난다. 위쪽을 두고 아래만 빼면 열린 것들의 순서가 깨진다.
+        while self.open.len() > at + 1 {
+            self.finalize(out, v);
+        }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
         if old.run == 1 || (old.guess && old.after_space) {
             for _ in 0..old.run {

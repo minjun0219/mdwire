@@ -395,6 +395,15 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             Some(at) if stack[at].guess && (!left || !after_space) => push_text(&mut stack, &mut root, &marker),
             // 여는 자리의 마커가 왔는데 열린 것이 추측이다 — 추측이 틀렸다. 되돌리고 연다.
             Some(at) if stack[at].guess => {
+                // 위에 열린 것들을 먼저 정리한다 — 아래만 빼면 순서가 깨진다. 규칙은 코어와 같다.
+                while stack.len() > at + 1 {
+                    let inner = stack.pop().expect("at 보다 위에 있다");
+                    if !inner.guess && !inner.buf.trim().is_empty() {
+                        scan.spans.push(Span { kind: inner.kind, text: normalize_ws(&inner.buf) });
+                    }
+                    let text = if inner.guess { format!("{}{}", inner.marker, inner.buf) } else { inner.buf };
+                    push_text(&mut stack, &mut root, &text);
+                }
                 let old = stack.pop().expect("at 은 유효한 인덱스다");
                 let restored = format!("{}{}", old.marker, old.buf);
                 push_text(&mut stack, &mut root, &restored);
