@@ -252,21 +252,43 @@ fn bare(text: &str, seam: Seam) -> String {
     let mut i = 0;
     while i < ch.len() {
         if ch[i] == '<' {
+            // **주석은 내용이 아니다.** `<!-- … -->` 안의 낱말은 화면에 안 보이는
+            // 것이 맞으니, 지운 출력을 손실로 세지 않는다.
+            if ch[i..].starts_with(&['<', '!', '-', '-']) {
+                if let Some(len) = ch[i + 4..].windows(3).position(|w| w == ['-', '-', '>']) {
+                    i += 4 + len + 3;
+                    continue;
+                }
+            }
             if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
                 // 태그는 지우되 **속성 값은 남긴다.** `<a href="…">` 의 주소는 화면에
                 // 안 보여도 실제로 배달되는 내용이다. 지우면 링크가 사라진 것으로 잡힌다.
+                // **내용을 실은 속성만 남긴다** — `href`·`src`·`alt`·`title`. `align="center"`
+                // 나 `style="…"` 은 화면에 글자로 안 보이니, 태그를 벗긴 출력에서 그
+                // 값이 빠졌다고 손실로 세면 안 된다.
                 let mut quoted = false;
+                let mut keep = false;
+                let mut name = String::new();
                 for &c in &ch[i..end] {
                     if c == '"' {
                         quoted = !quoted;
-                        if !quoted {
+                        if quoted {
+                            keep = matches!(name.trim_end_matches('='), "href" | "src" | "alt" | "title");
+                        } else {
                             attrs.push(' ');
+                            name.clear();
                         }
-                    } else if quoted && !is_marker(c) {
+                    } else if quoted {
                         // 속성 값도 본문과 **같은 잣대로** 씻는다. 여기만 `_` 를 남기면
                         // 입력의 `csrf_token` 이 출력에서는 `csrftoken` 이 되어, 멀쩡한
                         // 낱말이 사라진 것으로 잡힌다.
-                        attrs.push(c);
+                        if keep && !is_marker(c) {
+                            attrs.push(c);
+                        }
+                    } else if c.is_ascii_alphabetic() || c == '=' {
+                        name.push(c.to_ascii_lowercase());
+                    } else {
+                        name.clear();
                     }
                 }
                 i = end;
@@ -409,6 +431,34 @@ fn strip_urls(text: &str, seam: Seam) -> String {
             }
             continue;
         }
+        // `<url>` · `<url|텍스트>` — 오토링크와 슬랙 레거시 링크. 주소는 빼고 텍스트만
+        // 남긴다. 텍스트가 주소 그대로면 아무것도 안 남긴다 — 출력은 `<url>` 이나
+        // `<a href>` 로 나가서 어차피 주소만 있고, 남기면 입력에만 낱말이 생긴다.
+        if ch[i] == '<'
+            && (ch[i + 1..].starts_with(&['h', 't', 't', 'p', ':', '/', '/'])
+                || ch[i + 1..].starts_with(&['h', 't', 't', 'p', 's', ':', '/', '/']))
+        {
+            if let Some(close) = ch[i + 1..].iter().position(|&c| c == '>') {
+                let body = &ch[i + 1..i + 1 + close];
+                let (url, label) = match body.iter().position(|&c| c == '|') {
+                    Some(bar) => (&body[..bar], Some(&body[bar + 1..])),
+                    None => (body, None),
+                };
+                // 공백은 텍스트에는 와도 주소에는 못 온다.
+                if !url.iter().any(|c| c.is_whitespace()) {
+                    if let Some(label) = label {
+                        if label != url {
+                            out.extend(label.iter());
+                        }
+                    }
+                    i += 1 + close + 1;
+                    if seam == Seam::Split {
+                        out.push(' ');
+                    }
+                    continue;
+                }
+            }
+        }
         // 맨몸 URL 과 앵커.
         //
         // **스킴까지 봐야 한다.** `http` 로 시작하기만 하면 먹어 치우면 `http2` 같은
@@ -504,8 +554,24 @@ fn rejoin_parts(output: &str) -> String {
             rest = &rest[end..];
             stitched = true;
         }
+        // 마크다운 채널은 마커로 닫고 다시 연다 — 조각 끝과 다음 조각 앞머리에 같은
+        // 마커가 마주 보면 그 자리가 이음매다. 안쪽부터 여러 겹일 수 있다.
+        let mut marker_seam = false;
+        while let Some(m) =
+            ["``", "`", "**", "~~", "*"].into_iter().find(|m| rest.starts_with(m) && out.ends_with(m))
+        {
+            out.truncate(out.len() - m.len());
+            rest = &rest[m.len()..];
+            stitched = true;
+            marker_seam = true;
+        }
         if !stitched {
             out.push('\n');
+        } else if marker_seam {
+            // 마커 이음매에는 공백을 하나 둔다. 코어가 닫는 마커 앞과 여는 마커 뒤의
+            // 공백을 털어 내므로(공백 옆 마커는 마커가 아니다), 그냥 붙이면 `말` 과
+            // `이어서` 가 한 낱말이 된다.
+            out.push(' ');
         }
         out.push_str(rest);
     }
@@ -550,7 +616,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     //
     // **이어 붙여서 새로 생긴 것만 더한다.** 그대로인 범위까지 한 번 더 넣으면 같은
     // 범위 하나가 원문의 두 자리를 채워서, 정작 강조를 잃은 쪽이 통과한다.
-    if channel == Channel::TelegramHtml && output.contains(PART_SEPARATOR) {
+    if channel != Channel::Plain && output.contains(PART_SEPARATOR) {
         let mut before: HashMap<(emphasis::Kind, String), usize> = HashMap::new();
         for g in &got {
             *before.entry((g.kind, g.text.clone())).or_default() += 1;
@@ -604,10 +670,14 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
 /// 그래서 이 불변식을 테스트에 박아 둔다.
 fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
-        Channel::SlackMarkdown | Channel::SlackMrkdwn => {
+        Channel::SlackMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
-            // 대신 **짝이 맞아야** 한다.
-            let scan = emphasis::scan_markdown(&output.replace(PART_SEPARATOR, "\n"), Mode::Strict);
+            // 대신 **짝이 맞아야** 한다 — **조각마다.** 조각은 각각 메시지 하나라, 이어
+            // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
+            let mut scan = emphasis::Scan::default();
+            for part in output.split(PART_SEPARATOR) {
+                scan.unpaired.extend(emphasis::scan_markdown(part, Mode::Strict).unpaired);
+            }
             // **저자가 남긴 짝 없는 마커는 우리 잘못이 아니다.** 입력에 이미 짝 없이
             // 서 있던 것을 그대로 내보내는 것은 충실한 전달이지 결함이 아니다. 종류별로
             // 입력에 있던 만큼을 빼고, 출력에서 늘어난 것만 신고한다.
@@ -843,6 +913,20 @@ fn context(ch: &[char], at: usize) -> String {
 ///
 /// 문자 수로 맞춘 구현은 한글이 든 표에서 반드시 어긋난다. 이 규칙이 그것을 잡는다.
 fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
+    // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 는 GFM 표를
+    // 그대로 받으므로 열이 글자로 맞아 있을 이유가 없다. 대신 **표가 표로 남았는가**를
+    // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
+    if channel == Channel::SlackMarkdown {
+        let want = gfm_table_count(input);
+        let got = output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>();
+        if got < want {
+            out.push(Finding {
+                rule: Rule::TableMisaligned,
+                detail: format!("표가 표로 남지 않았다 — 원문 {want}개, 출력 {got}개"),
+            });
+        }
+        return;
+    }
     // **코드 블록 안의 표는 표가 아니다.** 마크다운 표를 코드로 보여 주는 문서가 있고,
     // 그건 원문 그대로 나가는 것이 맞다. 여기를 안 걸러내면 정상 통과를 고장으로 신고한다.
     // 입력에서 코드였던 줄을 기억해 두었다가, 그 줄로 시작하는 덩어리는 건너뛴다.
@@ -884,6 +968,38 @@ fn tables_in_part(
         }
         i = j.max(i + 1);
     }
+}
+
+/// GFM 표의 개수 — 머리글 줄 바로 다음에 구분선이 오는 자리를 센다.
+///
+/// 펜스 안은 세지 않는다. 입력에서는 코드 블록에 적힌 표가 출력에서도 코드로 남는 것이
+/// 맞아서고, 출력에서는 고정폭으로 내려간 표가 바로 펜스 안에 있어서다 — 그걸 세면
+/// 표를 잃은 출력이 통과한다.
+fn gfm_table_count(text: &str) -> usize {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut n = 0;
+    let mut fenced = false;
+    let mut in_table = false;
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim_start();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            fenced = !fenced;
+            in_table = false;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        if !line.contains('|') {
+            in_table = false;
+            continue;
+        }
+        if !in_table && is_delimiter(line) && i > 0 && lines[i - 1].contains('|') {
+            n += 1;
+            in_table = true;
+        }
+    }
+    n
 }
 
 fn is_delimiter(line: &str) -> bool {
@@ -929,6 +1045,14 @@ fn unescape_for_width(text: &str, channel: Channel) -> String {
     let mut i = 0;
     while i < ch.len() {
         if ch[i] == '<' {
+            // **주석은 내용이 아니다.** `<!-- … -->` 안의 낱말은 화면에 안 보이는
+            // 것이 맞으니, 지운 출력을 손실로 세지 않는다.
+            if ch[i..].starts_with(&['<', '!', '-', '-']) {
+                if let Some(len) = ch[i + 4..].windows(3).position(|w| w == ['-', '-', '>']) {
+                    i += 4 + len + 3;
+                    continue;
+                }
+            }
             if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
                 i = end;
                 continue;
@@ -1027,6 +1151,24 @@ mod tests {
 
         let by_width = "환경       | 재현  \n---------- | ------\n스테이징   | 예    \n로컬       | 아니오\n";
         let f = check("", by_width, Channel::Plain);
+        assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+    }
+
+    /// 표를 직접 그리는 채널 — 폭이 아니라 표가 남았는지를 본다.
+    #[test]
+    fn native_table_channel_wants_the_table_kept() {
+        let input = "| 환경 | 재현 |\n|---|---|\n| 스테이징 | 예 |\n";
+        let kept = "| 환경 | 재현 |\n| --- | --- |\n| 스테이징 | 예 |";
+        let f = check(input, kept, Channel::SlackMarkdown);
+        assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+
+        let fenced = "```\n환경     | 재현\n-------- | ----\n스테이징 | 예\n```";
+        let f = check(input, fenced, Channel::SlackMarkdown);
+        assert!(f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
+
+        // 코드 블록 안에 적힌 표는 표가 아니다 — 그대로 코드로 나가면 정상이다.
+        let quoted = "```\n| a | b |\n|---|---|\n| 1 | 2 |\n```\n";
+        let f = check(quoted, quoted, Channel::SlackMarkdown);
         assert!(!f.iter().any(|x| x.rule == Rule::TableMisaligned), "{f:?}");
     }
 

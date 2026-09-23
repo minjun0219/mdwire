@@ -1,0 +1,1 @@
+주소는 <a href="https://example.com/a_b_c?x=1&amp;y=2">https://example.com/a_b_c?x=1&amp;y=2</a> 에 있다. 슬랙에서 긁어 온 글은 <a href="https://example.com/p">문서 보기</a> 꼴이다.

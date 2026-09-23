@@ -12,7 +12,7 @@
 
 mod rig;
 
-use mdwire::{Channel, CjkPolicy, Streamer};
+use mdwire::{Channel, Streamer};
 use rig::{measure, report, Sample};
 
 #[global_allocator]
@@ -163,7 +163,7 @@ fn prose_only(doc: &str, pieces: &[&str], repeats: usize) {
         ("재사용 · telegram-html", Channel::TelegramHtml),
     ] {
         let reuse = name.starts_with("재사용");
-        let mut kept = Streamer::new(channel, CjkPolicy::Auto);
+        let mut kept = Streamer::new(channel);
         if reuse {
             out.clear();
             for p in pieces {
@@ -176,7 +176,7 @@ fn prose_only(doc: &str, pieces: &[&str], repeats: usize) {
             let s = if reuse {
                 &mut kept
             } else {
-                fresh = Streamer::new(channel, CjkPolicy::Auto);
+                fresh = Streamer::new(channel);
                 &mut fresh
             };
             out.clear();
@@ -206,7 +206,7 @@ fn engine(doc: &str, pieces: &[&str], repeats: usize) {
         ("새 Streamer · plain", Channel::Plain),
     ] {
         samples.push(measure(name, input_bytes, repeats, || {
-            let mut s = Streamer::new(channel, CjkPolicy::Auto);
+            let mut s = Streamer::new(channel);
             out.clear();
             for p in pieces {
                 s.push_into(p, &mut out);
@@ -222,7 +222,7 @@ fn engine(doc: &str, pieces: &[&str], repeats: usize) {
         ("재사용 · telegram-html", Channel::TelegramHtml),
         ("재사용 · slack-markdown", Channel::SlackMarkdown),
     ] {
-        let mut s = Streamer::new(channel, CjkPolicy::Auto);
+        let mut s = Streamer::new(channel);
         out.clear();
         for p in pieces {
             s.push_into(p, &mut out);
@@ -238,7 +238,7 @@ fn engine(doc: &str, pieces: &[&str], repeats: usize) {
         }));
     }
     samples.push(measure("render(완성본) · telegram-html", input_bytes, repeats, || {
-        let parts = mdwire::render(doc, Channel::TelegramHtml, CjkPolicy::Auto);
+        let parts = mdwire::render(doc, Channel::TelegramHtml);
         std::hint::black_box(&parts);
         1
     }));
@@ -299,7 +299,7 @@ fn real_docs(dir: &std::path::Path) {
     let mut cold_allocs = 0usize;
     let mut worst: (f64, String) = (0.0, String::new());
     let mut out = String::new();
-    let mut warm = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    let mut warm = Streamer::new(Channel::TelegramHtml);
 
     for path in &docs {
         let Ok(text) = std::fs::read_to_string(path) else { continue };
@@ -309,7 +309,7 @@ fn real_docs(dir: &std::path::Path) {
 
         // 새 Streamer — 메시지마다 하나씩 만드는 쪽이 치르는 값.
         let (_, cold) = rig::count(|| {
-            let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+            let mut s = Streamer::new(Channel::TelegramHtml);
             out.clear();
             for p in &pieces {
                 s.push_into(p, &mut out);
@@ -340,7 +340,7 @@ fn real_docs(dir: &std::path::Path) {
         for path in &docs {
             if let Ok(text) = std::fs::read_to_string(path) {
                 out.clear();
-                let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+                let mut s = Streamer::new(Channel::TelegramHtml);
                 for p in split_chunks(&text, CHUNK) {
                     s.push_into(p, &mut out);
                 }
@@ -419,7 +419,7 @@ mod gate {
     fn prose_streaming_is_allocation_free_once_warm() {
         let doc = synthetic_prose();
         let pieces = split_chunks(&doc, CHUNK);
-        let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+        let mut s = Streamer::new(Channel::TelegramHtml);
         let mut out = String::new();
 
         for p in &pieces {

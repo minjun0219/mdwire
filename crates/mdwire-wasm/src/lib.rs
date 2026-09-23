@@ -9,9 +9,9 @@
 //! ```js
 //! import { render, Streamer } from "mdwire";
 //!
-//! const parts = render(markdown, "telegram-html", "auto");
+//! const parts = render(markdown, "telegram-html");
 //!
-//! const s = new Streamer("slack-markdown", "auto");
+//! const s = new Streamer("slack-markdown");
 //! let out = "";
 //! for await (const chunk of stream) {
 //!   out += s.push(chunk);
@@ -26,13 +26,13 @@
 
 #![forbid(unsafe_code)]
 
-use mdwire::{Channel, CjkPolicy};
+use mdwire::Channel;
 use wasm_bindgen::prelude::*;
 
 /// 완성된 문서를 변환한다. 한도를 넘으면 조각 배열로 돌아온다.
 #[wasm_bindgen]
-pub fn render(input: &str, channel: &str, cjk: &str) -> Result<Vec<String>, JsError> {
-    Ok(mdwire::render(input, parse_channel(channel)?, parse_cjk(cjk)?))
+pub fn render(input: &str, channel: &str) -> Result<Vec<String>, JsError> {
+    Ok(mdwire::render(input, parse_channel(channel)?))
 }
 
 /// 채널의 길이 한도(문자 수). 조각을 직접 다루려는 호출자를 위해 열어 둔다.
@@ -54,9 +54,9 @@ pub struct Streamer {
 #[wasm_bindgen]
 impl Streamer {
     #[wasm_bindgen(constructor)]
-    pub fn new(channel: &str, cjk: &str) -> Result<Streamer, JsError> {
+    pub fn new(channel: &str) -> Result<Streamer, JsError> {
         Ok(Streamer {
-            inner: mdwire::Streamer::new(parse_channel(channel)?, parse_cjk(cjk)?),
+            inner: mdwire::Streamer::new(parse_channel(channel)?),
             buf: String::new(),
         })
     }
@@ -98,21 +98,8 @@ fn channel_of(name: &str) -> Result<Channel, String> {
     Channel::parse(name).ok_or_else(|| format!("모르는 채널: {name}"))
 }
 
-fn cjk_of(name: &str) -> Result<CjkPolicy, String> {
-    match name {
-        "auto" | "" => Ok(CjkPolicy::Auto),
-        "pad" => Ok(CjkPolicy::AlwaysPad),
-        "never" => Ok(CjkPolicy::Never),
-        other => Err(format!("모르는 CJK 정책: {other}")),
-    }
-}
-
 fn parse_channel(name: &str) -> Result<Channel, JsError> {
     channel_of(name).map_err(|e| JsError::new(&e))
-}
-
-fn parse_cjk(name: &str) -> Result<CjkPolicy, JsError> {
-    cjk_of(name).map_err(|e| JsError::new(&e))
 }
 
 #[cfg(test)]
@@ -124,14 +111,11 @@ mod tests {
     fn channel_and_policy_names_round_trip() {
         assert!(channel_of("telegram-html").is_ok());
         assert!(channel_of("없는채널").is_err());
-        assert!(cjk_of("pad").is_ok());
-        assert!(cjk_of("").is_ok());
-        assert!(cjk_of("맞춤").is_err());
     }
 
     #[test]
     fn render_goes_through_the_core() {
-        let parts = render("**굵게**", "telegram-html", "auto").expect("변환");
+        let parts = render("**굵게**", "telegram-html").expect("변환");
         assert_eq!(parts, vec!["<b>굵게</b>"]);
     }
 }

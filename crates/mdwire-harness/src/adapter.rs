@@ -7,7 +7,7 @@
 //! 분할 결과는 NUL 로 이어 붙인 한 문자열로 돌려준다 — CLI 와 같은 규약이다
 //! (`SPEC.md` 5절).
 
-use mdwire::{Channel, CjkPolicy};
+use mdwire::Channel;
 use std::io::Write;
 use std::process::{Command as Proc, Stdio};
 
@@ -20,15 +20,8 @@ pub trait Renderer {
 }
 
 /// 이 저장소의 구현.
-pub struct Mdwire {
-    pub cjk: CjkPolicy,
-}
-
-impl Default for Mdwire {
-    fn default() -> Self {
-        Self { cjk: CjkPolicy::Auto }
-    }
-}
+#[derive(Default)]
+pub struct Mdwire;
 
 impl Renderer for Mdwire {
     fn name(&self) -> String {
@@ -36,7 +29,7 @@ impl Renderer for Mdwire {
     }
 
     fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
-        Ok(mdwire::render(input, channel, self.cjk).join("\0"))
+        Ok(mdwire::render(input, channel).join("\0"))
     }
 }
 

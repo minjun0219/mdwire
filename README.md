@@ -34,9 +34,9 @@ cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arri
 ```
 
 ```rust
-let parts = mdwire::render(input, Channel::TelegramHtml, CjkPolicy::Auto);
+let parts = mdwire::render(input, Channel::TelegramHtml);
 
-let mut s = Streamer::new(Channel::SlackMarkdown, CjkPolicy::Auto);
+let mut s = Streamer::new(Channel::SlackMarkdown);
 s.push_into(chunk, &mut out);  // no allocation per chunk
 s.finish_into(&mut out);       // flush, closing anything left open
 ```
@@ -44,9 +44,9 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```js
 import { render, Streamer } from "mdwire";   // npm — works under a bundler and in plain Node
 
-const parts = render(markdown, "telegram-html", "auto");
+const parts = render(markdown, "telegram-html");
 
-const s = new Streamer("telegram-html", "auto");
+const s = new Streamer("telegram-html");
 let acc = "";
 for await (const chunk of tokens) {
   acc += s.push(chunk);
@@ -66,17 +66,17 @@ Three gaps in what exists today, each measured rather than assumed:
 - **Broken input is the normal case.** In a sample of 60 agent-generated documents,
   44 contained emphasis spanning a line break. A regex-based converter mispaired those
   into *inverted* emphasis ranges — and the channel returned HTTP 200, so nothing caught it.
-- **CJK is an afterthought.** One converter pads emphasis with U+200B next to Korean text;
-  another does not. The same input renders differently per channel, and neither is
-  configurable.
+- **CJK is guessed at.** One converter pads emphasis with U+200B next to Korean text;
+  another does not. Neither measured the channel. We did: Slack `markdown_text` follows
+  CommonMark, so `_italic_` dies next to a Korean particle and `*italic*` lives. mdwire
+  emits `*` and pads nothing.
 - **Streaming has no answer.** Every converter is batch: parse the whole document, build an
   AST, render. When tokens arrive incrementally, markup splits across chunk boundaries.
 
 ## Design
 
 - **No dependencies in the core.** Not a purity stance — batch parsers are structurally
-  wrong for streaming, and CJK emphasis policy is baked into theirs where we need it
-  configurable. See `DESIGN.md`.
+  wrong for streaming. See `DESIGN.md`.
 - **Rust core, many front ends.** WASM for npm, a single static binary for the CLI.
   The CLI matters most: any agent in any language can pipe through it with no bindings.
 - **The test corpus is a first-class artifact.** `corpus/` holds input → expected output

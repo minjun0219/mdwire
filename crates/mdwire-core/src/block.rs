@@ -23,7 +23,7 @@ use crate::inline::Inline;
 use crate::sink::Sink;
 use crate::vocab::{Emph, Vocab};
 use crate::width::str_width;
-use crate::{Channel, CjkPolicy};
+use crate::Channel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -72,9 +72,9 @@ struct FenceState {
 }
 
 impl Engine {
-    pub fn new(channel: Channel, cjk: CjkPolicy) -> Self {
+    pub fn new(channel: Channel) -> Self {
         Self {
-            v: Vocab::new(channel, cjk),
+            v: Vocab::new(channel),
             inline: Inline::new(),
             pending: Vec::new(),
             line_open: false,
@@ -649,6 +649,16 @@ fn safe_cut(p: &[char]) -> usize {
             k = k.min(at);
         }
     }
+    // **태그 모양의 `<` 도 붙든다.** `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로
+    // 나가 버린다. `>` 가 오거나 태그라기엔 길어지면 놓는다 — `1 < 2` 처럼 뒤가
+    // 공백이면 애초에 안 붙든다.
+    if let Some(at) = p[..k].iter().rposition(|&c| c == '<') {
+        // 다음 글자가 아직 안 왔으면(`<` 가 마지막) 일단 붙든다.
+        let tagish = p.get(at + 1).is_none_or(|&c| c.is_ascii_alphabetic() || c == '/' || c == '!');
+        if tagish && !p[at..k].contains(&'>') && k - at < 80 {
+            k = k.min(at);
+        }
+    }
     // **역슬래시와 그 다음 글자 사이에서는 끊지 않는다.** 위의 `[` 규칙이 `\[` 한가운데를
     // 가르면, 역슬래시만 먼저 나가서 탈출이 풀리지 않는다.
     while k > 0 && p[k - 1] == '\\' {
@@ -757,7 +767,9 @@ impl Table {
     fn render(&mut self, v: &Vocab, out: &mut String) {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
-        let plain = Vocab::new(Channel::Plain, CjkPolicy::Never);
+        // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
+        let plain = Vocab::new(Channel::Plain);
+        let cell_vocab = if v.tables_native() { v } else { &plain };
         let rows = std::mem::take(&mut self.rows);
         let mut cells: Vec<Vec<String>> = Vec::with_capacity(rows.len());
         let mut inline = Inline::new();
@@ -783,14 +795,19 @@ impl Table {
                 } else {
                     chars.extend(row.get(c).map(String::as_str).unwrap_or("").chars());
                 }
-                inline.render(&chars, &mut self.cell, &plain);
-                inline.finish_block(&mut self.cell, &plain);
+                inline.render(&chars, &mut self.cell, cell_vocab);
+                inline.finish_block(&mut self.cell, cell_vocab);
                 inline.reset();
                 line.push(std::mem::take(&mut self.cell));
             }
             cells.push(line);
         }
         self.rows = rows;
+
+        if v.tables_native() {
+            write_gfm_table(out, &cells, &self.align);
+            return;
+        }
 
         let mut widths = vec![0usize; cols];
         for row in &cells {
@@ -824,6 +841,43 @@ impl Table {
         }
         v.escape(&body, out);
         v.verbatim_close("", out);
+    }
+}
+
+/// 표를 GFM 그대로 낸다. 채널이 직접 그리는 곳용이라 열 너비를 맞추지 않는다.
+///
+/// 셀 안의 `|` 는 다시 `\|` 로 돌린다 — 안 그러면 읽는 쪽에서 칸이 갈린다.
+fn write_gfm_table(out: &mut String, cells: &[Vec<String>], align: &[Align]) {
+    let write_cells = |out: &mut String, row: &[String]| {
+        out.push('|');
+        for cell in row {
+            out.push(' ');
+            for c in cell.chars() {
+                if c == '|' {
+                    out.push('\\');
+                }
+                out.push(c);
+            }
+            out.push_str(" |");
+        }
+    };
+    for (r, row) in cells.iter().enumerate() {
+        if r > 0 {
+            out.push('\n');
+        }
+        write_cells(out, row);
+        if r == 0 {
+            // 구분선은 머리글 칸 수를 따른다. 정렬 정보가 모자라면 왼쪽 정렬로 채운다 —
+            // 칸 수가 어긋난 구분선은 읽는 쪽이 표로 안 받는다.
+            out.push_str("\n|");
+            for i in 0..row.len() {
+                out.push_str(match align.get(i).unwrap_or(&Align::Left) {
+                    Align::Left => " --- |",
+                    Align::Right => " ---: |",
+                    Align::Center => " :---: |",
+                });
+            }
+        }
     }
 }
 

@@ -33,13 +33,9 @@ pub enum Channel {
     /// Telegram `parse_mode=HTML`. 허용 태그 9개:
     /// `b i u s code pre a blockquote tg-spoiler`. 표·헤딩 없음. 4096자.
     TelegramHtml,
-    /// Telegram `parse_mode=MarkdownV2`. 이스케이프 대상 18자. 4096자.
-    TelegramMarkdownV2,
     /// Slack `markdown_text`. 표준 마크다운을 슬랙이 직접 변환한다. 12,000자.
     /// 변환이 거의 필요 없고, 남는 일은 정규화와 분할뿐이다.
     SlackMarkdown,
-    /// Slack 레거시 `mrkdwn`. 헤딩·표 없음. `*굵게*` `_기울임_` `<url|text>`.
-    SlackMrkdwn,
     /// 모든 마크업 제거. 폴백 경로.
     Plain,
 }
@@ -49,54 +45,28 @@ impl Channel {
     pub fn name(self) -> &'static str {
         match self {
             Channel::TelegramHtml => "telegram-html",
-            Channel::TelegramMarkdownV2 => "telegram-markdown-v2",
             Channel::SlackMarkdown => "slack-markdown",
-            Channel::SlackMrkdwn => "slack-mrkdwn",
             Channel::Plain => "plain",
         }
     }
 
-    /// v0.1 이 실제로 내보낼 수 있는 채널. 나머지는 `SPEC.md` 11절에서 미뤄 뒀다.
-    pub fn v0_1() -> [Channel; 3] {
+    /// 내보낼 수 있는 채널 전부. 코퍼스와 하네스가 이 목록을 돈다.
+    pub fn all() -> [Channel; 3] {
         [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::Plain]
     }
 
     /// 이름으로 채널을 찾는다.
     pub fn parse(name: &str) -> Option<Channel> {
-        [
-            Channel::TelegramHtml,
-            Channel::TelegramMarkdownV2,
-            Channel::SlackMarkdown,
-            Channel::SlackMrkdwn,
-            Channel::Plain,
-        ]
-        .into_iter()
-        .find(|c| c.name() == name)
+        Self::all().into_iter().find(|c| c.name() == name)
     }
 
     /// 이 채널의 메시지 길이 한도(문자 수). 분할의 기준이다.
     pub fn limit(self) -> usize {
         match self {
-            Channel::TelegramHtml | Channel::TelegramMarkdownV2 => 4096,
-            Channel::SlackMarkdown => 12_000,
-            Channel::SlackMrkdwn | Channel::Plain => 12_000,
+            Channel::TelegramHtml => 4096,
+            Channel::SlackMarkdown | Channel::Plain => 12_000,
         }
     }
-}
-
-/// CJK 인접 강조 정책.
-///
-/// 한글·한자·가나 옆에 붙은 `**` 를 채널 파서가 강조로 못 잡는 경우가 있다.
-/// 폭 없는 공백(U+200B)을 끼워 넣으면 살아나지만, 채널마다 필요 여부가 다르다.
-/// **이 정책이 채널별로 제각각인 것이 기존 변환기들의 공통 결함이다.**
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CjkPolicy {
-    /// 채널별로 알려진 기본값을 쓴다.
-    Auto,
-    /// 항상 U+200B 를 끼운다.
-    AlwaysPad,
-    /// 끼우지 않는다.
-    Never,
 }
 
 /// 스트리밍 변환기.
@@ -109,9 +79,9 @@ pub enum CjkPolicy {
 /// # 예
 ///
 /// ```
-/// use mdwire::{Channel, CjkPolicy, Streamer};
+/// use mdwire::{Channel, Streamer};
 ///
-/// let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+/// let mut s = Streamer::new(Channel::TelegramHtml);
 /// let mut out = String::new();
 /// // 조각 경계가 `**` 한가운데를 지나가도 반쪽으로 나가지 않는다.
 /// out.push_str(s.push("앞말 **굵"));
@@ -126,8 +96,8 @@ pub struct Streamer {
 }
 
 impl Streamer {
-    pub fn new(channel: Channel, cjk: CjkPolicy) -> Self {
-        Self { engine: Engine::new(channel, cjk), buf: String::new() }
+    pub fn new(channel: Channel) -> Self {
+        Self { engine: Engine::new(channel), buf: String::new() }
     }
 
     /// 조각을 밀어 넣고, 지금 내보낼 수 있는 출력을 받는다.
@@ -171,9 +141,9 @@ impl Streamer {
     /// 직전에 이걸 덧붙인다. **누적본 자체에는 넣지 않는다** — 다음 조각이 이어진다.
     ///
     /// ```
-    /// use mdwire::{Channel, CjkPolicy, Streamer};
+    /// use mdwire::{Channel, Streamer};
     ///
-    /// let mut s = Streamer::new(Channel::TelegramHtml, CjkPolicy::Auto);
+    /// let mut s = Streamer::new(Channel::TelegramHtml);
     /// let mut acc = String::new();
     /// s.push_into("> 인용이 시작되고", &mut acc);
     ///
@@ -199,14 +169,14 @@ impl Streamer {
 /// # 예
 ///
 /// ```
-/// use mdwire::{render, Channel, CjkPolicy};
+/// use mdwire::{render, Channel};
 ///
-/// let parts = render("## 제목\n\n**굵게** 있는 문단", Channel::TelegramHtml, CjkPolicy::Auto);
+/// let parts = render("## 제목\n\n**굵게** 있는 문단", Channel::TelegramHtml);
 /// assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
 /// ```
-pub fn render(input: &str, channel: Channel, cjk: CjkPolicy) -> Vec<String> {
-    let mut engine = Engine::new(channel, cjk);
-    let mut sink = PartsSink::new(Vocab::new(channel, cjk));
+pub fn render(input: &str, channel: Channel) -> Vec<String> {
+    let mut engine = Engine::new(channel);
+    let mut sink = PartsSink::new(Vocab::new(channel));
     engine.feed(input, &mut sink);
     engine.finish(&mut sink);
     sink.into_parts()
@@ -234,7 +204,7 @@ mod tests {
                  돌려준다 [src](https://example.com/owner/repo/blob/master/src/mod{i}.ts#L{i}28)\n"
             ));
         }
-        let parts = render(&input, Channel::TelegramHtml, CjkPolicy::Auto);
+        let parts = render(&input, Channel::TelegramHtml);
         assert!(parts.len() > 1, "한도를 넘겨서 나뉘어야 하는 입력이다");
         for (i, p) in parts.iter().enumerate() {
             assert_eq!(

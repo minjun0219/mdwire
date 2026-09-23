@@ -14,7 +14,6 @@
 - 깨진 입력 복구 — 짝 안 맞는 강조, 줄 넘는 강조, 안 닫힌 코드펜스
 - 채널별 렌더링 — 타깃이 받는 문법으로
 - 안전 분할 — 길이 한도와 스트리밍 경계에서 마크업을 자르지 않는다
-- CJK 인접 강조 정책 — 채널별 기본값 + 사용자 오버라이드
 
 **안 한다**
 
@@ -40,13 +39,11 @@ mdwire/
 
 ## 4. 채널
 
-| 채널 | 받는 것 | 한도 | v0.1 |
-|---|---|---|---|
-| Telegram HTML | `b i u s code pre a blockquote tg-spoiler` | 4096 | **넣는다** |
-| Slack `markdown_text` | 표준 마크다운 그대로 | 12,000 | **넣는다** |
-| Plain | 마크업 제거. 폴백 | — | **넣는다** |
-| Telegram MarkdownV2 | 이스케이프 18자 | 4096 | 이후 |
-| Slack `mrkdwn` (레거시) | `*굵게*` `_기울임_` `<url\|text>` | 12,000 | 이후 |
+| 채널 | 받는 것 | 한도 |
+|---|---|---|
+| Telegram HTML | `b i u s code pre a blockquote tg-spoiler` | 4096 |
+| Slack `markdown_text` | 표준 마크다운 그대로 | 12,000 |
+| Plain | 마크업 제거. 폴백 | — |
 
 **두 채널로 시작하는 이유**는 하나만으로는 이 라이브러리의 주장이 코드로 증명되지 않기
 때문이다. 텔레그램은 실제로 깨지는 곳이고, 슬랙은 변환이 거의 없어 사실상 "정규화 + 분할"만
@@ -57,10 +54,10 @@ mdwire/
 
 ```rust
 // 완성본
-let parts: Vec<String> = mdwire::render(input, Channel::TelegramHtml, CjkPolicy::Auto);
+let parts: Vec<String> = mdwire::render(input, Channel::TelegramHtml);
 
 // 스트리밍 — 지금 안전하게 낼 수 있는 만큼만 돌려준다
-let mut s = Streamer::new(Channel::SlackMarkdown, CjkPolicy::Auto);
+let mut s = Streamer::new(Channel::SlackMarkdown);
 out.push_str(s.push(chunk));    // 내부 버퍼를 빌려준다. 다음 호출까지 유효하다
 out.push_str(s.finish());       // 남은 것을 내보내고 열린 마크업을 닫는다
 
@@ -88,7 +85,7 @@ s.push_into(chunk, &mut out);
 → **`push_into`가 정본이고, `push`는 내부 버퍼를 빌려주는 편의 서명이다.**
 둘은 같은 코드를 부른다.
 
-CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
+CLI는 `mdwire --channel telegram-html [--stream]`.
 분할 결과는 **NUL 로 구분**한다 — 셸에서 다루기 가장 쉽고, 마크다운 본문에 안 나오는
 바이트다.
 
@@ -114,6 +111,10 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 텔레그램도 슬랙 레거시도 표 구문이 없다. **고정폭 블록으로 간다** — `<pre>` 안에서 열을 맞춘다. 좁은 화면에서 가로로 밀리지만
 표라는 것이 남고, 무엇보다 **이 라이브러리 안에서 끝난다.**
 
+**표를 직접 그리는 채널은 그대로 낸다.** 슬랙 `markdown_text` 는 표준 마크다운 표를 네이티브로
+그린다(Slack markdown block 문서). 거기서 고정폭으로 내리면 화면에 표가 아니라 코드가 보인다 —
+GFM 그대로, 정렬 표시와 셀 안의 마크업까지 살려서 낸다.
+
 기각한 둘:
 
 - **줄글로 펴기** — 정렬을 잃는다. 열이 셋만 넘어가도 무엇이 무엇인지 알 수 없다
@@ -134,9 +135,20 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 | 번호 | `1. ` | `1. ` | `1. ` |
 | 인용 | `<blockquote>`로 감싼다 | `> ` | `> ` |
 | 코드펜스 | `<pre>` / `<pre><code class="language-…">` | ` ``` ` 유지 | 펜스 제거, 내용만 |
-| 표 | `<pre>` 안 고정폭 | ` ``` ` 안 고정폭 | 고정폭 |
+| 표 | `<pre>` 안 고정폭 | GFM 그대로 | 고정폭 |
 | 구분선 | `──────────` | `---` | `──────────` |
 | 링크 | `<a href>` | `[텍스트](url)` | `텍스트 (url)` |
+| `<url>` · `<url\|텍스트>` | `<a href>` | `<url>` · `[텍스트](url)` | `url` · `텍스트 (url)` |
+| 인라인 HTML (`<sub>` `<br>` 주석) | 태그만 벗긴다 · `<br>` 은 줄바꿈 | 같음 | 같음 |
+
+**인라인 HTML 은 아는 태그만 벗긴다.** LLM 은 마크다운에 없는 표현을 `<sub>`·`<br>` 로
+메운다(실측 표본에서 74건). 텔레그램은 모르는 태그에 400 을 주고 슬랙 `markdown_text` 도
+그리지 않으니, escape 하면 화면에 `<sub>` 가 글자로 보인다. 태그는 벗기고 내용은 둔다 —
+각색이 아니라 표처럼 타깃에 그 구문이 없어서다. `Vec<T>` · `1 < 2` 처럼 모르는 꺾쇠는
+글이고, `<a>` 는 벗기면 주소가 사라져 손대지 않는다.
+
+**`<url>` 은 링크다.** 슬랙에서 긁어 온 글에 레거시 `<url|텍스트>` 가 그대로 남고(한 표본에서
+124건), 텍스트 없는 `<url>` 은 CommonMark 오토링크다. 텍스트는 인라인으로 다시 읽지 않는다.
 
 **헤딩 레벨 정규화**는 스트리밍이 가능한 범위까지만 한다 — 앞 헤딩보다 두 단계 이상
 깊어지면 한 단계로 당긴다. "문서에서 가장 얕은 헤딩을 1로" 같은 규칙은 문서 전체를 봐야
@@ -159,6 +171,12 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 
 **앞에 `|`가 없는 표는 문단으로 나간다.** 실제 문서 2281개에서 표 951개 중 950개가
 `|`로 시작했다(에이전트 산출물은 21개 전부). 남은 하나를 위해 스트리밍을 포기할 값이 없다.
+
+**한도를 넘겨 나눌 때 열린 인라인 마크업은 끊는 자리에서 닫고 다음 조각에서 다시 연다.**
+텔레그램의 태그만이 아니라 슬랙의 `**`·`*`·`~~`·백틱도 같다 — 12,000자 분할이
+`` `main → main` `` 의 공백에 떨어지면 두 메시지 다 코드가 깨진다. 짝이 맞는 스팬만 그렇게
+다룬다. 글자로 남은 마커(`2 ** 3`, 한 줄에 쏟아낸 가짜 펜스의 ```)까지 스팬으로 보면 조각마다
+없던 마커가 찍힌다 — 실측이다.
 
 ### 8.1 스트리밍이 붙드는 것
 
@@ -223,9 +241,8 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 
 - 채널 셋: Telegram HTML · Slack `markdown_text` · Plain
 - 정규화: 복구 + 정돈
-- 표: 고정폭 블록 (표시 폭 기준)
+- 표: 고정폭 블록 (표시 폭 기준) · 직접 그리는 채널은 GFM 그대로
 - 분할: 길이 한도 + 스트리밍 경계
-- CJK 정책: 채널별 기본값 + 오버라이드
 - CLI + WASM 바인딩
 - 코퍼스: 위 전부에 케이스
 
@@ -233,7 +250,10 @@ CLI는 `mdwire --channel telegram-html [--stream] [--cjk auto|pad|never]`.
 
 정해서 미룬 것이지 안 정한 것이 아니다.
 
-- Telegram MarkdownV2 · Slack 레거시 `mrkdwn`
+- Telegram MarkdownV2 · Slack 레거시 `mrkdwn` — **미룬 것이 아니라 뺐다**(2026-09-22).
+  목표는 텔레그램 HTML 과 슬랙 `markdown_text` 둘이고, 레거시 표기 때문에 남겨 두던 CJK
+  패딩(`CjkPolicy`)도 같이 걷어냈다. 실측에서 두 목표 채널 어디에도 U+200B 가 필요 없었다
+  (`DESIGN.md` 3절)
 - `no_std` 전환 — 지금 wasm 번들은 105 KB(release, `wasm-opt` 전)다. 이 중 얼마가
   `std` 이고 얼마가 `wasm-bindgen` 인지 가른 뒤에 판단한다. 숫자를 가르기 전에
   옮기면 얻는 것 없이 코어만 불편해진다
