@@ -129,8 +129,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 let n = rest.chars().count();
                 if len + n <= budget {
                     markup = probe;
-                    cur.push_str(rest);
-                    len += n;
+                    len += push_after_reopen(&mut cur, rest, &mut markup);
                     break;
                 }
                 if len > 0 {
@@ -156,8 +155,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                     .nth(take)
                     .map_or(rest.len(), |(i, _)| i);
                 markup.feed(&rest[..end], v);
-                cur.push_str(&rest[..end]);
-                len += take;
+                len += push_after_reopen(&mut cur, &rest[..end], &mut markup);
                 rest = &rest[end..];
                 if !rest.is_empty() {
                     cut(&mut parts, &mut cur, &mut len, &mut markup, v, limit);
@@ -169,6 +167,17 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
         parts.push(cur);
     }
     parts
+}
+
+/// 조각에 글을 붙이고 붙은 글자 수를 돌려준다. 방금 다시 연 마커 바로 뒤라면 앞 공백을
+/// 턴다 — `** 이어서` 는 열기가 아니다.
+fn push_after_reopen(cur: &mut String, s: &str, markup: &mut Markup) -> usize {
+    let s = if markup.fresh { s.trim_start() } else { s };
+    if !s.is_empty() {
+        markup.fresh = false;
+    }
+    cur.push_str(s);
+    s.chars().count()
 }
 
 /// 조각을 끊는다. 열린 것을 닫고, 다음 조각 앞머리에서 다시 연다.
@@ -193,9 +202,18 @@ fn cut(
         }
         _ => String::new(),
     };
+    // **닫는 마커 앞이 공백이면 닫기가 아니다.** 마크다운 채널은 `**굵은 말 **` 처럼
+    // 공백 뒤에 닫으면 슬랙이 별표를 글자로 보인다(CommonMark 의 flanking). 조각 끝
+    // 공백은 어차피 뜻이 없다 — 턴다. 다음 조각 앞머리의 공백도 같은 이유로 `split_hard`
+    // 가 다시 연 마커 뒤에서 턴다.
+    if v.channel != Channel::TelegramHtml {
+        let kept = part.trim_end().len();
+        part.truncate(kept);
+    }
     markup.close_all(&mut part, v);
     parts.push(part);
     markup.reopen(cur, v);
+    markup.fresh = v.channel != Channel::TelegramHtml && !cur.is_empty();
     // **다시 열 수 없는 마크업은 버린다.** 여는 태그만으로 조각이 차 버리면 내용이 한
     // 글자도 안 들어가고, 같은 자리에서 같은 조각을 끝없이 찍어 낸다. 마크업보다
     // 내용이 먼저다 — 여기서부터는 꾸밈 없이 내보낸다.
@@ -245,6 +263,9 @@ struct Markup {
     pos: usize,
     /// 다시 열 수 없어 버린 뒤다. 그 뒤로는 스팬을 닫지도 열지도 않는다.
     dropped: bool,
+    /// 방금 마크다운 마커를 다시 열었고 아직 내용이 안 붙었다. 여는 마커 뒤가 공백이면
+    /// 열기가 아니라서, 다음에 붙는 글의 앞 공백을 턴다.
+    fresh: bool,
 }
 
 /// 짝이 맞는 인라인 스팬 하나. 위치는 글자 단위다.
@@ -439,6 +460,7 @@ impl Default for Markup {
             spans: std::rc::Rc::from(Vec::new()),
             pos: 0,
             dropped: false,
+            fresh: false,
         }
     }
 }

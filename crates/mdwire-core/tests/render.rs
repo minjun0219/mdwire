@@ -691,6 +691,11 @@ fn slack_parts_close_and_reopen_spans() {
             assert_eq!(p.matches('`').count() % 2, 0, "백틱이 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
             assert_eq!(p.matches("**").count() % 2, 0, "`**` 가 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
             assert_eq!(p.matches("~~").count() % 2, 0, "`~~` 가 홀로 남았다: …{}", &p[p.len().saturating_sub(30)..]);
+            // 닫는 마커 앞과 여는 마커 뒤에 공백이 오면 마커가 아니라 글자다.
+            for m in ["**", "~~", "`"] {
+                assert!(!p.ends_with(&format!(" {m}")), "공백 뒤에 닫았다: …{}", &p[p.len().saturating_sub(30)..]);
+                assert!(!p.starts_with(&format!("{m} ")), "공백 앞에서 열었다: {}…", &p[..p.len().min(30)]);
+            }
         }
     }
 }

@@ -556,15 +556,22 @@ fn rejoin_parts(output: &str) -> String {
         }
         // 마크다운 채널은 마커로 닫고 다시 연다 — 조각 끝과 다음 조각 앞머리에 같은
         // 마커가 마주 보면 그 자리가 이음매다. 안쪽부터 여러 겹일 수 있다.
+        let mut marker_seam = false;
         while let Some(m) =
             ["``", "`", "**", "~~", "*"].into_iter().find(|m| rest.starts_with(m) && out.ends_with(m))
         {
             out.truncate(out.len() - m.len());
             rest = &rest[m.len()..];
             stitched = true;
+            marker_seam = true;
         }
         if !stitched {
             out.push('\n');
+        } else if marker_seam {
+            // 마커 이음매에는 공백을 하나 둔다. 코어가 닫는 마커 앞과 여는 마커 뒤의
+            // 공백을 털어 내므로(공백 옆 마커는 마커가 아니다), 그냥 붙이면 `말` 과
+            // `이어서` 가 한 낱말이 된다.
+            out.push(' ');
         }
         out.push_str(rest);
     }
