@@ -255,19 +255,34 @@ impl Inline {
             let left = can_open(prev, next) && !intraword;
 
             match same {
-                // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
-                Some(at) if !after_space => self.close_at(at, out, v),
-                // 앞이 공백인데 뒤로는 열 수 있다 — 줄 첫머리에 온 여는 마커다.
-                // **여기서 닫으면 강조 범위가 뒤집힌다.** 겹쳐 열지도 않고 버린다. 규칙 2.
-                Some(_) if left => {}
-                // 앞도 뒤도 공백이고 열린 것도 추측이었다 — `** 띄운 굵게 **` 다.
-                // 추측을 닫아 주면 여는 쪽은 글자로 되돌아가고 닫는 쪽만 사라진다.
-                // 둘 다 글자다.
-                Some(at) if self.open[at].guess => {
+                // **추측으로 연 것은 닫지 않는다.** 추측은 확정되지 않는다 — 닫아 주면
+                // 여는 쪽은 글자로 되돌아가거나 버려지고 닫는 쪽만 사라진다. `underfront.*
+                // (4개), minjunkim.*` 의 글롭 별표 둘과 `/* 주석 */` 이 그렇게 사라졌다.
+                // 실측(LLM 산출물 430건)에서 추측이 맞아떨어지는 모양은 없었고, 글자로 남은
+                // 별표가 사라지는 쪽만 있었다. 닫는 자리의 마커는 글자고, 추측은 블록
+                // 끝에서 되돌린다.
+                // 앞이 글자인 마커(`조합**이`)도 추측을 닫지 않고, 열지도 않는다 — 열면
+                // 블록 끝까지 삼킨다. 글자다.
+                Some(at) if self.open[at].guess && (!left || !after_space) => {
                     for _ in 0..take {
                         v.escape_char(c, out);
                     }
                 }
+                // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
+                // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
+                Some(at) if self.open[at].guess => self.reopen_at(at, out, take, c, emph, after_space),
+                // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
+                Some(at) if !after_space => self.close_at(at, out, v),
+                // 앞이 공백인데 뒤로는 열 수 있다 — 여는 마커가 또 왔다. **먼저 열린 쪽이
+                // 진다.** `채널**이다. …⏎**신분 공개**이` 에서 첫 `**` 는 짝 잃은 마커고
+                // 둘째 줄이 온전한 굵게다 — CommonMark 도 슬랙도 그렇게 읽는다(실측). 먼저
+                // 열린 마커는 앞이 공백이었으면 글자로 되돌리고, 글자였으면 버린다. 여기서
+                // "닫기"로 읽으면 강조 범위가 뒤집힌다 — 그 고장이 원본이다. 규칙 2.
+                Some(at) if left && at + 1 == self.open.len() => {
+                    self.reopen_at(at, out, take, c, emph, after_space)
+                }
+                // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
+                Some(_) if left => {}
                 Some(at) => self.close_at(at, out, v),
                 None if left => self.open.push(Open {
                     emph,
@@ -334,6 +349,22 @@ impl Inline {
         }
     }
 
+    /// 맨 위의 열린 마커를 물리고 이 자리에서 새로 연다 — 먼저 열린 쪽이 졌다.
+    ///
+    /// 홑마커는 글자로 되돌린다(글롭·주석·각주). `**` 는 추측이었고 앞이 공백이었을 때만
+    /// 되돌린다(`2 ** 3`) — 진짜 여는 마커였다가 진 `**` 는 짝 잃은 마커라 버린다. 되돌리면
+    /// 텔레그램 화면에 `**` 가 글자로 남는다.
+    fn reopen_at(&mut self, at: usize, out: &mut String, take: usize, c: char, emph: Emph, after_space: bool) {
+        debug_assert_eq!(at + 1, self.open.len());
+        let old = self.open.pop().expect("at 은 유효한 인덱스다");
+        if old.run == 1 || (old.guess && old.after_space) {
+            for _ in 0..old.run {
+                out.insert(old.at, old.ch);
+            }
+        }
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space });
+    }
+
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
         if i > 0 {
             Some(line[i - 1])
@@ -357,11 +388,11 @@ impl Inline {
         // 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
         let empty = out.len() == open.at;
         if open.guess || empty {
-            // 추측이 빗나갔다. 앞이 공백이었으면 원래 글자였던 것이니 되돌리고,
-            // 앞이 글자였으면 짝 잃은 닫는 마커이니 버린다 — 되돌리면 출력에 남는다.
-            // 내용이 빈 홑마커(`참고*` 의 꼬리 같은 것)는 글자로 남긴다. `**` 는 버린다 —
-            // 홑마커는 각주나 곱셈으로 쓰이지만 `**` 가 홀로 남을 이유는 없다.
-            if open.after_space || (empty && open.run == 1) {
+            // 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주(`참고*`), 글롭
+            // (`underfront.*`), 곱셈(`2 * 3`)으로 쓰이는 글자라 버리면 내용 손실이다.
+            // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
+            // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
+            if open.after_space || open.run == 1 {
                 for _ in 0..open.run {
                     out.insert(open.at, open.ch);
                 }
@@ -578,9 +609,18 @@ fn run_len(line: &[char], at: usize, c: char) -> usize {
 /// 빼는 것이 핵심인데, 그게 줄 첫머리로 밀려난 **여는** 마커이고 거기서 닫으면
 /// 범위가 뒤집히기 때문이다(`DESIGN.md`).
 fn can_open(prev: Option<char>, next: Option<char>) -> bool {
+    // 앞이 글자·숫자가 아니면(공백, 구두점, 그리고 `①`·`🔥` 같은 기호) 열 수 있다.
+    // CommonMark 는 유니코드 구두점만 치지만, LLM 은 항목 머리에 기호를 붙인다 —
+    // `①**"주간 졸림"**` 을 못 열면 닫는 쪽만 글자로 남는다(실측). `①` 은 유니코드로는
+    // 숫자(No)라 `is_alphanumeric` 에 걸린다 — 글자는 알파벳과 ASCII 숫자만 친다.
     next.is_some_and(|n| {
-        !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| p.is_whitespace() || is_punct(p)))
+        !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| !is_word_char(p)))
     })
+}
+
+/// 강조 마커 앞뒤의 "글자". 알파벳(한글 포함)과 ASCII 숫자다 — `①` 같은 기호는 아니다.
+fn is_word_char(c: char) -> bool {
+    c.is_alphabetic() || c.is_ascii_digit()
 }
 
 fn is_punct(c: char) -> bool {
