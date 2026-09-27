@@ -93,11 +93,32 @@ pub struct Streamer {
     engine: Engine,
     /// [`Streamer::push`] 가 빌려주는 버퍼. 재사용하므로 조각마다 할당하지 않는다.
     buf: String,
+    /// 줄바꿈이 아닌 글자를 하나라도 내보냈는가.
+    ///
+    /// **앞머리 빈 줄은 내보내지 않는다.** 문서가 주석이나 `<br>` 로 시작하면 첫 블록이
+    /// 비고 그 뒤의 줄바꿈만 남는데, 완성본은 조각 앞머리의 줄바꿈을 털고 시작한다
+    /// (`sink::PartsSink`). 스트리밍도 같아야 한다 — 그래야 둘이 같은 답을 낸다.
+    started: bool,
 }
 
 impl Streamer {
     pub fn new(channel: Channel) -> Self {
-        Self { engine: Engine::new(channel), buf: String::new() }
+        Self { engine: Engine::new(channel), buf: String::new(), started: false }
+    }
+
+    /// `from` 뒤에 새로 붙은 출력에서 앞머리 줄바꿈을 턴다. 첫 글자가 나올 때까지만이다.
+    fn trim_leading(&mut self, out: &mut String, from: usize) {
+        if self.started {
+            return;
+        }
+        let fresh = &out[from..];
+        let keep = fresh.len() - fresh.trim_start_matches('\n').len();
+        if keep > 0 {
+            out.drain(from..from + keep);
+        }
+        if out.len() > from {
+            self.started = true;
+        }
     }
 
     /// 조각을 밀어 넣고, 지금 내보낼 수 있는 출력을 받는다.
@@ -105,30 +126,36 @@ impl Streamer {
     /// 돌려주는 슬라이스는 **다음 호출 전까지만** 유효하다. 할당을 아예 없애려면
     /// [`Streamer::push_into`] 를 쓴다 — 둘은 같은 코드를 부른다(`SPEC.md` 5절).
     pub fn push(&mut self, chunk: &str) -> &str {
-        self.buf.clear();
-        let mut sink = StringSink(&mut self.buf);
-        self.engine.feed(chunk, &mut sink);
+        let mut buf = std::mem::take(&mut self.buf);
+        buf.clear();
+        self.push_into(chunk, &mut buf);
+        self.buf = buf;
         &self.buf
     }
 
     /// 호출자 버퍼에 직접 쓴다. 정본 서명 — 조각당 할당이 0 이다.
     pub fn push_into(&mut self, chunk: &str, out: &mut String) {
+        let from = out.len();
         let mut sink = StringSink(out);
         self.engine.feed(chunk, &mut sink);
+        self.trim_leading(out, from);
     }
 
     /// 입력이 끝났다. 남은 것을 전부 내보낸다(열린 마크업은 닫는다).
     pub fn finish(&mut self) -> &str {
-        self.buf.clear();
-        let mut sink = StringSink(&mut self.buf);
-        self.engine.finish(&mut sink);
+        let mut buf = std::mem::take(&mut self.buf);
+        buf.clear();
+        self.finish_into(&mut buf);
+        self.buf = buf;
         &self.buf
     }
 
     /// [`Streamer::finish`] 의 무할당 판.
     pub fn finish_into(&mut self, out: &mut String) {
+        let from = out.len();
         let mut sink = StringSink(out);
         self.engine.finish(&mut sink);
+        self.trim_leading(out, from);
     }
 
     /// **지금까지 받은 것을 그대로 보내도 되게 만든다.** 상태는 건드리지 않으므로
