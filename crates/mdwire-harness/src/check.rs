@@ -301,6 +301,11 @@ fn bare(text: &str, seam: Seam) -> String {
         // 폭 없는 공백도 지운다 — 우리가 일부러 끼운 것이라 낱말을 쪼개면 안 된다.
         if !is_marker(ch[i]) {
             out.push(ch[i]);
+        } else if ch[i] == '`' && seam == Seam::Split {
+            // 코드 스팬의 울타리는 띄어 읽을 때 경계다. 렌더러가 스팬 가장자리의 공백을
+            // 벗기므로(CommonMark) `x\` 등)로` 가 출력에서는 `x\`등)로` 인데, 화면에서는
+            // 코드 상자로 갈려 보인다 — 붙여 읽으면 없던 손실이 잡힌다.
+            out.push(' ');
         }
         i += 1;
     }
@@ -1088,7 +1093,7 @@ mod tests {
 
     #[test]
     fn accepts_the_repaired_output() {
-        let good = "공개 채널<b>이다. 글 내용이 아니라\n신분 공개 + 시점의 조합</b>이 판단 대상";
+        let good = "공개 채널이다. 글 내용이 아니라\n<b>신분 공개 + 시점의 조합</b>이 판단 대상";
         let f = check(INVERTED_INPUT, good, Channel::TelegramHtml);
         assert!(f.is_empty(), "{f:?}");
     }
