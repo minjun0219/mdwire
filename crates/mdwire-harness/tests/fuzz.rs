@@ -112,12 +112,18 @@ fn random_long_input_splits_cleanly() {
     let mut failures = Vec::new();
     for round in 0..150 {
         let mut input = String::new();
-        // 짧은 문서 여러 개를 이어서 한도(텔레그램 4,096)를 확실히 넘긴다.
-        while input.chars().count() < 9_000 {
+        // 짧은 문서 여러 개를 이어서 **모든 채널의** 한도를 확실히 넘긴다 — 가장 큰
+        // 한도(슬랙·plain 12,000)의 두 배. 텔레그램만 넘기면 나머지 채널의 분할 경로는
+        // 한 번도 안 돈다.
+        let target = Channel::all().iter().map(|c| c.limit()).max().expect("채널이 있다") * 2;
+        while input.chars().count() < target {
             input.push_str(&doc(&mut rng));
         }
         for channel in Channel::all() {
             let parts = mdwire::render(&input, channel);
+            if parts.len() < 2 {
+                failures.push(format!("#{round} {}: 한도를 넘겼는데 안 나뉘었다", channel.name()));
+            }
             let joined = parts.join("\0");
             let bad: Vec<_> = check(&input, &joined, channel)
                 .into_iter()
