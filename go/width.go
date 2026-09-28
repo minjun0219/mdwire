@@ -7,10 +7,10 @@ package mdwire
 // 0 으로 본다. 구간표는 Rust 코어(crates/mdwire-core/src/width.rs)에서 그대로 뽑았다 —
 // 손으로 옮기지 않는다.
 
-type span struct{ lo, hi rune }
+type cpRange struct{ lo, hi rune }
 
 // 폭 0 — 결합 문자, 폭 없는 공백, 변형 선택자.
-var zeroWidth = []span{
+var zeroWidth = []cpRange{
 	{0x0300, 0x036F}, // 결합 발음 기호
 	{0x0483, 0x0489},
 	{0x0591, 0x05BD},
@@ -38,7 +38,7 @@ var zeroWidth = []span{
 }
 
 // 폭 2 — East Asian Width 가 Wide 또는 Fullwidth 인 구간.
-var wide = []span{
+var wide = []cpRange{
 	{0x1100, 0x115F}, // 한글 초성 자모
 	{0x231A, 0x231B},
 	{0x2329, 0x232A},
@@ -181,7 +181,7 @@ func StrWidth(s string) int {
 }
 
 // inSpans 는 이진 탐색이다. 구간표가 정렬·비중첩이라는 전제는 테스트가 지킨다.
-func inSpans(table []span, c rune) bool {
+func inSpans(table []cpRange, c rune) bool {
 	lo, hi := 0, len(table)
 	for lo < hi {
 		mid := (lo + hi) / 2

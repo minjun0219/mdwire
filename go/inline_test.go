@@ -67,7 +67,7 @@ func TestWidths(t *testing.T) {
 		t.Error("혼합 폭이 더해지지 않는다")
 	}
 	// 이진 탐색의 전제 — 구간표가 정렬·비중첩이다. 깨지면 조용히 틀린 폭이 나온다.
-	for _, table := range [][]span{zeroWidth, wide} {
+	for _, table := range [][]cpRange{zeroWidth, wide} {
 		for i := 1; i < len(table); i++ {
 			if table[i-1].hi >= table[i].lo {
 				t.Errorf("구간이 겹치거나 순서가 틀렸다: %v %v", table[i-1], table[i])
@@ -85,5 +85,21 @@ func TestChannelNames(t *testing.T) {
 	}
 	if _, ok := ParseChannel("없는채널"); ok {
 		t.Error("모르는 이름을 받아들였다")
+	}
+}
+
+// 블록 층까지 — 문서 하나를 완성본 파이프라인으로. 기대값은 같은 방식으로 Rust CLI 에서 뽑았다.
+func TestBlocksMatchRustCore(t *testing.T) {
+	inputs := readCases(t, "block-input.txt")
+	for _, ch := range Channels() {
+		want := readCases(t, "block."+ch.Name()+".txt")
+		if len(want) != len(inputs) {
+			t.Fatalf("%s: 기대값 %d개, 입력 %d개 — regen.sh 를 다시 돌린다", ch.Name(), len(want), len(inputs))
+		}
+		for i, input := range inputs {
+			if got := strings.Join(Render(input, ch), "\x00"); got != want[i] {
+				t.Errorf("%s %q:\n  got  %q\n  want %q", ch.Name(), input, got, want[i])
+			}
+		}
 	}
 }

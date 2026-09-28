@@ -56,7 +56,8 @@ jobs:
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
-          go test ./...
+          cargo build -p mdwire-cli --locked
+          MDWIRE_RUST=../target/debug/mdwire go test ./...
 
       # 올릴 패키지가 실제로 만들어지는지 본다.
       - name: npm 패키지 빌드
