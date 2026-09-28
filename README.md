@@ -79,6 +79,7 @@ Three gaps in what exists today, each measured rather than assumed:
   wrong for streaming. See `DESIGN.md`.
 - **Rust core, many front ends.** WASM for npm, a single static binary for the CLI.
   The CLI matters most: any agent in any language can pipe through it with no bindings.
+  A Go port lives in `go/` (in progress, stdlib only) and is held to the same corpus.
 - **The test corpus is a first-class artifact.** `corpus/` holds input → expected output
   per channel. A port in another language is correct when it passes the corpus. This is
   how consistency survives more than one implementation.

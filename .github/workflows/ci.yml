@@ -48,6 +48,16 @@ jobs:
       - name: wasm-pack 설치
         run: cargo install wasm-pack --locked
 
+      # **Go 이식은 같은 코퍼스를 통과해야 한다.** 러너에 Go 가 깔려 있어 액션 없이 돈다.
+      # 시험의 기대값은 Rust CLI 출력에서 뽑은 것이라(go/testdata/regen.sh), 두 구현이
+      # 갈리면 여기서 걸린다.
+      - name: go
+        working-directory: go
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+
       # 올릴 패키지가 실제로 만들어지는지 본다.
       - name: npm 패키지 빌드
         run: ./scripts/build-npm.sh
