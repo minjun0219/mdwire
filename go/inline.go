@@ -508,14 +508,21 @@ func canOpen(prev, next rune) bool {
 	return !isPunct(next) || prev == noChar || !isWordChar(prev)
 }
 
-// isWordChar 는 강조 마커 앞뒤의 "글자"다. 알파벳(한글 포함)과 ASCII 숫자 — `①` 은 아니다.
-func isWordChar(c rune) bool {
-	return unicode.IsLetter(c) || (c >= '0' && c <= '9')
+// isAlphabetic 은 러스트 char::is_alphabetic — 유니코드 Alphabetic 속성이다. Go 의 IsLetter(L
+// 범주)보다 넓다: 글자 수 Nl 과 Other_Alphabetic(데바나가리 모음 부호 같은 결합 문자)이
+// 들어간다. 여기가 갈리면 `का_x` 의 `_` 를 러스트는 글자로 두고 Go 는 강조로 연다.
+func isAlphabetic(c rune) bool {
+	return unicode.IsLetter(c) || unicode.Is(unicode.Nl, c) || unicode.Is(unicode.Other_Alphabetic, c)
 }
 
-// isAlphanumeric 은 러스트 char::is_alphanumeric 의 자리다 — 글자 또는 숫자(유니코드).
+// isWordChar 는 강조 마커 앞뒤의 "글자"다. 알파벳(한글 포함)과 ASCII 숫자 — `①` 은 아니다.
+func isWordChar(c rune) bool {
+	return isAlphabetic(c) || (c >= '0' && c <= '9')
+}
+
+// isAlphanumeric 은 러스트 char::is_alphanumeric 의 자리다 — Alphabetic 또는 Numeric(Nd·Nl·No).
 func isAlphanumeric(c rune) bool {
-	return unicode.IsLetter(c) || unicode.IsNumber(c)
+	return isAlphabetic(c) || unicode.IsNumber(c)
 }
 
 func isASCIIPunct(c rune) bool {
