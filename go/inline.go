@@ -72,7 +72,7 @@ func (in *inline) endLine() { in.prev = '\n' }
 // render 를 거치지 않는데, 되돌려 다시 읽을 때 두 줄이 한 줄로 붙으면 안 된다.
 func (in *inline) noteRaw(s string) {
 	if n := len(in.open); n > 0 && in.open[n-1].emph == emphCode {
-		in.codeSrc = append(in.codeSrc, []rune(s)...)
+		in.codeSrc = appendRunes(in.codeSrc, s)
 	}
 }
 
@@ -290,7 +290,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
 	if old.run == 1 || (old.guess && old.afterSpace) {
-		insertAt(out, old.at, string(repeatRune(old.ch, old.run)))
+		insertRun(out, old.at, old.ch, old.run)
 	}
 	fresh.at = len(*out)
 	fresh.guess = false
@@ -346,7 +346,7 @@ func (in *inline) finalize(out *[]byte, v vocab) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		if o.afterSpace || o.run == 1 {
-			insertAt(out, o.at, string(repeatRune(o.ch, o.run)))
+			insertRun(out, o.at, o.ch, o.run)
 		}
 		return
 	}

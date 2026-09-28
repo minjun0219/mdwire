@@ -17,11 +17,33 @@ func insertAt(out *[]byte, at int, s string) {
 	*out = b
 }
 
+// insertRun 은 같은 글자 n개를 out[at:] 앞에 끼워 넣는다 — 마커 되돌리기용. 마커는 ASCII 다.
+func insertRun(out *[]byte, at int, c rune, n int) {
+	b := *out
+	for i := 0; i < n; i++ {
+		b = append(b, 0)
+	}
+	copy(b[at+n:], b[at:len(b)-n])
+	for i := 0; i < n; i++ {
+		b[at+i] = byte(c)
+	}
+	*out = b
+}
+
 // removeAt 은 out[at] 한 바이트를 지운다. ASCII 공백처럼 한 바이트인 것만 지운다.
 func removeAt(out *[]byte, at int) {
 	b := *out
 	copy(b[at:], b[at+1:])
 	*out = b[:len(b)-1]
+}
+
+// appendRunes 는 문자열의 글자를 슬라이스에 이어 붙인다. `[]rune(s)` 로 바꿔 붙이면 조각마다
+// 임시 슬라이스가 생긴다 — 스트리밍 경로는 조각마다 불리므로 그 할당이 곧 회귀다.
+func appendRunes(dst []rune, s string) []rune {
+	for _, c := range s {
+		dst = append(dst, c)
+	}
+	return dst
 }
 
 func runLen(line []rune, at int, c rune) int {

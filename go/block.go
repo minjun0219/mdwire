@@ -111,14 +111,14 @@ func (e *engine) feed(chunk string, s sink) {
 	for len(chunk) > 0 {
 		nl := strings.IndexByte(chunk, '\n')
 		if nl < 0 {
-			e.pending = append(e.pending, []rune(chunk)...)
+			e.pending = appendRunes(e.pending, chunk)
 			e.progress(false, s)
 			return
 		}
 		rest := chunk[:nl]
 		// CRLF 입력. `\r` 를 남겨 보내면 채널에 그대로 박힌다.
 		rest = strings.TrimSuffix(rest, "\r")
-		e.pending = append(e.pending, []rune(rest)...)
+		e.pending = appendRunes(e.pending, rest)
 		e.progress(true, s)
 		chunk = chunk[nl+1:]
 	}
