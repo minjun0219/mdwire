@@ -133,8 +133,26 @@ func splitHard(text string, limit int, v vocab) []string {
 					room = max(limit-m.reserve(), 0)
 				}
 				take := max(room-length, 1)
-				end := runeOffset(rest, take)
-				m.feed(rest[:end], v)
+				// 예산은 실제로 끊는 자리의 마크업으로 다시 잰다. budget 은 덩어리 전체를 먹인
+				// 뒤의 것이라, 닫는 마커가 덩어리 끝에 있으면 "열린 것 없음"으로 잰다 — 그러면
+				// 한도까지 채운 뒤 cut 이 닫는 마커를 붙여 한도를 넘긴다. 자른 앞부분만 먹여 보고,
+				// 닫고 다시 여는 몫이 안 들어가면 그만큼 덜 담는다.
+				var end int
+				var cutProbe markup
+				for {
+					end = runeOffset(rest, take)
+					cutProbe = m.clone()
+					cutProbe.feed(rest[:end], v)
+					reserve := cutProbe.reserve()
+					need := length + take + reserve
+					// 다시 열 수 없을 만큼 큰 마크업(budget == 0, 한도만 한 여는 태그)은 줄여 봐야
+					// 소용없다 — cut 이 버린다. 한 글자씩 조각만 쏟아지니 그대로 간다.
+					if need <= limit || take == 1 || budget == 0 || reserve >= limit {
+						break
+					}
+					take -= min(need-limit, take-1)
+				}
+				m = cutProbe
 				length += pushAfterReopen(&cur, rest[:end], &m)
 				rest = rest[end:]
 				if len(rest) > 0 {

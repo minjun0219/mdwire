@@ -43,8 +43,9 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	if !ok {
 		return fmt.Errorf("모르는 채널: %q (telegram-html · slack-markdown · plain)", channel)
 	}
+	// 쓰기·비우기 실패를 삼키지 않는다 — 닫힌 파이프나 가득 찬 장치에 잘린 출력을 내고 0 으로
+	// 끝나면 호출자가 배달 실패를 알 수 없다.
 	w := bufio.NewWriter(out)
-	defer w.Flush()
 	if stream {
 		s := mdwire.NewStreamer(ch)
 		r := bufio.NewReader(in)
@@ -66,13 +67,19 @@ func run(args []string, in io.Reader, out io.Writer) error {
 			}
 			piece = piece[:0]
 			s.PushTo(string(chunk), &piece)
-			w.Write(piece)
-			w.Flush()
+			if _, err := w.Write(piece); err != nil {
+				return err
+			}
+			if err := w.Flush(); err != nil {
+				return err
+			}
 		}
 		piece = piece[:0]
 		s.FinishTo(&piece)
-		w.Write(piece)
-		return nil
+		if _, err := w.Write(piece); err != nil {
+			return err
+		}
+		return w.Flush()
 	}
 	input, err := io.ReadAll(in)
 	if err != nil {
@@ -80,9 +87,13 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	}
 	for i, part := range mdwire.Render(string(input), ch) {
 		if i > 0 {
-			w.WriteByte(0)
+			if err := w.WriteByte(0); err != nil {
+				return err
+			}
 		}
-		w.WriteString(part)
+		if _, err := w.WriteString(part); err != nil {
+			return err
+		}
 	}
-	return nil
+	return w.Flush()
 }

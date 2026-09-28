@@ -162,3 +162,19 @@ func TestParityWithRustCore(t *testing.T) {
 		}
 	}
 }
+
+// 공백 없는 긴 강조를 글자로 끊어도 조각이 한도를 지킨다 — 러스트 쪽 같은 이름의 테스트.
+func TestLongSpaceFreeSpanIsCutWithinTheLimit(t *testing.T) {
+	input := "**" + strings.Repeat("a", 20000) + "**"
+	for _, ch := range Channels() {
+		parts := Render(input, ch)
+		if len(parts) < 2 {
+			t.Errorf("%s: 나뉘어야 한다", ch.Name())
+		}
+		for _, p := range parts {
+			if n := utf8.RuneCountInString(p); n > ch.Limit() {
+				t.Errorf("%s: %d자 조각 — 한도 %d", ch.Name(), n, ch.Limit())
+			}
+		}
+	}
+}

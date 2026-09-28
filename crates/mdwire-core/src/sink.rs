@@ -149,12 +149,26 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 // 쏟아진다. 지금 열려 있는 것 기준으로 최대한 담고, 닫을 자리는 `cut`
                 // 이 마크업을 버려서 만든다.
                 let room = if budget == 0 { limit.saturating_sub(markup.reserve(v)) } else { budget };
-                let take = room.saturating_sub(len).max(1);
-                let end = rest
-                    .char_indices()
-                    .nth(take)
-                    .map_or(rest.len(), |(i, _)| i);
-                markup.feed(&rest[..end], v);
+                let mut take = room.saturating_sub(len).max(1);
+                // **예산은 실제로 끊는 자리의 마크업으로 다시 잰다.** 위의 `budget` 은 덩어리
+                // 전체를 먹인 뒤의 것이라, `**` + 공백 없는 2만 자 + `**` 처럼 닫는 마커가 덩어리
+                // 끝에 있으면 "열린 것 없음"으로 잰다. 그러면 한도까지 채운 뒤 `cut` 이 닫는
+                // 마커를 붙여 한도를 넘긴다(4,100자 텔레그램 조각). 자른 앞부분만 먹여 보고,
+                // 닫고 다시 여는 몫이 안 들어가면 그만큼 덜 담는다.
+                let (end, probe) = loop {
+                    let end = rest.char_indices().nth(take).map_or(rest.len(), |(i, _)| i);
+                    let mut probe = markup.clone();
+                    probe.feed(&rest[..end], v);
+                    let reserve = probe.reserve(v);
+                    let need = len + take + reserve;
+                    // 다시 열 수 없을 만큼 큰 마크업(`budget == 0`, 한도만 한 여는 태그)은 줄여
+                    // 봐야 소용없다 — `cut` 이 버린다. 한 글자씩 조각만 쏟아지니 그대로 간다.
+                    if need <= limit || take == 1 || budget == 0 || reserve >= limit {
+                        break (end, probe);
+                    }
+                    take -= (need - limit).min(take - 1);
+                };
+                markup = probe;
                 len += push_after_reopen(&mut cur, &rest[..end], &mut markup);
                 rest = &rest[end..];
                 if !rest.is_empty() {

@@ -718,3 +718,18 @@ fn slack_parts_close_and_reopen_spans() {
         }
     }
 }
+
+/// **공백 없는 긴 강조를 글자로 끊어도 조각이 한도를 지킨다.** 닫는 마커가 덩어리 끝에
+/// 있으면 예산을 "열린 것 없음"으로 재서, 한도까지 채운 뒤 닫는 마커를 붙여 넘겼다.
+#[test]
+fn a_long_space_free_span_is_cut_within_the_limit() {
+    let input = format!("**{}**", "a".repeat(20_000));
+    for channel in Channel::all() {
+        let parts = render(&input, channel);
+        assert!(parts.len() > 1, "{}: 나뉘어야 한다", channel.name());
+        for p in &parts {
+            let n = p.chars().count();
+            assert!(n <= channel.limit(), "{}: {n}자 조각 — 한도 {}", channel.name(), channel.limit());
+        }
+    }
+}
