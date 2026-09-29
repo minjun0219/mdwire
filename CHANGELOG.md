@@ -2,10 +2,11 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
-## 미발행
+## 0.1.1 — 2026-09-29
 
 ### 새로 할 수 있는 것
 
+- append-only 계약 · 입력 방언 · 정규화 리포트 ([#27](https://github.com/minjun0219/mdwire/pull/27))
 - **go** — Go 이식 — 코퍼스와 러스트 대조를 통과한다 ([#25](https://github.com/minjun0219/mdwire/pull/25))
 - **wasm** — npm 패키지가 맨 Node 에서도 돌고 릴리스에 산출물이 붙는다 ([#20](https://github.com/minjun0219/mdwire/pull/20))
 
@@ -21,6 +22,10 @@
 ### 테스트
 
 - **harness** — 무작위 입력 퍼즈로 불변식을 지킨다 ([#24](https://github.com/minjun0219/mdwire/pull/24))
+
+### 유지
+
+- **release** — 버전 올리기를 release PR 로 자동화한다 ([#28](https://github.com/minjun0219/mdwire/pull/28))
 
 ## 0.1.0 — 2026-09-22
 
