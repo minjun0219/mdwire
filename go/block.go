@@ -99,8 +99,11 @@ type engine struct {
 	blank   bool
 	held    string
 	hasHeld bool
-	table   table
-	fence   fenceState
+	// hold 는 붙들어 둔 `[`·`<!--` 를 어디까지 훑었나다. safeCut 이 조각마다 처음부터 다시
+	// 훑지 않게 들고 있는다. 열린 줄 안에서만 뜻이 있다.
+	hold  holdMemo
+	table table
+	fence fenceState
 	// 조각이 `\r` 로 끝났다. 다음 조각이 `\n` 으로 시작하면 CRLF 라 버리고, 아니면 글자다.
 	// `\r` 를 줄에 먼저 넣으면 `---\r` 가 구분선이 아니라 문단이 된다 — 완성본은 `\r\n` 을 한
 	// 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면 다음 글자를 볼 때까지 들고 있어야 한다.
@@ -189,6 +192,8 @@ func (e *engine) progress(eol bool, s sink) {
 	}
 
 	if !e.lineOpen {
+		// 새 줄이다. 앞 줄에서 훑던 자리는 이 줄과 상관없다.
+		e.hold = holdMemo{}
 		// 표는 `|` 로 시작하는 줄에서만 시작한다. 붙드는 값이 그 줄 하나뿐이라 그렇다.
 		d := classify(e.pending, eol, true)
 		switch d.kind {
@@ -208,11 +213,12 @@ func (e *engine) progress(eol bool, s sink) {
 	if eol {
 		cut = trimEnd(e.pending)
 	} else {
-		cut = safeCut(e.pending)
+		cut = safeCut(e.pending, &e.hold)
 	}
 	if cut > 0 {
 		e.inline.render(e.pending[:cut], &e.out, e.v)
 		e.pending = append(e.pending[:0], e.pending[cut:]...)
+		e.hold.shift(cut)
 	}
 	if eol {
 		e.pending = e.pending[:0]
@@ -644,25 +650,37 @@ func classify(p []rune, eol, canTable bool) decision {
 
 // safeCut 은 아직 내보내면 안 되는 꼬리를 빼고 남은 길이다. 마커는 다음 글자를 봐야 열기/닫기가
 // 갈린다. 줄 끝 공백은 지워야 한다. 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
-func safeCut(p []rune) int {
+//
+// 붙든 구문은 이어서 훑는다. 닫히지 않은 `[`·`<!--` 는 줄 끝까지 붙들 수 있는데, 조각마다
+// 처음부터 다시 훑으면 한 줄 안에서 O(n²) 이 된다. 그 줄 안에서 pending 은 뒤에 붙기만 하고
+// 앞은 cut 만큼 빠지므로, 훑던 자리를 holdMemo 에 두고 새로 온 꼬리만 본다.
+func safeCut(p []rune, memo *holdMemo) int {
 	k := len(p)
 	// 링크는 `[` 부터 `](…)` 의 `)` 까지 통째로 봐야 한다. 텍스트 안의 `)` 로 놓으면 안 된다 —
 	// `[Show GN (MAYDAY)](url)` 이 64바이트 조각으로 들어올 때 `(MAYDAY)` 의 `)` 에서 놓아
 	// 링크가 글자로 나갔다(실제 문서 대조에서 나왔다).
 	// 앞에서부터 본다. 마지막 `[` 만 보면 `[a](1.[b](url` 처럼 주소 안에 링크가 겹칠 때 바깥
 	// `[` 가 먼저 글자로 나간다 — 완성본은 바깥을 링크로 읽는다(퍼즈에서 나왔다).
-	for i := 0; i < k; {
+	// 앞 조각에서 여기까지는 안 닫힌 `[` 가 없었다 — 거기서 잇는다.
+	i := min(memo.scanned, k)
+	for i < k {
 		if p[i] != '[' {
 			i++
 			continue
 		}
-		end, ok := linkEnd(p[i:k])
+		from := linkScan{phase: scanBracket, j: 1}
+		if memo.hasLink && memo.linkAt == i {
+			from = memo.link
+		}
+		end, scan, ok := linkEndFrom(p[i:k], from)
 		if !ok {
+			memo.hasLink, memo.linkAt, memo.link = true, i, scan
 			k = i
 			break
 		}
 		i += end
 	}
+	memo.scanned = i
 	// 태그 모양의 `<` 도 붙든다. `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로 나가 버린다.
 	// `>` 가 오거나 태그라기엔 길어지면 놓는다. 다음 글자가 아직 안 왔으면 일단 붙든다.
 	// 주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다. 긴 주석을 80자에서 놓으면 `<` 가 글자로
@@ -670,12 +688,20 @@ func safeCut(p []rune) int {
 	// 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
 	for i := 0; i+4 <= k; {
 		if startsWith(p[i:], "<!--") {
-			end := findSeq(p[i+4:k], "-->")
+			body := p[i+4 : k]
+			// 앞 조각에서 `-->` 가 없던 데까지는 다시 안 본다.
+			from := 0
+			if memo.hasComment && memo.commentAt == i {
+				from = min(memo.commentFrom, len(body))
+			}
+			end := findSeq(body[from:], "-->")
 			if end < 0 {
+				// `--` 가 끝에 걸쳤을 수 있다 — 두 글자 앞에서 이어 본다.
+				memo.hasComment, memo.commentAt, memo.commentFrom = true, i, max(len(body)-2, 0)
 				k = i
 				break
 			}
-			i += 4 + end + 3
+			i += 4 + from + end + 3
 		} else {
 			i++
 		}
@@ -720,33 +746,79 @@ func safeCut(p []rune) int {
 	return k
 }
 
-// linkEnd 는 `[` 로 시작하는 조각이 링크로 끝나는 자리(`)` 다음)다. 링크가 아니면(`]` 뒤가
-// `(` 가 아니면) `]` 다음이고, 아직 못 정하면 ok 가 false — 붙든다. `]` 는 중첩 대괄호를
-// 건너뛰어 찾는다 — 인라인 파서의 findLink 와 같은 규칙이다.
-func linkEnd(p []rune) (int, bool) {
-	j := 1
-	depth := 0
-	for j < len(p) {
-		if p[j] == '[' {
-			depth++
-		} else if p[j] == ']' {
-			if depth == 0 {
-				break
+// holdMemo 는 붙든 구문을 어디까지 훑었나다. 자리는 pending 기준이고, 앞이 cut 만큼 빠지면 당긴다.
+type holdMemo struct {
+	scanned     int // 여기 앞에는 안 닫힌 `[` 가 없다
+	hasLink     bool
+	linkAt      int // 안 닫힌 `[` 의 자리
+	link        linkScan
+	hasComment  bool
+	commentAt   int // 안 닫힌 `<!--` 의 자리
+	commentFrom int // 그 뒤에서 `-->` 를 이어 찾을 자리
+}
+
+// shift 는 앞 n 글자가 나갔을 때 자리를 당긴다. 그 안에 있던 구문은 끝난 것이라 잊는다.
+func (m *holdMemo) shift(n int) {
+	m.scanned = max(m.scanned-n, 0)
+	if m.hasLink {
+		m.linkAt -= n
+		m.hasLink = m.linkAt >= 0
+	}
+	if m.hasComment {
+		m.commentAt -= n
+		m.hasComment = m.commentAt >= 0
+	}
+}
+
+const (
+	scanBracket = iota // 짝이 되는 `]` 를 찾는 중
+	scanClosed         // `]` 는 찾았고 다음 글자를 기다린다
+	scanParen          // `](` 뒤에서 `)` 를 찾는 중
+)
+
+// linkScan 은 linkEndFrom 이 멈춘 자리다. j 는 `[` 로부터의 거리다.
+type linkScan struct {
+	phase, j, depth int
+}
+
+// linkEndFrom 은 `[` 로 시작하는 조각이 링크로 끝나는 자리(`)` 다음)다. 링크가 아니면(`]` 뒤가
+// `(` 가 아니면) `]` 다음이고, 아직 못 정하면 ok 가 false 와 멈춘 자리 — 붙들고, 다음 조각에서
+// 거기서 잇는다. `]` 는 중첩 대괄호를 건너뛰어 찾는다 — 인라인 파서의 findLink 와 같은 규칙이다.
+func linkEndFrom(p []rune, s linkScan) (int, linkScan, bool) {
+	for {
+		switch s.phase {
+		case scanBracket:
+			for {
+				if s.j >= len(p) {
+					return 0, s, false
+				}
+				if p[s.j] == '[' {
+					s.depth++
+				} else if p[s.j] == ']' {
+					if s.depth == 0 {
+						break
+					}
+					s.depth--
+				}
+				s.j++
 			}
-			depth--
+			s.phase = scanClosed
+		case scanClosed:
+			if s.j+1 >= len(p) {
+				return 0, s, false
+			}
+			if p[s.j+1] != '(' {
+				return s.j + 1, s, true
+			}
+			s.phase, s.j = scanParen, s.j+2
+		default:
+			if c := indexRune(p[min(s.j, len(p)):], ')'); c >= 0 {
+				return s.j + c + 1, s, true
+			}
+			s.j = len(p)
+			return 0, s, false
 		}
-		j++
 	}
-	if j+1 >= len(p) {
-		return 0, false
-	}
-	if p[j+1] != '(' {
-		return j + 1, true
-	}
-	if c := indexRune(p[j+2:], ')'); c >= 0 {
-		return j + 2 + c + 1, true
-	}
-	return 0, false
 }
 
 // prefixMatch 는 chars 가 s 로 시작하는가다. chars 가 더 짧으면 s 의 앞부분이어야 한다 —

@@ -56,6 +56,9 @@ pub(crate) struct Engine {
     /// 빈 줄이 하나 밀려 있는가. 여러 개가 와도 하나로 접는다(정돈).
     blank: bool,
     held: Option<String>,
+    /// 붙들어 둔 `[`·`<!--` 를 어디까지 훑었나. [`safe_cut`] 이 조각마다 처음부터 다시 훑지
+    /// 않게 들고 있는다. 열린 줄 안에서만 뜻이 있다.
+    hold: HoldMemo,
     /// 줄 전체가 필요한 경로에서만 쓰는 버퍼. 재사용해서 줄마다 할당하지 않는다.
     scratch: String,
     table: Table,
@@ -96,6 +99,7 @@ impl Engine {
             wrote: false,
             blank: false,
             held: None,
+            hold: HoldMemo::default(),
             scratch: String::new(),
             table: Table::default(),
             fence: FenceState::default(),
@@ -177,6 +181,8 @@ impl Engine {
         }
 
         if !self.line_open {
+            // 새 줄이다. 앞 줄에서 훑던 자리는 이 줄과 상관없다.
+            self.hold = HoldMemo::default();
             // 표는 **`|` 로 시작하는 줄에서만** 시작한다. 앞 블록이 무엇이든 상관없다.
             //
             // 붙드는 값이 그 줄 하나뿐이라 그렇다 — 구분선이 따라오는지 보려면 한 줄을
@@ -197,10 +203,11 @@ impl Engine {
         }
 
         // 접두사 뒤부터는 인라인이다. 끝에 걸친 마커·공백만 남기고 흘려보낸다.
-        let cut = if eol { trim_end(&self.pending) } else { safe_cut(&self.pending) };
+        let cut = if eol { trim_end(&self.pending) } else { safe_cut(&self.pending, &mut self.hold) };
         if cut > 0 {
             self.inline.render(&self.pending[..cut], &mut self.out, &self.v);
             self.pending.drain(..cut);
+            self.hold.shift(cut);
         }
         if eol {
             self.pending.clear();
@@ -679,27 +686,39 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
 ///
 /// 마커는 **다음 글자를 봐야 열기/닫기가 갈린다**. 줄 끝 공백은 지워야 한다.
 /// 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
-fn safe_cut(p: &[char]) -> usize {
+///
+/// **붙든 구문은 이어서 훑는다.** 닫히지 않은 `[`·`<!--` 는 줄 끝까지 붙들 수 있는데, 조각마다
+/// 처음부터 다시 훑으면 한 줄 안에서 O(n²) 이 된다 — 한 글자씩 흘린 4만 자에서 수백 ms 였다.
+/// 붙든 그 줄 안에서 `pending` 은 뒤에 붙기만 하고 앞은 `cut` 만큼 빠지므로, 훑던 자리를
+/// [`HoldMemo`] 에 두고 새로 온 꼬리만 본다.
+fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
     let mut k = p.len();
     // 링크는 `[` 부터 `](…)` 의 `)` 까지 통째로 봐야 한다. **텍스트 안의 `)` 로 놓으면 안
     // 된다** — `[Show GN (MAYDAY)](url)` 이 64바이트 조각으로 들어올 때 `(MAYDAY)` 의 `)` 에서
     // 놓아 링크가 글자로 나갔다(Go 이식과 실제 문서를 대조하다 나왔다).
     // **앞에서부터 본다.** 마지막 `[` 만 보면 `[a](1.[b](url` 처럼 주소 안에 링크가 겹칠 때
     // 바깥 `[` 가 먼저 글자로 나간다 — 완성본은 바깥을 링크로 읽는다(퍼즈에서 나왔다).
-    let mut i = 0;
+    // 앞 조각에서 여기까지는 안 닫힌 `[` 가 없었다 — 거기서 잇는다.
+    let mut i = memo.scanned.min(k);
     while i < k {
         if p[i] != '[' {
             i += 1;
             continue;
         }
-        match link_end(&p[i..k]) {
-            Some(end) => i += end,
-            None => {
+        let from = match memo.link {
+            Some((at, scan)) if at == i => scan,
+            _ => LinkScan::Bracket { j: 1, depth: 0 },
+        };
+        match link_end_from(&p[i..k], from) {
+            Ok(end) => i += end,
+            Err(scan) => {
+                memo.link = Some((i, scan));
                 k = i;
                 break;
             }
         }
     }
+    memo.scanned = i;
     // **태그 모양의 `<` 도 붙든다.** `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로
     // 나가 버린다. `>` 가 오거나 태그라기엔 길어지면 놓는다 — `1 < 2` 처럼 뒤가
     // 공백이면 애초에 안 붙든다. 다음 글자가 아직 안 왔으면(`<` 가 마지막) 일단 붙든다.
@@ -709,9 +728,17 @@ fn safe_cut(p: &[char]) -> usize {
     let mut i = 0;
     while i + 4 <= k {
         if p[i..].starts_with(&['<', '!', '-', '-']) {
-            match p[i + 4..k].windows(3).position(|w| w == ['-', '-', '>']) {
-                Some(end) => i += 4 + end + 3,
+            let body = &p[i + 4..k];
+            // 앞 조각에서 `-->` 가 없던 데까지는 다시 안 본다.
+            let from = match memo.comment {
+                Some((at, from)) if at == i => from.min(body.len()),
+                _ => 0,
+            };
+            match body[from..].windows(3).position(|w| w == ['-', '-', '>']) {
+                Some(end) => i += 4 + from + end + 3,
                 None => {
+                    // `--` 가 끝에 걸쳤을 수 있다 — 두 글자 앞에서 이어 본다.
+                    memo.comment = Some((i, body.len().saturating_sub(2)));
                     k = i;
                     break;
                 }
@@ -756,28 +783,68 @@ fn safe_cut(p: &[char]) -> usize {
     k
 }
 
+/// 붙든 구문을 어디까지 훑었나. 자리는 `pending` 기준이고, 앞이 `cut` 만큼 빠지면 당긴다.
+#[derive(Default, Clone, Copy)]
+pub(crate) struct HoldMemo {
+    /// 여기 앞에는 안 닫힌 `[` 가 없다. 링크를 찾는 훑기가 여기서 잇는다.
+    scanned: usize,
+    /// 안 닫힌 `[` 의 자리와 그 안에서 훑던 상태.
+    link: Option<(usize, LinkScan)>,
+    /// 안 닫힌 `<!--` 의 자리와, 그 뒤에서 `-->` 를 이어 찾을 자리.
+    comment: Option<(usize, usize)>,
+}
+
+impl HoldMemo {
+    /// 앞 `n` 글자가 나갔다. 그 안에 있던 구문은 끝난 것이라 잊는다.
+    fn shift(&mut self, n: usize) {
+        self.scanned = self.scanned.saturating_sub(n);
+        self.link = self.link.and_then(|(at, s)| at.checked_sub(n).map(|at| (at, s)));
+        self.comment = self.comment.and_then(|(at, f)| at.checked_sub(n).map(|at| (at, f)));
+    }
+}
+
+/// [`link_end_from`] 이 멈춘 자리. 자리는 `[` 로부터의 거리다.
+#[derive(Clone, Copy)]
+enum LinkScan {
+    /// 짝이 되는 `]` 를 찾는 중. `j` 부터 본다.
+    Bracket { j: usize, depth: usize },
+    /// `]` 는 찾았고 다음 글자를 기다린다.
+    Closed { at: usize },
+    /// `](` 뒤에서 `)` 를 찾는 중.
+    Paren { j: usize },
+}
+
 /// `[` 로 시작하는 조각이 링크로 끝나는 자리(`)` 다음). 링크가 아니면(`]` 뒤가 `(` 가 아니면)
-/// `]` 다음이고, 아직 못 정하면 `None` — 붙든다. `]` 는 중첩 대괄호를 건너뛰어 찾는다 —
-/// 인라인 파서의 `find_link` 와 같은 규칙이다.
-fn link_end(p: &[char]) -> Option<usize> {
-    let mut j = 1;
-    let mut depth = 0usize;
-    while j < p.len() {
-        match p[j] {
-            '[' => depth += 1,
-            ']' if depth == 0 => break,
-            ']' => depth -= 1,
-            _ => {}
+/// `]` 다음이고, 아직 못 정하면 멈춘 자리를 `Err` 로 돌려준다 — 붙들고, 다음 조각에서 거기서
+/// 잇는다. `]` 는 중첩 대괄호를 건너뛰어 찾는다 — 인라인 파서의 `find_link` 와 같은 규칙이다.
+fn link_end_from(p: &[char], mut scan: LinkScan) -> Result<usize, LinkScan> {
+    loop {
+        scan = match scan {
+            LinkScan::Bracket { mut j, mut depth } => {
+                loop {
+                    match p.get(j) {
+                        None => return Err(LinkScan::Bracket { j, depth }),
+                        Some('[') => depth += 1,
+                        Some(']') if depth == 0 => break,
+                        Some(']') => depth -= 1,
+                        Some(_) => {}
+                    }
+                    j += 1;
+                }
+                LinkScan::Closed { at: j }
+            }
+            LinkScan::Closed { at } => match p.get(at + 1) {
+                None => return Err(LinkScan::Closed { at }),
+                Some('(') => LinkScan::Paren { j: at + 2 },
+                Some(_) => return Ok(at + 1),
+            },
+            LinkScan::Paren { j } => {
+                return match p[j.min(p.len())..].iter().position(|&c| c == ')') {
+                    Some(c) => Ok(j + c + 1),
+                    None => Err(LinkScan::Paren { j: p.len() }),
+                };
+            }
         }
-        j += 1;
-    }
-    if j >= p.len() {
-        return None;
-    }
-    match p.get(j + 1) {
-        Some('(') => p[j + 2..].iter().position(|&c| c == ')').map(|c| j + 2 + c + 1),
-        Some(_) => Some(j + 1),
-        None => None,
     }
 }
 
