@@ -25,9 +25,26 @@
 다른 곳에서 이어야 하거나, 되돌릴 단위를 하나로 묶고 싶을 때. `main`에 머지 커밋을
 만들지 않는다.
 
-게이트는 `cargo test --workspace`와 `cargo clippy`, 그리고 `go/`에서 `go test ./...`와
-`go vet ./...`. 통과 전에 커밋하지 않는다. Go 이식의 기대값은 Rust CLI에서 뽑는다
-(`go/testdata/regen.sh`) — 코어 동작을 바꾸면 다시 뽑는다.
+게이트는 CI(`ci.yml`)와 같다. 통과 전에 커밋하지 않는다.
+
+```sh
+./scripts/readme-sync.sh
+cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings
+cargo build -p mdwire-wasm --target wasm32-unknown-unknown
+cargo build -p mdwire-cli && (cd go && test -z "$(gofmt -l .)" && go vet ./... \
+  && MDWIRE_RUST=../target/debug/mdwire go test ./...)   # 없으면 러스트 대조가 조용히 빠진다
+./scripts/build-npm.sh && CI=1 ./scripts/smoke.sh          # Node · Bun · TypeScript
+```
+
+Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — 코어 동작을 바꾸면 다시 뽑는다.
+
+## 지도
+
+- `crates/mdwire-core` — 코어(std만, lib 이름 `mdwire`). crates.io 게시
+- `crates/mdwire-cli` — `mdwire` CLI. crates.io 게시
+- `crates/mdwire-wasm` — npm `@minjun0219/mdwire`의 바인딩(`scripts/build-npm.sh`)
+- `crates/mdwire-harness` — 코퍼스 대조·불변식 채점(`mdwire-check`), `crates/mdwire-bench` — 할당·처리량
+- `go/` — Go 이식, `corpus/` — 정본 케이스
 
 ## 릴리스
 
