@@ -2,6 +2,12 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.3 — 2026-09-29
+
+### 유지
+
+- **release** — crates.io 와 npm 에 Trusted Publishing 으로 올린다 ([#39](https://github.com/minjun0219/mdwire/pull/39))
+
 ## 0.1.2 — 2026-09-29
 
 ### 새로 할 수 있는 것

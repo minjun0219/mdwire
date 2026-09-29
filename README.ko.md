@@ -9,7 +9,7 @@ LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보낸다.
 CommonMark 라고 가정하고 한 번에 한 채널만 본다. 에이전트 출력에는 두 가정이 다 맞지
 않는다.
 
-**상태: v0.1.2.** 정규화·렌더·분할·스트리밍이 세 채널 — Telegram HTML, Slack
+**상태: v0.1.3.** 정규화·렌더·분할·스트리밍이 세 채널 — Telegram HTML, Slack
 `markdown_text`, 평문 — 에서 돈다. Rust 코어, CLI, npm 패키지(WASM), Go 이식이 있다.
 v0.1 에 든 것과 일부러 미룬 것은 `SPEC.md` 에 있다.
 
@@ -118,11 +118,11 @@ await append(t.finish());
 
 ```sh
 # npm 패키지 (번들러에서도, 맨 Node 에서도 돈다)
-npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.2/mdwire-0.1.2.tgz
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.3/mdwire-0.1.3.tgz
 
 # CLI 바이너리 — macOS(Apple silicon) 또는 Linux(x86_64)
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.2/mdwire-v0.1.2-aarch64-apple-darwin.tar.gz | tar xz
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.2/mdwire-v0.1.2-x86_64-unknown-linux-gnu.tar.gz | tar xz
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.3/mdwire-v0.1.3-aarch64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.3/mdwire-v0.1.3-x86_64-unknown-linux-gnu.tar.gz | tar xz
 ```
 
 릴리스 본문에 산출물마다 SHA-256 이 있다 — URL 로 설치할 때 그 값으로 고정한다.
