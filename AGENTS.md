@@ -25,3 +25,10 @@
 게이트는 `cargo test --workspace`와 `cargo clippy`, 그리고 `go/`에서 `go test ./...`와
 `go vet ./...`. 통과 전에 커밋하지 않는다. Go 이식의 기대값은 Rust CLI에서 뽑는다
 (`go/testdata/regen.sh`) — 코어 동작을 바꾸면 다시 뽑는다.
+
+## 릴리스
+
+버전·`CHANGELOG.md`·README 설치 줄은 손으로 고치지 않는다. main 에 커밋이 들어오면
+`release-pr.yml` 이 `release: X.Y.Z` PR 을 열어 두고, 그걸 squash 로 머지하는 것이
+릴리스다 — `vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
+자동으로 오른다. 다른 버전은 main 의 `[workspace.package] version` 으로 정한다.

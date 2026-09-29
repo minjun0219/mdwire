@@ -2,11 +2,25 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
-## 0.1.1 — 2026-09-22
+## 미발행
 
 ### 새로 할 수 있는 것
 
+- **go** — Go 이식 — 코퍼스와 러스트 대조를 통과한다 ([#25](https://github.com/minjun0219/mdwire/pull/25))
 - **wasm** — npm 패키지가 맨 Node 에서도 돌고 릴리스에 산출물이 붙는다 ([#20](https://github.com/minjun0219/mdwire/pull/20))
+
+### 고친 것
+
+- **core** — 추측으로 연 마커를 닫지 않는다 ([#23](https://github.com/minjun0219/mdwire/pull/23))
+- **core** — 슬랙·텔레그램 실측에 맞춰 범위를 다시 잡는다 ([#22](https://github.com/minjun0219/mdwire/pull/22))
+
+### 문서
+
+- **design** — 다른 변환기를 같은 척도로 나란히 잰다 ([#26](https://github.com/minjun0219/mdwire/pull/26))
+
+### 테스트
+
+- **harness** — 무작위 입력 퍼즈로 불변식을 지킨다 ([#24](https://github.com/minjun0219/mdwire/pull/24))
 
 ## 0.1.0 — 2026-09-22
 
