@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"unicode/utf8"
 
 	mdwire "github.com/minjun0219/mdwire/go"
@@ -203,6 +204,9 @@ func batchJSONL(ch mdwire.Channel, opts mdwire.Options, in io.Reader, w *bufio.W
 // readDoc 은 한 줄을 (id, text) 로 읽는다. id 는 받은 글자 그대로다 — 다시 직렬화하면
 // 구현마다 이스케이프가 달라진다. 에러 문구는 러스트 CLI 와 같다.
 func readDoc(line []byte) (id, text, msg string) {
+	if hasLoneSurrogate(line) {
+		return "", "", "짝 없는 UTF-16 서로게이트가 있다"
+	}
 	// encoding/json 은 잘못된 UTF-8 을 U+FFFD 로 바꿔 받는다. 러스트는 거절한다 — 같게 거절한다.
 	var fields map[string]json.RawMessage
 	if !utf8.Valid(line) || json.Unmarshal(line, &fields) != nil || fields == nil {
@@ -222,4 +226,44 @@ func readDoc(line []byte) (id, text, msg string) {
 		id = string(raw)
 	}
 	return id, text, ""
+}
+
+// hasLoneSurrogate 는 줄 어디엔가 짝 없는 서로게이트 이스케이프(\ud800 홀로)가 있는지 본다.
+// encoding/json 은 이걸 U+FFFD 로 바꿔 받고 serde_json 은 자리에 따라 거부한다 — 러스트 CLI 와
+// 같은 규칙 하나(줄 전체 거부)로 앞에서 거른다. 역슬래시는 JSON 문자열 안에만 올 수 있다.
+func hasLoneSurrogate(line []byte) bool {
+	hex := func(at int) (uint64, bool) {
+		if at+4 > len(line) {
+			return 0, false
+		}
+		v, err := strconv.ParseUint(string(line[at:at+4]), 16, 32)
+		return v, err == nil
+	}
+	for i := 0; i < len(line); {
+		if line[i] != '\\' {
+			i++
+			continue
+		}
+		if i+1 >= len(line) || line[i+1] != 'u' {
+			i += 2
+			continue
+		}
+		v, ok := hex(i + 2)
+		switch {
+		case ok && v >= 0xD800 && v <= 0xDBFF:
+			lo, ok := uint64(0), false
+			if i+7 < len(line) && line[i+6] == '\\' && line[i+7] == 'u' {
+				lo, ok = hex(i + 8)
+			}
+			if !ok || lo < 0xDC00 || lo > 0xDFFF {
+				return true
+			}
+			i += 12
+		case ok && v >= 0xDC00 && v <= 0xDFFF:
+			return true
+		default:
+			i += 6
+		}
+	}
+	return false
 }

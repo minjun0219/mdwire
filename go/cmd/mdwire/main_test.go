@@ -38,13 +38,18 @@ var batchInput = strings.Join([]string{
 	" ",
 	"{\"text\":\"\xff\"}",
 	`{"id":-1.5e3,"text":"앞 ` + "`" + ` 뒤"}`,
+	"\v",
+	`{"text":"**\ud800"}`,
+	`{"id":"\udc00","text":"x"}`,
+	`{"\ud800":1,"text":"x"}`,
+	`{"text":"\ud83d\ude00 \\ud800 ok"}`,
 }, "\n")
 
 func TestBatchKeepsGoingAndCountsFailures(t *testing.T) {
 	var out, errOut strings.Builder
 	err := runWith([]string{"--channel", "slack-markdown", "--from", "slack-mrkdwn", "--batch", "jsonl"}, strings.NewReader(batchInput), &out, &errOut)
-	if err == nil || err.Error() != "7줄을 읽지 못했다" {
-		t.Fatalf("에러가 %v — 못 읽은 7줄을 세야 한다\n%s", err, out.String())
+	if err == nil || err.Error() != "11줄을 읽지 못했다" {
+		t.Fatalf("에러가 %v — 못 읽은 11줄을 세야 한다\n%s", err, out.String())
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
 	if got := lines[0]; got != `{"line":1,"id":"a\"1<&>","closedEmphasis":0,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0}` {

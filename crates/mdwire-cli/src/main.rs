@@ -186,6 +186,9 @@ fn batch_jsonl(channel: Channel, options: Options, input: impl BufRead, out: &mu
 /// 한 줄을 `(id, text)` 로 읽는다. `id` 는 받은 글자 그대로 — 다시 직렬화하면 구현마다
 /// 이스케이프가 달라진다. 에러 문구는 파서의 것이 아니라 이쪽 것이다 — Go 판과 같게.
 fn read_doc(line: &[u8]) -> Result<(Option<String>, String), &'static str> {
+    if has_lone_surrogate(line) {
+        return Err("짝 없는 UTF-16 서로게이트가 있다");
+    }
     let fields: HashMap<String, Box<RawValue>> =
         serde_json::from_slice(line).map_err(|_| "JSON 객체가 아니다")?;
     let text = fields.get("text").ok_or("text 가 없다")?;
@@ -247,6 +250,42 @@ fn stream_stdin(channel: Channel, options: Options, out: &mut impl Write) -> io:
     Ok(streamer.repairs())
 }
 
+/// 줄 어디엔가 짝 없는 서로게이트 이스케이프(`\ud800` 홀로)가 있는가.
+///
+/// **줄 전체를 거부하는 규칙 하나로 둔다.** serde_json 은 문자열로 푸는 자리(키·`text`)에서만
+/// 거부하고 그냥 건너뛰는 값(`id`·모르는 필드)에서는 받는다. Go 의 encoding/json 은 어디서든
+/// U+FFFD 로 바꿔 받는다. 파서마다 다른 자리를 맞추느니 앞에서 한 번 거른다. 역슬래시는
+/// JSON 에서 문자열 안에만 올 수 있으니 문자열 경계를 따라가지 않아도 된다.
+fn has_lone_surrogate(line: &[u8]) -> bool {
+    let hex = |at: usize| -> Option<u32> {
+        let s = std::str::from_utf8(line.get(at..at + 4)?).ok()?;
+        u32::from_str_radix(s, 16).ok()
+    };
+    let mut i = 0;
+    while i < line.len() {
+        if line[i] != b'\\' {
+            i += 1;
+            continue;
+        }
+        if line.get(i + 1) != Some(&b'u') {
+            i += 2;
+            continue;
+        }
+        match hex(i + 2) {
+            Some(0xD800..=0xDBFF) => {
+                let low = (line.get(i + 6) == Some(&b'\\') && line.get(i + 7) == Some(&b'u')).then(|| hex(i + 8)).flatten();
+                if !matches!(low, Some(0xDC00..=0xDFFF)) {
+                    return true;
+                }
+                i += 12;
+            }
+            Some(0xDC00..=0xDFFF) => return true,
+            _ => i += 6,
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,5 +320,16 @@ mod tests {
         assert_eq!(lines[2], "{\"line\":3,\"error\":\"text 는 문자열이어야 한다\"}");
         assert_eq!(lines[3], "{\"line\":4,\"error\":\"text 가 없다\"}");
         assert!(lines[4].starts_with("{\"line\":5,\"closedEmphasis\":0"), "{}", lines[4]);
+    }
+
+    /// 짝 없는 서로게이트는 자리와 상관없이 줄을 거부한다. 짝이 맞으면(이모지) 받는다.
+    #[test]
+    fn lone_surrogates_are_rejected_anywhere() {
+        for line in [r#"{"text":"\ud800"}"#, r#"{"id":"\udc00","text":"x"}"#, r#"{"a":"\ud800\u0041","text":"x"}"#] {
+            assert!(has_lone_surrogate(line.as_bytes()), "{line}");
+        }
+        for line in [r#"{"text":"\ud83d\ude00"}"#, r#"{"text":"\\ud800"}"#, r#"{"text":"\u0041"}"#] {
+            assert!(!has_lone_surrogate(line.as_bytes()), "{line}");
+        }
     }
 }
