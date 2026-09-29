@@ -1,5 +1,7 @@
 # mdwire
 
+English | [한국어](README.ko.md)
+
 Send LLM-generated Markdown to chat channels without it breaking.
 
 Agents emit Markdown. Chat channels don't accept it — each has its own subset, its own
@@ -7,10 +9,10 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: v0.1 core works.** Normalizing, rendering, splitting and streaming are
-implemented for three channels — Telegram HTML, Slack `markdown_text`, and plain text —
-with a Rust core, a CLI, and WASM bindings. See `SPEC.md` for what is in v0.1 and what
-was deliberately deferred.
+**Status: v0.1.1.** Normalizing, rendering, splitting and streaming work for three
+channels — Telegram HTML, Slack `markdown_text`, and plain text — from a Rust core, a CLI,
+an npm package (WASM), and a Go port. See `SPEC.md` for what is in v0.1 and what was
+deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
 
 ## What it does
 
@@ -21,10 +23,15 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 1. **Normalize.** Agent output is not well-formed. Unpaired `**`, emphasis that spans a
    line break in wrapped prose, unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
-   tags; Slack `markdown_text` takes standard Markdown directly; legacy `mrkdwn` has no
-   headings and no tables.
+   tags; Slack `markdown_text` takes standard Markdown directly.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
+
+Two options around that pipeline. **Input dialect:** an agent that learned Slack from its
+docs writes legacy `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`); `--from slack-mrkdwn`
+reads it as such instead of as standard Markdown. **Repair report:** how many times the
+normalizer stepped in — unclosed emphasis, unclosed fence, unpaired backticks, dropped
+markers — so you can log how often the model breaks its own formatting.
 
 ## Use it
 
@@ -115,16 +122,19 @@ Every release carries its own artifacts — no registry needed:
 # npm package (works under a bundler and in plain Node)
 npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-0.1.1.tgz
 
-# CLI binary
+# CLI binary — macOS (Apple silicon) or Linux (x86_64)
 curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-v0.1.1-aarch64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-v0.1.1-x86_64-unknown-linux-gnu.tar.gz | tar xz
 ```
+
+The release notes list a SHA-256 for every artifact — pin to it when installing by URL.
 
 Or from source: `cargo install --path crates/mdwire-cli`.
 
 Go, as a library or a CLI with the same flags:
 
 ```sh
-go get github.com/minjun0219/mdwire/go
+go get github.com/minjun0219/mdwire/go@latest
 go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest
 ```
 
@@ -134,16 +144,19 @@ parts := mdwire.Render(input, mdwire.TelegramHTML)
 s := mdwire.NewStreamer(mdwire.SlackMarkdown)
 s.PushTo(chunk, &out)   // no allocation per chunk
 s.FinishTo(&out)
+
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+log.Printf("%+v", out.Repairs)
 ```
 
 ## Building
 
 ```sh
 ./scripts/build-npm.sh     # the npm package into pkg/ (needs `cargo install wasm-pack`)
-./scripts/smoke.sh         # install it into a scratch project and call it from Node + TypeScript
+./scripts/smoke.sh         # install it into a scratch project; call it from Node, Bun, and TypeScript
 ```
 
-The wasm bundle is 87 KB, release with `wasm-opt`. The package carries two builds and
+The wasm binary is 111 KB, release with `wasm-opt`. The package carries two builds and
 picks by `exports` condition: `node` gets a CommonJS build that loads the wasm from disk,
 everything else gets the ESM bundler build. The script writes the root `package.json`
 itself: the crate has to stay `mdwire-wasm` because the core's library is already named
@@ -163,6 +176,12 @@ another language can be measured with the same yardstick:
 mdwire-check --cmd "node convert.js --to {channel}"
 mdwire-check --scan ./some-directory-of-markdown   # invariants only, no expected output
 ```
+
+## Releasing
+
+Nobody edits the version by hand. After every merge to `main` a bot keeps a
+`release: X.Y.Z` pull request open; merging it tags `vX.Y.Z` and `go/vX.Y.Z` and publishes
+the release with its artifacts. See `AGENTS.md`.
 
 ## License
 
