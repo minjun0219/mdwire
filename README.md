@@ -116,7 +116,15 @@ Three gaps in what exists today, each measured rather than assumed:
 
 ## Installing
 
-Every release carries its own artifacts — no registry needed:
+From the registries:
+
+```sh
+npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun
+cargo add mdwire-core              # Rust library (`use mdwire::…`)
+cargo install mdwire-cli           # the `mdwire` CLI
+```
+
+Every release also carries its own artifacts, if you would rather not go through a registry:
 
 ```sh
 # npm package (works under a bundler and in plain Node)

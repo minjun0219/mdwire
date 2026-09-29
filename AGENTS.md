@@ -28,7 +28,7 @@
 
 ## 릴리스
 
-버전·`CHANGELOG.md`·README 설치 줄은 손으로 고치지 않는다. main 에 커밋이 들어오면
+버전·`CHANGELOG.md`·README 설치 줄의 버전(릴리스 URL · 상태 줄)은 손으로 고치지 않는다. main 에 커밋이 들어오면
 `release-pr.yml` 이 `release: X.Y.Z` PR 을 열어 두고, 그걸 squash 로 머지하는 것이
 릴리스다 — `vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
 자동으로 오른다. 다른 버전은 main 의 `[workspace.package] version` 으로 정한다.
