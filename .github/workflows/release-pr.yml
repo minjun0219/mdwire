@@ -104,12 +104,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
-            echo "::error::v$VERSION 태그가 이미 있다 — 버전을 올리지 않은 release 커밋이다."
-            exit 1
-          fi
+          head=$(git rev-parse HEAD)
           # Go 모듈은 하위 디렉터리(`go/`)에 있어서 태그에 경로 접두사가 붙어야 `go get` 이 찾는다.
-          git tag "v$VERSION"
-          git tag "go/v$VERSION"
-          git push origin "v$VERSION" "go/v$VERSION"
+          # **다시 돌려도 이어서 한다.** 태그를 민 뒤 디스패치가 실패했으면 태그는 이미 이
+          # 커밋에 있다 — 그건 건너뛰고 빠진 것만 찍은 뒤 다시 부른다. 다른 커밋에 같은 태그가
+          # 있으면 버전을 안 올린 release 커밋이라 멈춘다.
+          for tag in "v$VERSION" "go/v$VERSION"; do
+            at=$(git ls-remote --tags origin "refs/tags/$tag" | cut -f1)
+            if [ -z "$at" ]; then
+              git tag "$tag"
+              git push origin "$tag"
+            elif [ "$at" != "$head" ]; then
+              echo "::error::$tag 태그가 이미 다른 커밋($at)에 있다 — 버전을 올리지 않은 release 커밋이다."
+              exit 1
+            fi
+          done
           gh workflow run release.yml --ref "v$VERSION" -f tag="v$VERSION"
