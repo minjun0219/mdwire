@@ -94,7 +94,8 @@ jobs:
       - name: 패키지
         run: |
           ./scripts/build-npm.sh
-          npm install -g typescript
+          # ci.yml 과 같다 — 스모크는 CI 에서 Bun 이 없으면 실패한다. 올리는 패키지도 Bun 에서 본다.
+          npm install -g typescript bun
           ./scripts/smoke.sh
           npm pack ./pkg
           echo "ASSET=$(ls mdwire-*.tgz)" >> "$GITHUB_ENV"
