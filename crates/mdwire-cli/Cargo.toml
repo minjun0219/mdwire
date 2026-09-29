@@ -14,3 +14,6 @@ path = "src/main.rs"
 # `cargo package` 가 여기서 멈춘다.
 [dependencies]
 mdwire-core = { path = "../mdwire-core", version = "0.1.1" }
+# `--batch jsonl` 의 입력을 읽는다. 코어가 아니라 CLI 층이라 의존을 둔다(`AGENTS.md`).
+# `raw_value` — `id` 를 다시 직렬화하지 않고 받은 글자 그대로 돌려주려고 쓴다.
+serde_json = { version = "1", features = ["raw_value"] }
