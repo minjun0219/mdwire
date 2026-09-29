@@ -10,17 +10,31 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# **tarball 로 설치한다.** 디렉터리를 넘기면 npm 은 심볼릭 링크만 걸어서, `files` 에서
+# 빠진 파일(예: `.wasm`)이 있어도 여기서는 안 잡힌다. 릴리스에 붙는 것과 같은 tgz 를 쓴다.
+npm pack --silent --pack-destination "$TMP" "$ROOT/pkg" >/dev/null
+TGZ="$(ls "$TMP"/mdwire-*.tgz)"
+
 cd "$TMP"
 npm init -y >/dev/null
 # 첫 소비자와 같게 ESM 프로젝트로 둔다. 이게 없으면 `.ts` 자체가 CommonJS 로 읽힌다.
 npm pkg set type=module >/dev/null
-npm install --no-audit --no-fund "$ROOT/pkg" >/dev/null
+npm install --no-audit --no-fund "$TGZ" >/dev/null
 cp "$ROOT/scripts/smoke.mjs" "$ROOT/scripts/smoke.ts" .
 
 # 1. Node 에서 ESM 으로 import — `node` 조건이 CommonJS 빌드로 이어져야 한다.
 node smoke.mjs
 
-# 2. TypeScript — 첫 소비자의 설정(nodenext · verbatimModuleSyntax)으로 타입이 서는지.
+# 2. Bun — 같은 파일을 그대로. Bun 은 `node` 조건을 골라 CommonJS 빌드를 읽고, wasm 은
+#    `fs` 로 디스크에서 읽는다(2026-09-29 확인). 빌드 단계 없이 TypeScript ESM 으로 도는
+#    소비자가 이 경로로 붙는다.
+if command -v bun >/dev/null; then
+  bun smoke.mjs | sed 's/^/bun: /'
+else
+  echo "bun 이 없어 Bun 확인은 건너뛴다" >&2
+fi
+
+# 3. TypeScript — 첫 소비자의 설정(nodenext · verbatimModuleSyntax)으로 타입이 서는지.
 #    `types` 를 비워 둔다. 빈 프로젝트라 @types/node 가 없고, 여기서 보는 것은 우리
 #    `.d.ts` 가 그 설정에서 서느냐 하나뿐이다.
 if command -v tsc >/dev/null; then

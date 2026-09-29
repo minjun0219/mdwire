@@ -105,11 +105,31 @@ jobs:
 
   # 산출물 잡이 전부 성공했을 때만 공개한다. 이미 공개된 릴리스(workflow_dispatch 로
   # 다시 붙인 경우)에는 아무 일도 하지 않는다.
+  #
+  # **공개 전에 산출물의 SHA-256 을 본문 끝에 붙인다.** 레지스트리 없이 릴리스 자산을 URL 로
+  # 설치하는 쪽은 태그만으로는 무결성을 못 잡는다 — 해시로 고정한다. 이미 붙어 있으면
+  # (다시 돌린 경우) 다시 붙이지 않는다.
   publish:
     needs: [cli, npm]
     runs-on: ubuntu-latest
     steps:
-      - name: 릴리스 공개
+      - name: 해시를 본문에 붙이고 공개
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: |
+          R="--repo $GITHUB_REPOSITORY"
+          mkdir assets
+          gh release download "$TAG" $R --dir assets
+          gh release view "$TAG" $R --json body --jq .body > notes.md
+          if ! grep -q '^## SHA-256' notes.md; then
+            {
+              echo
+              echo '## SHA-256'
+              echo
+              echo '```'
+              (cd assets && sha256sum *)
+              echo '```'
+            } >> notes.md
+            gh release edit "$TAG" $R --notes-file notes.md
+          fi
+          gh release edit "$TAG" $R --draft=false
