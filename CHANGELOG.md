@@ -2,6 +2,16 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.6 — 2026-09-29
+
+### 고친 것
+
+- **release** — npm 11 을 전역 설치 대신 npx 로 쓴다 ([#46](https://github.com/minjun0219/mdwire/pull/46))
+
+### 성능
+
+- **core** — 붙든 `[`·`<!--` 를 조각마다 처음부터 다시 훑지 않는다 ([#45](https://github.com/minjun0219/mdwire/pull/45))
+
 ## 0.1.5 — 2026-09-29
 
 ### 문서
