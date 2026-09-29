@@ -52,7 +52,7 @@ s.finish_into(&mut out);       // 남은 것을 내보내고 열린 것을 닫�
 ```
 
 ```js
-import { render, renderWithReport, Streamer } from "mdwire";   // npm — 번들러, Node, Bun
+import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — 번들러, Node, Bun
 
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });

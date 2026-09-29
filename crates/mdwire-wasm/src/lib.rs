@@ -7,7 +7,7 @@
 //! 맡으므로 `init()` 을 부르지 않는다 — `web` 타깃으로 직접 쓸 때만 필요하다.
 //!
 //! ```js
-//! import { render, Streamer } from "mdwire";
+//! import { render, Streamer } from "@minjun0219/mdwire";
 //!
 //! const parts = render(markdown, "telegram-html");
 //! const { parts: p, repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });

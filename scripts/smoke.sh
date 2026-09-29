@@ -13,7 +13,7 @@ trap 'rm -rf "$TMP"' EXIT
 # **tarball 로 설치한다.** 디렉터리를 넘기면 npm 은 심볼릭 링크만 걸어서, `files` 에서
 # 빠진 파일(예: `.wasm`)이 있어도 여기서는 안 잡힌다. 릴리스에 붙는 것과 같은 tgz 를 쓴다.
 npm pack --silent --pack-destination "$TMP" "$ROOT/pkg" >/dev/null
-TGZ="$(ls "$TMP"/mdwire-*.tgz)"
+TGZ="$(ls "$TMP"/*.tgz)"
 
 cd "$TMP"
 npm init -y >/dev/null

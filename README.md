@@ -53,7 +53,7 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import { render, renderWithReport, Streamer } from "mdwire";   // npm — bundlers, Node, Bun
+import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — bundlers, Node, Bun
 
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });

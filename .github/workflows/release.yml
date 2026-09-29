@@ -1,5 +1,5 @@
 # 릴리스에 산출물을 붙이고 레지스트리에 올린다 — CLI 바이너리와 npm 패키지 tarball,
-# 그리고 crates.io(mdwire-core · mdwire-cli)와 npm(mdwire).
+# 그리고 crates.io(mdwire-core · mdwire-cli)와 npm(@minjun0219/mdwire).
 #
 # 레지스트리를 거치지 않고 릴리스에서 바로 가져다 쓸 수도 있다:
 #   npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-0.1.1.tgz
@@ -99,7 +99,10 @@ jobs:
           npm install -g typescript bun
           ./scripts/smoke.sh
           npm pack ./pkg
-          echo "ASSET=$(ls mdwire-*.tgz)" >> "$GITHUB_ENV"
+          # 스코프 패키지는 `minjun0219-mdwire-X.tgz` 로 나온다. 릴리스 자산 이름은 `mdwire-X.tgz` 로
+          # 둔다 — README 설치 줄·릴리스 스크립트의 치환·본문 해시가 이 이름을 본다.
+          mv minjun0219-mdwire-*.tgz "mdwire-${TAG#v}.tgz"
+          echo "ASSET=mdwire-${TAG#v}.tgz" >> "$GITHUB_ENV"
       - name: 릴리스에 붙이기
         env:
           GH_TOKEN: ${{ github.token }}
@@ -218,14 +221,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=${TAG#v}
-          code=$(curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/mdwire)
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/@minjun0219%2fmdwire)
           case "$code" in
             200) ;;
-            404) echo "::warning::mdwire 가 아직 npm 에 없다 — 첫 판은 토큰으로 손수 올린다. 건너뛴다."; exit 0 ;;
+            404) echo "::warning::@minjun0219/mdwire 가 아직 npm 에 없다 — 첫 판은 토큰으로 손수 올린다. 건너뛴다."; exit 0 ;;
             *) echo "::error::npm 레지스트리가 $code 를 줬다"; exit 1 ;;
           esac
-          if [ "$(npm view "mdwire@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
-            echo "mdwire $VERSION 은 이미 있다"
+          if [ "$(npm view "@minjun0219/mdwire@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "@minjun0219/mdwire $VERSION 은 이미 있다"
             exit 0
           fi
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "mdwire-$VERSION.tgz"
