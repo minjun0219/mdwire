@@ -233,5 +233,6 @@ jobs:
           fi
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "mdwire-$VERSION.tgz"
           # Trusted Publishing 은 npm 11.5.1 이상이 필요하다. 러너의 npm 은 10 이다(Node 는 22 라 된다).
-          npm install -g npm@^11.5.1
-          npm publish "mdwire-$VERSION.tgz"
+          # **전역으로 올리지 않는다** — `npm install -g npm` 은 러너의 /usr/local 에 man 페이지를
+          # 쓰다 EACCES 로 죽었다(v0.1.5). npx 로 그 판을 한 번 빌려 쓴다.
+          npx --yes npm@^11.5.1 publish "mdwire-$VERSION.tgz"
