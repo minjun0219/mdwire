@@ -103,12 +103,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" "$ASSET" --clobber
 
-  # 산출물 잡이 전부 성공했을 때만 공개한다. 이미 공개된 릴리스(workflow_dispatch 로
-  # 다시 붙인 경우)에는 아무 일도 하지 않는다.
+  # 산출물 잡이 전부 성공했을 때만 공개한다.
   #
   # **공개 전에 산출물의 SHA-256 을 본문 끝에 붙인다.** 레지스트리 없이 릴리스 자산을 URL 로
-  # 설치하는 쪽은 태그만으로는 무결성을 못 잡는다 — 해시로 고정한다. 이미 붙어 있으면
-  # (다시 돌린 경우) 다시 붙이지 않는다.
+  # 설치하는 쪽은 태그만으로는 무결성을 못 잡는다 — 해시로 고정한다. 이미 공개된 릴리스를
+  # workflow_dispatch 로 다시 붙인 경우에도 산출물이 `--clobber` 로 새로 올라가 해시가
+  # 바뀌므로, 이미 있는 절을 떼고 새로 붙인다.
   publish:
     needs: [cli, npm]
     runs-on: ubuntu-latest
@@ -120,16 +120,18 @@ jobs:
           R="--repo $GITHUB_REPOSITORY"
           mkdir assets
           gh release download "$TAG" $R --dir assets
-          gh release view "$TAG" $R --json body --jq .body > notes.md
-          if ! grep -q '^## SHA-256' notes.md; then
-            {
-              echo
-              echo '## SHA-256'
-              echo
-              echo '```'
-              (cd assets && sha256sum *)
-              echo '```'
-            } >> notes.md
-            gh release edit "$TAG" $R --notes-file notes.md
-          fi
+          # 해시 절은 늘 본문 끝에 붙으므로 그 제목부터 끝까지가 옛 절이다.
+          # 옛 절 앞의 빈 줄도 떼야 다시 돌릴 때마다 빈 줄이 쌓이지 않는다.
+          gh release view "$TAG" $R --json body --jq .body \
+            | awk '/^## SHA-256/ {exit} /^[[:space:]]*$/ {gap = gap $0 "\n"; next} {printf "%s%s\n", gap, $0; gap = ""}' \
+            > notes.md
+          {
+            echo
+            echo '## SHA-256'
+            echo
+            echo '```'
+            (cd assets && sha256sum *)
+            echo '```'
+          } >> notes.md
+          gh release edit "$TAG" $R --notes-file notes.md
           gh release edit "$TAG" $R --draft=false

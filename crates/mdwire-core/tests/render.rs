@@ -783,6 +783,12 @@ fn repairs_count_what_the_normalizer_fixed() {
     // 멀쩡한 입력은 아무것도 안 고친다.
     let out = mdwire::render_with("**굵게** 와 `코드`\n```\n펜스\n```", Channel::SlackMarkdown, mdwire::Options::default());
     assert!(!out.repairs.any(), "{:?}", out.repairs);
+
+    // 표 셀에서 고친 것도 센다 — 셀을 그리는 인라인이 따로 돌아도 문서의 것이다.
+    for ch in [Channel::SlackMarkdown, Channel::TelegramHtml] {
+        let out = mdwire::render_with("| a |\n|---|\n| **x |", ch, mdwire::Options::default());
+        assert_eq!(out.repairs.closed_emphasis, 1, "{ch:?} {:?}", out.repairs);
+    }
 }
 
 /// 스트리밍도 같은 수를 센다 — 조각 크기와 무관하게.

@@ -467,7 +467,7 @@ func (e *engine) closeBlock(s sink) {
 		e.blockCloseMarkup(&e.out)
 	case stateTable:
 		e.startLine()
-		e.table.render(e.v, e.dialect, &e.out)
+		e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
 		e.table.clear()
 	}
 	e.state = stateNone
@@ -864,7 +864,7 @@ func (t *table) clear() {
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
 // 표는 반드시 어긋난다(SPEC 7절). 표를 직접 그리는 채널은 GFM 그대로 낸다.
-func (t *table) render(v vocab, d Dialect, out *[]byte) {
+func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
@@ -872,8 +872,8 @@ func (t *table) render(v vocab, d Dialect, out *[]byte) {
 	if v.tablesNative() {
 		cellVocab = v
 	}
-	// 셀 안의 방언은 문서를 따른다. 여기서 고친 것은 세지 않는다 — 셀은 한 줄짜리라 짝 없는
-	// 마커가 글자로 돌아가는 것이 대부분이고, 그건 저자의 서식을 고친 게 아니다.
+	// 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
+	// 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
 	in := newInline(d)
 	cells := make([][]string, 0, len(t.rows))
 	for _, row := range t.rows {
@@ -900,6 +900,7 @@ func (t *table) render(v vocab, d Dialect, out *[]byte) {
 		}
 		cells = append(cells, line)
 	}
+	repairs.add(in.repairs)
 
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)

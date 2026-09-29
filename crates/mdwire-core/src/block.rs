@@ -497,7 +497,7 @@ impl Engine {
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);
                 self.start_line();
-                table.render(&self.v, self.dialect, &mut self.out);
+                table.render(&self.v, self.dialect, &mut self.inline.repairs, &mut self.out);
                 table.clear();
                 self.table = table;
             }
@@ -892,7 +892,7 @@ impl Table {
 
     /// 고정폭 블록으로 그린다. **열은 표시 폭으로 맞춘다** — 문자 수로 맞추면
     /// 한글이 든 표는 반드시 어긋난다(`SPEC.md` 7절).
-    fn render(&mut self, v: &Vocab, dialect: Dialect, out: &mut String) {
+    fn render(&mut self, v: &Vocab, dialect: Dialect, repairs: &mut Repairs, out: &mut String) {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
         // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
@@ -900,8 +900,8 @@ impl Table {
         let cell_vocab = if v.tables_native() { v } else { &plain };
         let rows = std::mem::take(&mut self.rows);
         let mut cells: Vec<Vec<String>> = Vec::with_capacity(rows.len());
-        // 셀 안의 방언은 문서를 따른다. 여기서 고친 것은 세지 않는다 — 셀은 한 줄짜리라
-        // 짝 없는 마커가 글자로 돌아가는 것이 대부분이고, 그건 저자의 서식을 고친 게 아니다.
+        // 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의
+        // `**x` 를 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
         let mut inline = Inline::new(dialect);
         let mut chars: Vec<char> = Vec::new();
         for row in &rows {
@@ -933,6 +933,7 @@ impl Table {
             cells.push(line);
         }
         self.rows = rows;
+        repairs.add(inline.repairs);
 
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);
