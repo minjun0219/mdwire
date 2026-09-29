@@ -31,6 +31,10 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 ```sh
 cat agent-output.md | mdwire --channel telegram-html          # parts separated by NUL
 cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arrives
+
+# The agent wrote Slack's legacy mrkdwn (*bold*, ~strike~)? Say so. --report prints what
+# the normalizer fixed (unclosed emphasis, unclosed fence, …) as one JSON line on stderr.
+cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
 ```
 
 ```rust
@@ -42,9 +46,10 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import { render, Streamer } from "mdwire";   // npm — works under a bundler and in plain Node
+import { render, renderWithReport, Streamer } from "mdwire";   // npm — bundlers, Node, Bun
 
 const parts = render(markdown, "telegram-html");
+const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 
 // A channel that rewrites the whole message (Telegram edit): send acc plus the tail
 // that closes open blocks. Keep acc itself untouched.

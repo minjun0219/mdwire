@@ -69,6 +69,76 @@ impl Channel {
     }
 }
 
+/// 입력 방언 — 에이전트가 무슨 표기로 썼는가.
+///
+/// 기본은 표준 마크다운이다. 슬랙에 답하는 에이전트는 흔히 **레거시 `mrkdwn`** 으로 쓴다
+/// (슬랙 문서가 그렇게 가르친다) — `*굵게*` · `_기울임_` · `~취소~`. 표준으로 읽으면
+/// `*굵게*` 가 기울임이 되고 `~취소~` 는 글자로 남는다. 출력 채널과는 따로 정한다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Dialect {
+    /// 표준 마크다운(CommonMark · GFM).
+    #[default]
+    Markdown,
+    /// 슬랙 레거시 `mrkdwn`. 별표는 몇 개든 굵게, 물결은 하나든 둘이든 취소선이다.
+    /// 표준 표기(`**굵게**` · `~~취소~~` · `[텍스트](url)`)가 섞여도 같은 뜻으로 읽는다.
+    SlackMrkdwn,
+}
+
+impl Dialect {
+    /// CLI 인자와 바인딩에서 쓰는 이름.
+    pub fn name(self) -> &'static str {
+        match self {
+            Dialect::Markdown => "markdown",
+            Dialect::SlackMrkdwn => "slack-mrkdwn",
+        }
+    }
+
+    /// 이름으로 방언을 찾는다.
+    pub fn parse(name: &str) -> Option<Dialect> {
+        [Dialect::Markdown, Dialect::SlackMrkdwn].into_iter().find(|d| d.name() == name)
+    }
+}
+
+/// 변환 옵션. 지금은 입력 방언 하나다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Options {
+    pub from: Dialect,
+}
+
+/// 정규화가 고친 것의 개수. **모델이 얼마나 자주 서식을 깨는지**를 재는 데 쓴다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Repairs {
+    /// 블록이 끝나도록 안 닫혀서 닫아 준 강조(`**영향 범위` 처럼).
+    pub closed_emphasis: usize,
+    /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스.
+    pub closed_fence: usize,
+    /// 짝이 없어 코드가 아니라 글자로 되돌린 백틱 런.
+    pub reverted_code_span: usize,
+    /// 짝 잃은 채 버린 `**` (`꼬리**` 처럼 앞이 글자인 것).
+    pub dropped_marker: usize,
+}
+
+impl Repairs {
+    pub(crate) fn add(&mut self, other: Repairs) {
+        self.closed_emphasis += other.closed_emphasis;
+        self.closed_fence += other.closed_fence;
+        self.reverted_code_span += other.reverted_code_span;
+        self.dropped_marker += other.dropped_marker;
+    }
+
+    /// 하나라도 고쳤는가.
+    pub fn any(&self) -> bool {
+        *self != Repairs::default()
+    }
+}
+
+/// [`render_with`] 의 결과 — 조각과 고친 것.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rendered {
+    pub parts: Vec<String>,
+    pub repairs: Repairs,
+}
+
 /// 스트리밍 변환기.
 ///
 /// 조각을 넣으면 **지금 안전하게 내보낼 수 있는 만큼만** 돌려준다.
@@ -103,7 +173,17 @@ pub struct Streamer {
 
 impl Streamer {
     pub fn new(channel: Channel) -> Self {
-        Self { engine: Engine::new(channel), buf: String::new(), started: false }
+        Self::with_options(channel, Options::default())
+    }
+
+    /// 옵션을 주고 만든다 — 입력 방언 따위.
+    pub fn with_options(channel: Channel, options: Options) -> Self {
+        Self { engine: Engine::new(channel, options), buf: String::new(), started: false }
+    }
+
+    /// 지금까지 정규화가 고친 것. `finish` 뒤에 보면 문서 전체의 값이다.
+    pub fn repairs(&self) -> Repairs {
+        self.engine.repairs()
     }
 
     /// `from` 뒤에 새로 붙은 출력에서 앞머리 줄바꿈을 턴다. 첫 글자가 나올 때까지만이다.
@@ -202,11 +282,24 @@ impl Streamer {
 /// assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
 /// ```
 pub fn render(input: &str, channel: Channel) -> Vec<String> {
-    let mut engine = Engine::new(channel);
+    render_with(input, channel, Options::default()).parts
+}
+
+/// [`render`] 에 옵션을 주고, 정규화가 고친 것도 같이 받는다.
+///
+/// ```
+/// use mdwire::{render_with, Channel, Dialect, Options};
+///
+/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, Options { from: Dialect::SlackMrkdwn });
+/// assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
+/// assert_eq!(out.repairs.closed_emphasis, 1);
+/// ```
+pub fn render_with(input: &str, channel: Channel, options: Options) -> Rendered {
+    let mut engine = Engine::new(channel, options);
     let mut sink = PartsSink::new(Vocab::new(channel));
     engine.feed(input, &mut sink);
     engine.finish(&mut sink);
-    sink.into_parts()
+    Rendered { repairs: engine.repairs(), parts: sink.into_parts() }
 }
 
 #[cfg(test)]

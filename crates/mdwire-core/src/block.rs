@@ -23,7 +23,7 @@ use crate::inline::Inline;
 use crate::sink::Sink;
 use crate::vocab::{Emph, Vocab};
 use crate::width::str_width;
-use crate::Channel;
+use crate::{Channel, Dialect, Options, Repairs};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -67,6 +67,10 @@ pub(crate) struct Engine {
     /// 된다. 완성본은 `\r\n` 을 한 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면
     /// 다음 글자를 볼 때까지 들고 있어야 한다.
     cr: bool,
+    /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
+    closed_fence: usize,
+    /// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
+    dialect: Dialect,
 }
 
 #[derive(Default)]
@@ -79,10 +83,10 @@ struct FenceState {
 }
 
 impl Engine {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(channel: Channel, options: Options) -> Self {
         Self {
             v: Vocab::new(channel),
-            inline: Inline::new(),
+            inline: Inline::new(options.from),
             pending: Vec::new(),
             line_open: false,
             kind: LineKind::Para,
@@ -96,7 +100,16 @@ impl Engine {
             table: Table::default(),
             fence: FenceState::default(),
             cr: false,
+            closed_fence: 0,
+            dialect: options.from,
         }
+    }
+
+    /// 지금까지 정규화가 고친 것.
+    pub fn repairs(&self) -> Repairs {
+        let mut r = self.inline.repairs;
+        r.closed_fence += self.closed_fence;
+        r
     }
 
     pub fn feed<S: Sink>(&mut self, chunk: &str, sink: &mut S) {
@@ -139,6 +152,9 @@ impl Engine {
         }
         if let Some(held) = self.held.take() {
             self.whole_para(&held, sink);
+        }
+        if self.state == State::Fence {
+            self.closed_fence += 1;
         }
         self.close_block(sink);
         self.flush_all(sink);
@@ -481,7 +497,7 @@ impl Engine {
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);
                 self.start_line();
-                table.render(&self.v, &mut self.out);
+                table.render(&self.v, self.dialect, &mut self.out);
                 table.clear();
                 self.table = table;
             }
@@ -876,7 +892,7 @@ impl Table {
 
     /// 고정폭 블록으로 그린다. **열은 표시 폭으로 맞춘다** — 문자 수로 맞추면
     /// 한글이 든 표는 반드시 어긋난다(`SPEC.md` 7절).
-    fn render(&mut self, v: &Vocab, out: &mut String) {
+    fn render(&mut self, v: &Vocab, dialect: Dialect, out: &mut String) {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
         // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
@@ -884,7 +900,9 @@ impl Table {
         let cell_vocab = if v.tables_native() { v } else { &plain };
         let rows = std::mem::take(&mut self.rows);
         let mut cells: Vec<Vec<String>> = Vec::with_capacity(rows.len());
-        let mut inline = Inline::new();
+        // 셀 안의 방언은 문서를 따른다. 여기서 고친 것은 세지 않는다 — 셀은 한 줄짜리라
+        // 짝 없는 마커가 글자로 돌아가는 것이 대부분이고, 그건 저자의 서식을 고친 게 아니다.
+        let mut inline = Inline::new(dialect);
         let mut chars: Vec<char> = Vec::new();
         for row in &rows {
             let mut line = Vec::with_capacity(cols);

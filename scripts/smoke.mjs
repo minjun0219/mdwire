@@ -1,6 +1,6 @@
 // npm 패키지가 실제로 도는지 본다. 빌드만으로는 경계 너머가 안 잡힌다.
 // `mdwire` 로 부른다 — `exports` 맵을 거쳐야 진짜 소비자와 같은 길이다.
-import { render, limit, Streamer } from "mdwire";
+import { render, renderWithReport, limit, Streamer } from "mdwire";
 import { strict as assert } from "node:assert";
 
 assert.equal(limit("telegram-html"), 4096);
@@ -26,6 +26,25 @@ for (const channel of ["telegram-html", "slack-markdown", "plain"]) {
   appended += st.finish();
   assert.equal(appended, render(input, channel).join(""), `${channel}: 이어 붙인 것이 완성본과 다르다`);
 }
+
+// 입력 방언 — 레거시 mrkdwn 으로 쓴 에이전트 출력. 옵션은 객체 하나다.
+assert.deepEqual(
+  render("*굵게* ~취소~ <https://x.io|링크>", "slack-markdown", { from: "slack-mrkdwn" }),
+  ["**굵게** ~~취소~~ [링크](https://x.io)"],
+);
+const ms = new Streamer("telegram-html", { from: "slack-mrkdwn" });
+assert.equal(ms.push("*굵") + ms.push("게*") + ms.finish(), "<b>굵게</b>");
+assert.throws(() => render("x", "plain", { from: "mrkdwn" }), /모르는 방언/);
+
+// 정규화가 고친 것.
+const report = renderWithReport("**영향 범위\n```ts\nconst a = 1;", "telegram-html");
+assert.equal(report.parts.length, 1);
+assert.equal(report.repairs.closedEmphasis, 1);
+assert.equal(report.repairs.closedFence, 1);
+const rs = new Streamer("slack-markdown");
+rs.push("**열고 안 닫힘");
+rs.finish();
+assert.equal(rs.repairs().closedEmphasis, 1);
 
 assert.throws(() => render("x", "없는채널"), /모르는 채널/);
 console.log("npm 스모크 통과");

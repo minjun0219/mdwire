@@ -4,11 +4,76 @@ package mdwire
 // 자리는 렌더 결과가 아니라 구조에서 고른다. 블록이 끝나 열린 마크업이 없는 지점만 경계가
 // 된다. 변환 후에 문자 수로 자르면 `<code>` 가 열린 채 잘리고 채널은 400 을 준다.
 func Render(input string, ch Channel) []string {
-	e := newEngine(ch)
+	return RenderWith(input, ch, Options{}).Parts
+}
+
+// Dialect 는 입력 방언 — 에이전트가 무슨 표기로 썼는가다. 기본은 표준 마크다운이다. 슬랙에
+// 답하는 에이전트는 흔히 레거시 mrkdwn(`*굵게*` · `_기울임_` · `~취소~`)으로 쓴다.
+type Dialect int
+
+const (
+	// Markdown 은 표준 마크다운(CommonMark · GFM)이다.
+	Markdown Dialect = iota
+	// SlackMrkdwn 은 슬랙 레거시 mrkdwn 이다. 별표는 몇 개든 굵게, 물결은 하나든 둘이든
+	// 취소선이다. 표준 표기가 섞여도 같은 뜻으로 읽는다.
+	SlackMrkdwn
+)
+
+// Name 은 CLI 인자와 바인딩에서 쓰는 이름이다.
+func (d Dialect) Name() string {
+	if d == SlackMrkdwn {
+		return "slack-mrkdwn"
+	}
+	return "markdown"
+}
+
+// ParseDialect 는 이름으로 방언을 찾는다.
+func ParseDialect(name string) (Dialect, bool) {
+	for _, d := range []Dialect{Markdown, SlackMrkdwn} {
+		if d.Name() == name {
+			return d, true
+		}
+	}
+	return 0, false
+}
+
+// Options 는 변환 옵션이다. 지금은 입력 방언 하나다.
+type Options struct {
+	From Dialect
+}
+
+// Repairs 는 정규화가 고친 것의 개수다. 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
+type Repairs struct {
+	// ClosedEmphasis 는 블록이 끝나도록 안 닫혀서 닫아 준 강조다.
+	ClosedEmphasis int
+	// ClosedFence 는 문서 끝까지 안 닫혀서 닫아 준 코드펜스다.
+	ClosedFence int
+	// RevertedCodeSpan 은 짝이 없어 코드가 아니라 글자로 되돌린 백틱 런이다.
+	RevertedCodeSpan int
+	// DroppedMarker 는 짝 잃은 채 버린 `**` 다.
+	DroppedMarker int
+}
+
+func (r *Repairs) add(o Repairs) {
+	r.ClosedEmphasis += o.ClosedEmphasis
+	r.ClosedFence += o.ClosedFence
+	r.RevertedCodeSpan += o.RevertedCodeSpan
+	r.DroppedMarker += o.DroppedMarker
+}
+
+// Rendered 는 RenderWith 의 결과 — 조각과 고친 것이다.
+type Rendered struct {
+	Parts   []string
+	Repairs Repairs
+}
+
+// RenderWith 는 Render 에 옵션을 주고, 정규화가 고친 것도 같이 돌려준다.
+func RenderWith(input string, ch Channel, o Options) Rendered {
+	e := newEngine(ch, o)
 	s := newPartsSink(e.v)
 	e.feed(input, s)
 	e.finish(s)
-	return s.intoParts()
+	return Rendered{Parts: s.intoParts(), Repairs: e.repairs()}
 }
 
 // Streamer 는 스트리밍 변환기다. 조각을 넣으면 지금 안전하게 내보낼 수 있는 만큼만 돌려준다.
@@ -22,8 +87,16 @@ type Streamer struct {
 
 // NewStreamer 는 채널 하나에 묶인 변환기를 만든다.
 func NewStreamer(ch Channel) *Streamer {
-	return &Streamer{e: newEngine(ch)}
+	return NewStreamerWith(ch, Options{})
 }
+
+// NewStreamerWith 는 옵션을 주고 만든다 — 입력 방언 따위.
+func NewStreamerWith(ch Channel, o Options) *Streamer {
+	return &Streamer{e: newEngine(ch, o)}
+}
+
+// Repairs 는 지금까지 정규화가 고친 것이다. Finish 뒤에 보면 문서 전체의 값이다.
+func (s *Streamer) Repairs() Repairs { return s.e.repairs() }
 
 // PushTo 는 조각을 밀어 넣고 지금 내보낼 수 있는 출력을 dst 에 붙인다. 정본 서명 —
 // 호출자 버퍼에 직접 쓰므로 조각당 할당이 없다.

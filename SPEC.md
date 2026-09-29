@@ -63,6 +63,12 @@ out.push_str(s.finish());       // 남은 것을 내보내고 열린 마크업�
 
 // 할당이 0 이어야 하는 경로는 호출자 버퍼에 직접 쓴다
 s.push_into(chunk, &mut out);
+
+// 옵션(입력 방언)과 정규화가 고친 것 — 5.1절
+let out = mdwire::render_with(input, Channel::SlackMarkdown, Options { from: Dialect::SlackMrkdwn });
+let (parts, repairs) = (out.parts, out.repairs);
+let mut s = Streamer::with_options(Channel::SlackMarkdown, Options::default());
+let fixed = s.repairs();   // 지금까지 고친 것. finish 뒤면 문서 전체
 ```
 
 **스트리밍 반환 모양은 벤치가 정했다.** 변환 함수를 고정하고 서명만 바꿔 재면
@@ -85,9 +91,42 @@ s.push_into(chunk, &mut out);
 → **`push_into`가 정본이고, `push`는 내부 버퍼를 빌려주는 편의 서명이다.**
 둘은 같은 코드를 부른다.
 
-CLI는 `mdwire --channel telegram-html [--stream]`.
+CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--stream] [--report]`.
 분할 결과는 **NUL 로 구분**한다 — 셸에서 다루기 가장 쉽고, 마크다운 본문에 안 나오는
 바이트다.
+
+### 5.1 입력 방언과 고친 것
+
+**입력 방언**(`Options::from`)은 출력 채널과 따로 정한다. 기본은 표준 마크다운이고,
+`slack-mrkdwn` 은 슬랙 레거시 표기로 쓴 에이전트 출력을 받는다 — 슬랙에 답하는
+에이전트는 슬랙 문서가 가르치는 대로 흔히 이 표기로 쓴다. 표준으로 읽으면 `*굵게*` 가
+기울임이 되고 `~취소~` 는 글자로 남는다.
+
+| 입력 | 표준(`markdown`) | `slack-mrkdwn` |
+|---|---|---|
+| `*x*` · `**x**` | 기울임 · 굵게 | 둘 다 굵게 |
+| `_x_` | 기울임 | 기울임 |
+| `~x~` · `~~x~~` | 글자 · 취소선 | 둘 다 취소선 |
+| `<url\|텍스트>` | 링크 | 링크 |
+
+mrkdwn 의 홑 `~` 는 **한국어의 물결표와 부딪힌다**(`약 ~40km`, `5~6월`). 그래서 글자
+뒤나 숫자 앞에서는 열지 않고, 영숫자 앞에서는 닫지 않으며(슬랙 mrkdwn 도 단어 경계를
+요구한다), 안 닫히면 블록 끝까지 긋지 않고 글자로 되돌린다. 조사 앞에서는 닫는다
+(`~취소~가`). 멘션(`<@U…>`)·채널(`<#C…|이름>`)은 건드리지 않는다.
+
+**고친 것**(`Repairs`)은 정규화가 저자 대신 한 일의 개수다 — 모델이 얼마나 자주 서식을
+깨는지 로그로 재려는 쪽이 쓴다. 출력은 바꾸지 않는다.
+
+| 필드 | 뜻 |
+|---|---|
+| `closed_emphasis` | 블록이 끝나도록 안 닫혀서 닫아 준 강조 |
+| `closed_fence` | 문서 끝까지 안 닫혀서 닫아 준 코드펜스 |
+| `reverted_code_span` | 짝이 없어 글자로 되돌린 백틱 런 |
+| `dropped_marker` | 짝 잃은 채 버린 `**` |
+
+스트리밍도 같은 수를 센다 — 조각 크기와 무관하게(퍼즈가 잰다). CLI 는 `--report` 로
+stderr 에 JSON 한 줄, npm 은 `renderWithReport` 와 `Streamer#repairs()`, Go 는
+`RenderWith`·`Streamer.Repairs()`.
 
 ## 6. 정규화 강도
 
