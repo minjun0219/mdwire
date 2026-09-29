@@ -8,6 +8,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # release PR 은 봇이 민 브랜치라 위 두 이벤트가 안 뜬다 — `release-pr.yml` 이 이걸로 부른다.
+  workflow_dispatch:
 
 permissions:
   contents: read

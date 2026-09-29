@@ -1,0 +1,122 @@
+# 버전 올리기를 PR 로 한다. **release PR 을 머지하는 것이 곧 릴리스 결정이다.**
+#
+# 1. main 에 커밋이 들어올 때마다 `release/next` 브랜치에 다음 판(버전 · Cargo.lock ·
+#    CHANGELOG · README 설치 줄)을 만들고 `release: X.Y.Z` PR 을 열거나 갱신한다.
+#    머지하기 전까지 main 의 버전은 그대로다.
+# 2. 그 PR 이 squash 로 들어오면(커밋 제목이 `release: ` 로 시작) `vX.Y.Z` 와 Go 모듈용
+#    `go/vX.Y.Z` 태그를 찍고 `release.yml` 을 부른다.
+#
+# 버전 규칙은 `scripts/prepare-release.sh` 에 있다 — 패치만 자동으로 올린다.
+#
+# **기본 토큰(`GITHUB_TOKEN`)이 민 태그·브랜치로는 다른 워크플로가 안 뜬다.** GitHub 이
+# 워크플로가 워크플로를 연쇄로 부르는 것을 막아서다. 예외는 `workflow_dispatch` 뿐이라
+# 릴리스와 release PR 의 CI 는 직접 부른다(`gh workflow run`). PAT 을 쓰지 않는 대신이다.
+#
+# release-plz 를 쓰지 않는 이유 — 크레이트마다 변경 기록을 따로 만들어서, 크레이트
+# 디렉터리 밖만 건드린 커밋(워크플로 · 문서 · Go 이식)이 기록에서 빠졌다. 이 저장소는
+# 판 하나에 기록 하나다(`cliff.toml`).
+name: release-pr
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  BRANCH: release/next
+
+jobs:
+  prepare:
+    if: "${{ !startsWith(github.event.head_commit.message, 'release: ') }}"
+    runs-on: ubuntu-latest
+    # 커밋이 연달아 들어오면 마지막 것만 PR 에 남으면 된다.
+    concurrency:
+      group: release-pr
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 마지막 태그와 그 뒤 커밋 전부가 있어야 버전·기록을 만든다
+      - name: 툴체인
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          cargo install git-cliff --version 2.14.2 --locked
+      - name: 다음 판 만들기
+        id: next
+        run: echo "version=$(./scripts/prepare-release.sh)" >> "$GITHUB_OUTPUT"
+
+      # 낼 것이 없으면(방금 릴리스했으면) 열려 있던 release PR 을 닫는다.
+      - name: 낼 것 없음
+        if: steps.next.outputs.version == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          [ -z "$pr" ] || gh pr close "$pr" --delete-branch --comment "낼 커밋이 없어 닫는다."
+
+      - name: release PR 열기·갱신
+        if: steps.next.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$BRANCH"
+          git commit -am "release: $VERSION" --allow-empty
+          # 이 브랜치는 봇 것이다 — 매번 main 에서 새로 만들어 덮는다.
+          git push --force origin "$BRANCH"
+
+          awk -v v="$VERSION" '$0 ~ "^## " v " " {p=1; next} /^## /{if (p) exit} p' CHANGELOG.md > notes.md
+          cat >> notes.md <<EOF
+
+          ---
+          머지하면 \`v$VERSION\` · \`go/v$VERSION\` 태그가 찍히고 릴리스가 만들어진다. **squash 로 머지한다**
+          — 커밋 제목이 \`release: \` 로 시작해야 태그 잡이 돈다.
+          다른 버전을 원하면 main 의 \`[workspace.package] version\` 을 그 값으로 바꾼다.
+          EOF
+
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "release: $VERSION" --body-file notes.md
+          else
+            # 저장소 설정 "Allow GitHub Actions to create and approve pull requests" 가
+            # 꺼져 있으면 여기서 실패한다. 브랜치는 이미 올라가 있다.
+            gh pr create --base main --head "$BRANCH" --title "release: $VERSION" --body-file notes.md
+          fi
+
+          # 봇이 민 커밋에는 CI 가 저절로 안 돈다 — 직접 부른다. 결과는 PR 의 체크에 붙는다.
+          gh workflow run ci.yml --ref "$BRANCH"
+
+  tag:
+    if: "${{ startsWith(github.event.head_commit.message, 'release: ') }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 태그 찍고 릴리스 부르기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          head=$(git rev-parse HEAD)
+          # Go 모듈은 하위 디렉터리(`go/`)에 있어서 태그에 경로 접두사가 붙어야 `go get` 이 찾는다.
+          # **다시 돌려도 이어서 한다.** 태그를 민 뒤 디스패치가 실패했으면 태그는 이미 이
+          # 커밋에 있다 — 그건 건너뛰고 빠진 것만 찍은 뒤 다시 부른다. 다른 커밋에 같은 태그가
+          # 있으면 버전을 안 올린 release 커밋이라 멈춘다.
+          for tag in "v$VERSION" "go/v$VERSION"; do
+            at=$(git ls-remote --tags origin "refs/tags/$tag" | cut -f1)
+            if [ -z "$at" ]; then
+              git tag "$tag"
+              git push origin "$tag"
+            elif [ "$at" != "$head" ]; then
+              echo "::error::$tag 태그가 이미 다른 커밋($at)에 있다 — 버전을 올리지 않은 release 커밋이다."
+              exit 1
+            fi
+          done
+          gh workflow run release.yml --ref "v$VERSION" -f tag="v$VERSION"
