@@ -22,4 +22,6 @@
 다른 곳에서 이어야 하거나, 되돌릴 단위를 하나로 묶고 싶을 때. `main`에 머지 커밋을
 만들지 않는다.
 
-게이트는 `cargo test --workspace`와 `cargo clippy`. 통과 전에 커밋하지 않는다.
+게이트는 `cargo test --workspace`와 `cargo clippy`, 그리고 `go/`에서 `go test ./...`와
+`go vet ./...`. 통과 전에 커밋하지 않는다. Go 이식의 기대값은 Rust CLI에서 뽑는다
+(`go/testdata/regen.sh`) — 코어 동작을 바꾸면 다시 뽑는다.

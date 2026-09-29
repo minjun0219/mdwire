@@ -640,19 +640,47 @@ fn classify(p: &[char], eol: bool, can_table: bool) -> Decision {
 /// 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
 fn safe_cut(p: &[char]) -> usize {
     let mut k = p.len();
-    // 링크는 `[` 부터 `)` 까지 통째로 봐야 한다.
-    if let Some(at) = p[..k].iter().rposition(|&c| c == '[') {
-        if !p[at..k].contains(&')') {
-            k = k.min(at);
+    // 링크는 `[` 부터 `](…)` 의 `)` 까지 통째로 봐야 한다. **텍스트 안의 `)` 로 놓으면 안
+    // 된다** — `[Show GN (MAYDAY)](url)` 이 64바이트 조각으로 들어올 때 `(MAYDAY)` 의 `)` 에서
+    // 놓아 링크가 글자로 나갔다(Go 이식과 실제 문서를 대조하다 나왔다).
+    // **앞에서부터 본다.** 마지막 `[` 만 보면 `[a](1.[b](url` 처럼 주소 안에 링크가 겹칠 때
+    // 바깥 `[` 가 먼저 글자로 나간다 — 완성본은 바깥을 링크로 읽는다(퍼즈에서 나왔다).
+    let mut i = 0;
+    while i < k {
+        if p[i] != '[' {
+            i += 1;
+            continue;
+        }
+        match link_end(&p[i..k]) {
+            Some(end) => i += end,
+            None => {
+                k = i;
+                break;
+            }
         }
     }
     // **태그 모양의 `<` 도 붙든다.** `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로
     // 나가 버린다. `>` 가 오거나 태그라기엔 길어지면 놓는다 — `1 < 2` 처럼 뒤가
     // 공백이면 애초에 안 붙든다. 다음 글자가 아직 안 왔으면(`<` 가 마지막) 일단 붙든다.
     if let Some(at) = p[..k].iter().rposition(|&c| c == '<') {
-        let tagish = p.get(at + 1).is_none_or(|&c| c.is_ascii_alphabetic() || c == '/' || c == '!');
-        if tagish && !p[at..k].contains(&'>') && k - at < 80 {
-            k = k.min(at);
+        let body = &p[at + 1..k];
+        if !p[at..k].contains(&'>') {
+            let autolink = starts_with_chars(body, "http://") || starts_with_chars(body, "https://");
+            if autolink {
+                // **오토링크는 길이를 안 잰다.** 주소는 80자를 쉽게 넘고, 놓으면 `<` 가 글자로
+                // 나가 링크가 죽는다(실제 문서를 64자 조각으로 흘리다 나왔다). 공백이 오면
+                // 오토링크가 아니다 — 단 `<url|텍스트>` 의 텍스트에는 공백이 온다.
+                let ws = body.iter().position(|c| c.is_whitespace());
+                let bar = body.iter().position(|&c| c == '|');
+                if ws.is_none_or(|w| bar.is_some_and(|b| b < w)) {
+                    k = k.min(at);
+                }
+            } else {
+                let tagish = p.get(at + 1).is_none_or(|&c| c.is_ascii_alphabetic() || c == '/' || c == '!');
+                if tagish && k - at < 80 {
+                    k = k.min(at);
+                }
+            }
         }
     }
     // **마커는 맨 마지막에 붙든다.** 다음 글자를 봐야 열기/닫기가 갈리는데, 위에서 `[` 나
@@ -668,6 +696,45 @@ fn safe_cut(p: &[char]) -> usize {
         k -= 1;
     }
     k
+}
+
+/// `[` 로 시작하는 조각이 링크로 끝나는 자리(`)` 다음). 링크가 아니면(`]` 뒤가 `(` 가 아니면)
+/// `]` 다음이고, 아직 못 정하면 `None` — 붙든다. `]` 는 중첩 대괄호를 건너뛰어 찾는다 —
+/// 인라인 파서의 `find_link` 와 같은 규칙이다.
+fn link_end(p: &[char]) -> Option<usize> {
+    let mut j = 1;
+    let mut depth = 0usize;
+    while j < p.len() {
+        match p[j] {
+            '[' => depth += 1,
+            ']' if depth == 0 => break,
+            ']' => depth -= 1,
+            _ => {}
+        }
+        j += 1;
+    }
+    if j >= p.len() {
+        return None;
+    }
+    match p.get(j + 1) {
+        Some('(') => p[j + 2..].iter().position(|&c| c == ')').map(|c| j + 2 + c + 1),
+        Some(_) => Some(j + 1),
+        None => None,
+    }
+}
+
+/// `chars` 가 `s` 로 시작하는가. `s` 가 더 길면 `chars` 전체가 `s` 의 앞부분이어야 한다 —
+/// 아직 다 안 온 `<htt` 도 오토링크 후보로 붙든다.
+fn starts_with_chars(chars: &[char], s: &str) -> bool {
+    let mut it = chars.iter();
+    for c in s.chars() {
+        match it.next() {
+            Some(&x) if x == c => {}
+            Some(_) => return false,
+            None => return true,
+        }
+    }
+    true
 }
 
 /// 줄 끝 공백을 뺀 길이. 정돈의 일부다.

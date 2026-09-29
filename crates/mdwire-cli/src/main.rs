@@ -98,27 +98,37 @@ fn stream_stdin(channel: Channel, out: &mut impl Write) -> io::Result<()> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let mut rendered = String::new();
+    // 글자 경계에 걸려 남은 바이트. `fill_buf` 는 버퍼가 비기 전에는 다시 읽지 않으므로,
+    // 버퍼 끝의 반쪽 글자는 **다음 회차에 홀로 돌아온다** — 그때 "잘못된 UTF-8" 로 죽던
+    // 것을 여기 들고 있다가 뒤에 오는 바이트와 이어 붙인다.
+    let mut carry: Vec<u8> = Vec::new();
 
     loop {
         let chunk = reader.fill_buf()?;
         if chunk.is_empty() {
             break;
         }
-        // UTF-8 경계를 넘지 않는 만큼만 소비한다. 남은 바이트는 다음 회차에 이어 읽는다.
-        let valid = match std::str::from_utf8(chunk) {
+        let n = chunk.len();
+        carry.extend_from_slice(chunk);
+        reader.consume(n);
+        // UTF-8 경계를 넘지 않는 만큼만 넘긴다. 남은 바이트는 다음 회차에 이어 읽는다.
+        let valid = match std::str::from_utf8(&carry) {
             Ok(s) => s.len(),
-            Err(e) if e.valid_up_to() > 0 => e.valid_up_to(),
+            Err(e) if e.error_len().is_none() => e.valid_up_to(),
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
-        let text = std::str::from_utf8(&chunk[..valid])
-            .expect("valid_up_to 까지는 UTF-8 이다")
-            .to_string();
-        reader.consume(valid);
-
+        if valid == 0 {
+            continue;
+        }
+        let text = std::str::from_utf8(&carry[..valid]).expect("valid_up_to 까지는 UTF-8 이다");
         rendered.clear();
-        streamer.push_into(&text, &mut rendered);
+        streamer.push_into(text, &mut rendered);
         out.write_all(rendered.as_bytes())?;
         out.flush()?;
+        carry.drain(..valid);
+    }
+    if !carry.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "입력이 글자 한가운데서 끝났다"));
     }
 
     rendered.clear();
