@@ -822,3 +822,34 @@ fn streamer_counts_the_same_repairs() {
         assert_eq!(s.repairs(), batch.repairs, "조각 {size}");
     }
 }
+
+/// **붙든 구문을 이어서 훑어도 답은 같아야 한다.** 안 닫힌 `[`·`<!--` 는 훑던 자리를 기억해 두고
+/// 새 꼬리만 보는데, 그 기억이 조각 경계·중첩·뒤늦은 닫힘에서 틀리면 스트리밍이 완성본과
+/// 갈린다. 모든 조각 크기로 흘려 본다.
+#[test]
+fn resumed_hold_scans_agree_with_batch() {
+    let inputs = [
+        "앞 [긴 텍스트 [중첩] 계속](https://x.io/a) 뒤",
+        "[a](1.[b](url) 끝",
+        "[텍스트] 링크 아님, 그리고 [둘](u)",
+        "앞 <!-- 주석 - -- 아직 --> 뒤 **굵게**",
+        "<!-- 안 닫힌 주석 [x](y) 끝까지",
+        "[안 닫힌 링크 <!-- 주석 --> 끝까지",
+        "**굵게 [링크](u) <!--c--> 끝**",
+    ];
+    for input in inputs {
+        for channel in [Channel::TelegramHtml, Channel::SlackMarkdown] {
+            let batch = render(input, channel).join("");
+            let chars: Vec<char> = input.chars().collect();
+            for size in 1..=chars.len() {
+                let mut s = Streamer::new(channel);
+                let mut got = String::new();
+                for chunk in chars.chunks(size) {
+                    s.push_into(&chunk.iter().collect::<String>(), &mut got);
+                }
+                s.finish_into(&mut got);
+                assert_eq!(got, batch, "{input:?} · {} · 조각 {size}", channel.name());
+            }
+        }
+    }
+}
