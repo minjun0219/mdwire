@@ -57,6 +57,10 @@ if command -v tsc >/dev/null; then
 }
 JSON
   tsc -p . && echo "타입 통과 (nodenext · verbatimModuleSyntax)"
+elif [ -n "${CI:-}" ]; then
+  # Bun 과 같다 — CI(와 그걸 흉내 내는 CI=1 로컬 게이트)에서는 건너뛰지 않는다.
+  echo "CI 에 tsc 가 없다 — npm install -g typescript 로 깐다" >&2
+  exit 1
 else
   echo "tsc 가 없어 타입 확인은 건너뛴다" >&2
 fi
