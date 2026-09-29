@@ -101,6 +101,7 @@ pub fn run_case(case: &Case, renderer: &dyn Renderer, channel: Channel) -> Outco
     match renderer.render(&case.input, channel) {
         Ok(actual) => {
             outcome.findings = check::check(&case.input, &actual, channel);
+            stream_findings(renderer, &case.input, channel, &actual, &mut outcome.findings);
             if let Some(expected) = case.expected.get(channel.name()) {
                 outcome.compared = Some(Compare {
                     matched: normalize(expected) == normalize(&actual),
@@ -148,13 +149,49 @@ pub fn scan_dir(dir: &Path, renderer: &dyn Renderer, channels: &[Channel]) -> io
                 error: None,
             };
             match renderer.render(&input, channel) {
-                Ok(actual) => outcome.findings = check::check(&input, &actual, channel),
+                Ok(actual) => {
+                    outcome.findings = check::check(&input, &actual, channel);
+                    stream_findings(renderer, &input, channel, &actual, &mut outcome.findings);
+                }
                 Err(e) => outcome.error = Some(e),
             }
             out.push(outcome);
         }
     }
     Ok(out)
+}
+
+/// 스트리밍으로 받은 것을 이어 붙인 결과가 완성본과 같은가 — append-only 계약.
+///
+/// **한 글자씩**과 **64글자씩** 두 번 흘린다. 한 글자씩은 경계가 모든 자리에 걸리는 가장
+/// 가혹한 경우고, 64글자는 실제 토큰 흐름에 가깝다. 한도를 넘겨 나뉜 출력은 건너뛴다 —
+/// 조각은 저마다 메시지 하나라 앞머리 줄바꿈을 털고 시작하고, 스트리밍은 한도를 모른다.
+fn stream_findings(
+    renderer: &dyn Renderer,
+    input: &str,
+    channel: Channel,
+    batch: &str,
+    findings: &mut Vec<check::Finding>,
+) {
+    if batch.contains('\0') {
+        return;
+    }
+    for chunk in [1, 64] {
+        let Some(streamed) = renderer.stream(input, channel, chunk) else { return };
+        if streamed != batch {
+            let at = streamed.chars().zip(batch.chars()).take_while(|(a, b)| a == b).count();
+            let around = |s: &str| s.chars().skip(at.saturating_sub(15)).take(40).collect::<String>();
+            findings.push(check::Finding {
+                rule: check::Rule::StreamDiverged,
+                detail: format!(
+                    "{chunk}글자씩 흘린 결과가 {at}번째 글자부터 다르다\n      완성본: …{}…\n      스트림: …{}…",
+                    around(batch).replace('\n', "⏎"),
+                    around(&streamed).replace('\n', "⏎")
+                ),
+            });
+            return;
+        }
+    }
 }
 
 fn collect_md(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {

@@ -34,6 +34,12 @@ pub enum Rule {
     EmptyOutput,
     /// 입력에 있던 낱말이 출력에서 사라졌는가.
     TextLoss,
+    /// 조각으로 흘려 받은 것을 이어 붙인 결과가 한 번에 렌더한 결과와 다른가.
+    ///
+    /// **append-only 계약의 채점이다.** 스트리밍이 돌려준 글은 확정분이라 뒤에서 고칠 수
+    /// 없다 — 이어 붙인 것이 완성본과 같아야 앞 글을 못 고치는 채널(Slack `appendStream`)에
+    /// 그대로 흘릴 수 있다. 스트리밍을 제공하는 구현만 잰다.
+    StreamDiverged,
 }
 
 impl Rule {
@@ -48,6 +54,7 @@ impl Rule {
             Rule::TableMisaligned => "표 열 어긋남",
             Rule::EmptyOutput => "빈 출력",
             Rule::TextLoss => "내용 손실",
+            Rule::StreamDiverged => "스트리밍 불일치",
         }
     }
 }

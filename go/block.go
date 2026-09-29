@@ -101,6 +101,10 @@ type engine struct {
 	hasHeld bool
 	table   table
 	fence   fenceState
+	// 조각이 `\r` 로 끝났다. 다음 조각이 `\n` 으로 시작하면 CRLF 라 버리고, 아니면 글자다.
+	// `\r` 를 줄에 먼저 넣으면 `---\r` 가 구분선이 아니라 문단이 된다 — 완성본은 `\r\n` 을 한
+	// 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면 다음 글자를 볼 때까지 들고 있어야 한다.
+	cr bool
 }
 
 func newEngine(ch Channel) *engine {
@@ -108,9 +112,22 @@ func newEngine(ch Channel) *engine {
 }
 
 func (e *engine) feed(chunk string, s sink) {
+	if chunk == "" {
+		return
+	}
+	if e.cr {
+		e.cr = false
+		if chunk[0] != '\n' {
+			e.pending = append(e.pending, '\r')
+		}
+	}
 	for len(chunk) > 0 {
 		nl := strings.IndexByte(chunk, '\n')
 		if nl < 0 {
+			if strings.HasSuffix(chunk, "\r") {
+				e.cr = true
+				chunk = chunk[:len(chunk)-1]
+			}
 			e.pending = appendRunes(e.pending, chunk)
 			e.progress(false, s)
 			return
@@ -125,6 +142,11 @@ func (e *engine) feed(chunk string, s sink) {
 }
 
 func (e *engine) finish(s sink) {
+	// 문서가 `\r` 로 끝났다 — 뒤에 `\n` 이 없으니 글자다.
+	if e.cr {
+		e.cr = false
+		e.pending = append(e.pending, '\r')
+	}
 	if len(e.pending) > 0 || e.lineOpen {
 		e.progress(true, s)
 	}
@@ -629,6 +651,21 @@ func safeCut(p []rune) int {
 	}
 	// 태그 모양의 `<` 도 붙든다. `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로 나가 버린다.
 	// `>` 가 오거나 태그라기엔 길어지면 놓는다. 다음 글자가 아직 안 왔으면 일단 붙든다.
+	// 주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다. 긴 주석을 80자에서 놓으면 `<` 가 글자로
+	// 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄 안이다.
+	// 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
+	for i := 0; i+4 <= k; {
+		if startsWith(p[i:], "<!--") {
+			end := findSeq(p[i+4:k], "-->")
+			if end < 0 {
+				k = i
+				break
+			}
+			i += 4 + end + 3
+		} else {
+			i++
+		}
+	}
 	if at := lastIndexRune(p[:k], '<'); at >= 0 && indexRune(p[at:k], '>') < 0 {
 		body := p[at+1 : k]
 		if prefixMatch(body, "http://") || prefixMatch(body, "https://") {

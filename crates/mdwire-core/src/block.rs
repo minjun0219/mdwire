@@ -60,6 +60,13 @@ pub(crate) struct Engine {
     scratch: String,
     table: Table,
     fence: FenceState,
+    /// 조각이 `\r` 로 끝났다. 다음 조각이 `\n` 으로 시작하면 CRLF 라 버리고, 아니면 글자다.
+    ///
+    /// **`\r` 를 줄에 먼저 넣으면 안 된다.** 넣는 순간 그 줄은 `\r` 로 끝나는 줄로 판정된다
+    /// — `---\r` 는 구분선이 아니라 문단이 되고, `\r` 하나뿐인 줄은 빈 줄이 아니라 문단이
+    /// 된다. 완성본은 `\r\n` 을 한 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면
+    /// 다음 글자를 볼 때까지 들고 있어야 한다.
+    cr: bool,
 }
 
 #[derive(Default)]
@@ -88,10 +95,17 @@ impl Engine {
             scratch: String::new(),
             table: Table::default(),
             fence: FenceState::default(),
+            cr: false,
         }
     }
 
     pub fn feed<S: Sink>(&mut self, chunk: &str, sink: &mut S) {
+        if chunk.is_empty() {
+            return;
+        }
+        if std::mem::take(&mut self.cr) && !chunk.starts_with('\n') {
+            self.pending.push('\r');
+        }
         for seg in chunk.split_inclusive('\n') {
             match seg.strip_suffix('\n') {
                 Some(rest) => {
@@ -101,6 +115,13 @@ impl Engine {
                     self.progress(true, sink);
                 }
                 None => {
+                    let seg = match seg.strip_suffix('\r') {
+                        Some(s) => {
+                            self.cr = true;
+                            s
+                        }
+                        None => seg,
+                    };
                     self.pending.extend(seg.chars());
                     self.progress(false, sink);
                 }
@@ -109,6 +130,10 @@ impl Engine {
     }
 
     pub fn finish<S: Sink>(&mut self, sink: &mut S) {
+        // 문서가 `\r` 로 끝났다 — 뒤에 `\n` 이 없으니 글자다.
+        if std::mem::take(&mut self.cr) {
+            self.pending.push('\r');
+        }
         if !self.pending.is_empty() || self.line_open {
             self.progress(true, sink);
         }
@@ -662,6 +687,23 @@ fn safe_cut(p: &[char]) -> usize {
     // **태그 모양의 `<` 도 붙든다.** `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로
     // 나가 버린다. `>` 가 오거나 태그라기엔 길어지면 놓는다 — `1 < 2` 처럼 뒤가
     // 공백이면 애초에 안 붙든다. 다음 글자가 아직 안 왔으면(`<` 가 마지막) 일단 붙든다.
+    // **주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다.** 긴 주석을 80자에서 놓으면 `<` 가
+    // 글자로 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄
+    // 안이라 안 닫힌 주석도 줄 끝에서 풀린다. 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
+    let mut i = 0;
+    while i + 4 <= k {
+        if p[i..].starts_with(&['<', '!', '-', '-']) {
+            match p[i + 4..k].windows(3).position(|w| w == ['-', '-', '>']) {
+                Some(end) => i += 4 + end + 3,
+                None => {
+                    k = i;
+                    break;
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
     if let Some(at) = p[..k].iter().rposition(|&c| c == '<') {
         let body = &p[at + 1..k];
         if !p[at..k].contains(&'>') {
