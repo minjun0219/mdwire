@@ -769,6 +769,20 @@ fn slack_mrkdwn_keeps_korean_tildes_literal() {
     assert_eq!(mrkdwn("가격 ~만원 할인", Channel::TelegramHtml), "가격 ~만원 할인");
 }
 
+/// **mrkdwn 의 홑별표도 줄을 넘는다.** 닫히면 한 덩어리 굵게고, 문단이 끝나도록 안 닫히면
+/// 그 문단에서 닫고 고친 것으로 센다 — 다음 문단의 `*` 와 짝짓지 않는다.
+#[test]
+fn slack_mrkdwn_bold_spans_lines_but_not_paragraphs() {
+    assert_eq!(mrkdwn("*첫 줄\n둘째 줄*입니다", Channel::SlackMarkdown), "**첫 줄\n둘째 줄**입니다");
+    let out = mdwire::render_with(
+        "*굵게 시작\n\n다른 문단*",
+        Channel::SlackMarkdown,
+        mdwire::Options { from: mdwire::Dialect::SlackMrkdwn },
+    );
+    assert_eq!(out.parts.join(""), "**굵게 시작**\n\n다른 문단*");
+    assert_eq!(out.repairs.closed_emphasis, 1, "{:?}", out.repairs);
+}
+
 /// **정규화가 고친 것을 센다.** 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
 #[test]
 fn repairs_count_what_the_normalizer_fixed() {
