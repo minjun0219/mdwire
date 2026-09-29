@@ -28,6 +28,8 @@ wasm-pack build crates/mdwire-wasm --release --target nodejs  --out-dir "../../$
 echo '{ "type": "module" }'   > "$OUT/bundler/package.json"
 echo '{ "type": "commonjs" }' > "$OUT/node/package.json"
 rm -f "$OUT"/*/.gitignore
+# 레지스트리 페이지는 패키지 안의 README 를 보여 준다. 없으면 빈 페이지다.
+cp README.md LICENSE "$OUT/"
 
 cat > "$OUT/package.json" <<JSON
 {

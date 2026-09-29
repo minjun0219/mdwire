@@ -1,6 +1,7 @@
-# 릴리스에 산출물을 붙인다 — CLI 바이너리와 npm 패키지 tarball.
+# 릴리스에 산출물을 붙이고 레지스트리에 올린다 — CLI 바이너리와 npm 패키지 tarball,
+# 그리고 crates.io(mdwire-core · mdwire-cli)와 npm(mdwire).
 #
-# 레지스트리(npm · crates.io)에 올리지 않아도 여기서 바로 가져다 쓸 수 있다:
+# 레지스트리를 거치지 않고 릴리스에서 바로 가져다 쓸 수도 있다:
 #   npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-0.1.1.tgz
 #   curl -L …/mdwire-v0.1.1-aarch64-apple-darwin.tar.gz | tar xz
 #
@@ -136,3 +137,98 @@ jobs:
           } >> notes.md
           gh release edit "$TAG" $R --notes-file notes.md
           gh release edit "$TAG" $R --draft=false
+
+  # ── 레지스트리 ──────────────────────────────────────────────────────────────
+  #
+  # **인증은 Trusted Publishing(OIDC)이다 — 저장소에 토큰을 두지 않는다.** 잡마다 GitHub 이
+  # 서명한 신분증(`id-token: write`)을 레지스트리가 받아, 이 저장소의 이 워크플로(`release.yml`)
+  # 라는 것을 확인하고 그 자리에서 짧은 토큰을 내준다. 설정은 레지스트리 쪽 패키지 설정에 있다.
+  #
+  # **첫 판은 사람이 토큰으로 올린다.** Trusted Publishing 은 이미 있는 패키지에만 걸 수 있다.
+  # 그래서 레지스트리에 이름이 아직 없으면 경고만 남기고 건너뛴다 — 이 워크플로를 먼저
+  # 머지해도 릴리스가 깨지지 않는다.
+  #
+  # **이미 올라간 버전은 건너뛴다.** 레지스트리는 같은 버전을 다시 받지 않는다 —
+  # workflow_dispatch 로 다시 돌려도 여기서 죽지 않게.
+  #
+  # 공개된 GitHub 릴리스(`publish`) 뒤에만 돈다. 레지스트리는 되돌릴 수 없어서(crates.io 는
+  # yank 만, npm 은 72시간 안에만 unpublish) 산출물이 다 선 판만 올린다.
+  crates:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: 올릴 크레이트
+        id: todo
+        run: |
+          VERSION=${TAG#v}
+          UA="mdwire release (https://github.com/$GITHUB_REPOSITORY)"
+          todo=""
+          # 순서가 곧 게시 순서다 — CLI 가 코어에 기댄다.
+          for c in mdwire-core mdwire-cli; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" "https://crates.io/api/v1/crates/$c")
+            case "$code" in
+              200) ;;
+              404) echo "::warning::$c 가 아직 crates.io 에 없다 — 첫 판은 토큰으로 손수 올린다. 건너뛴다."; continue ;;
+              *) echo "::error::crates.io 가 $code 를 줬다"; exit 1 ;;
+            esac
+            code=$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" "https://crates.io/api/v1/crates/$c/$VERSION")
+            if [ "$code" = 200 ]; then
+              echo "$c $VERSION 은 이미 있다"
+            else
+              todo="$todo $c"
+            fi
+          done
+          echo "crates=${todo# }" >> "$GITHUB_OUTPUT"
+      # 외부 액션을 안 쓰는 이 저장소의 예외다. OIDC 토큰을 crates.io 토큰으로 바꾸고, 잡이
+      # 끝나면 되돌리는(revoke) 공식 액션이라 손으로 짜지 않는다. 태그가 아니라 커밋으로 고정한다.
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        if: steps.todo.outputs.crates != ''
+        id: auth
+      - name: 올리기
+        if: steps.todo.outputs.crates != ''
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CRATES: ${{ steps.todo.outputs.crates }}
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          # cargo publish 는 올린 판이 인덱스에 보일 때까지 기다린다 — 다음 크레이트가 바로 찾는다.
+          for c in $CRATES; do
+            cargo publish -p "$c" --locked
+          done
+
+  # **릴리스에 붙은 tarball 을 그대로 올린다.** 다시 빌드하면 본문의 SHA-256 과 다른 파일이
+  # 레지스트리에 간다. provenance(어느 저장소·커밋·워크플로가 만들었나)는 Trusted Publishing
+  # 이면 npm 이 스스로 붙인다 — package.json 의 repository.url 이 이 저장소와 같아야 한다.
+  npm-registry:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${TAG#v}
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/mdwire)
+          case "$code" in
+            200) ;;
+            404) echo "::warning::mdwire 가 아직 npm 에 없다 — 첫 판은 토큰으로 손수 올린다. 건너뛴다."; exit 0 ;;
+            *) echo "::error::npm 레지스트리가 $code 를 줬다"; exit 1 ;;
+          esac
+          if [ "$(npm view "mdwire@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "mdwire $VERSION 은 이미 있다"
+            exit 0
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "mdwire-$VERSION.tgz"
+          # Trusted Publishing 은 npm 11.5.1 이상이 필요하다. 러너의 npm 은 10 이다(Node 는 22 라 된다).
+          npm install -g npm@^11.5.1
+          npm publish "mdwire-$VERSION.tgz"
