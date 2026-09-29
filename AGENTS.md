@@ -32,3 +32,6 @@
 `release-pr.yml` 이 `release: X.Y.Z` PR 을 열어 두고, 그걸 squash 로 머지하는 것이
 릴리스다 — `vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
 자동으로 오른다. 다른 버전은 main 의 `[workspace.package] version` 으로 정한다.
+crates.io(`mdwire-core` · `mdwire-cli`)와 npm(`mdwire`)도 `release.yml` 이 Trusted
+Publishing 으로 올린다 — 저장소에 토큰을 두지 않는다. 레지스트리에 아직 없는 이름의 첫 판만
+사람이 토큰으로 올린다.
