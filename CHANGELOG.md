@@ -2,6 +2,25 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.2 — 2026-09-29
+
+### 새로 할 수 있는 것
+
+- **cli** — --report 를 여러 문서에 한 번에 돌린다 ([#37](https://github.com/minjun0219/mdwire/pull/37))
+
+### 문서
+
+- **readme** — 한국어 README 를 두고 v0.1.1 에 맞춘다 ([#30](https://github.com/minjun0219/mdwire/pull/30))
+- **spec** — 채널 한도가 무엇을 세는지 적는다 ([#35](https://github.com/minjun0219/mdwire/pull/35))
+
+### 테스트
+
+- **corpus** — 줄을 넘는 mrkdwn 홑별표를 코퍼스로 고정한다 ([#36](https://github.com/minjun0219/mdwire/pull/36))
+
+### 유지
+
+- **npm** — 스모크에서 Bun 확인이 실제로 돌게 한다 ([#31](https://github.com/minjun0219/mdwire/pull/31))
+
 ## 0.1.1 — 2026-09-29
 
 ### 새로 할 수 있는 것
