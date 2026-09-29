@@ -114,7 +114,15 @@ await append(t.finish());
 
 ## 설치
 
-릴리스마다 산출물이 붙는다 — 레지스트리가 필요 없다.
+레지스트리에서:
+
+```sh
+npm install @minjun0219/mdwire     # npm — 번들러, Node, Bun
+cargo add mdwire-core              # Rust 라이브러리 (`use mdwire::…`)
+cargo install mdwire-cli           # `mdwire` CLI
+```
+
+레지스트리를 거치지 않으려면 릴리스마다 붙는 산출물을 바로 받아도 된다.
 
 ```sh
 # npm 패키지 (번들러에서도, 맨 Node 에서도 돈다)
