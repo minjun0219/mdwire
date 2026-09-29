@@ -91,7 +91,8 @@ let fixed = s.repairs();   // 지금까지 고친 것. finish 뒤면 문서 전�
 → **`push_into`가 정본이고, `push`는 내부 버퍼를 빌려주는 편의 서명이다.**
 둘은 같은 코드를 부른다.
 
-CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--stream] [--report]`.
+CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--stream] [--report]`,
+여러 문서의 고친 것만 잴 때는 `--batch jsonl`(5.1절).
 분할 결과는 **NUL 로 구분**한다 — 셸에서 다루기 가장 쉽고, 마크다운 본문에 안 나오는
 바이트다.
 
@@ -127,6 +128,15 @@ mrkdwn 의 홑 `~` 는 **한국어의 물결표와 부딪힌다**(`약 ~40km`, `
 스트리밍도 같은 수를 센다 — 조각 크기와 무관하게(퍼즈가 잰다). CLI 는 `--report` 로
 stderr 에 JSON 한 줄, npm 은 `renderWithReport` 와 `Streamer#repairs()`, Go 는
 `RenderWith`·`Streamer.Repairs()`.
+
+**문서 여럿은 `--batch jsonl` 로 한 프로세스에 잰다.** 줄마다 `{"id": …, "text": "…"}` 를
+받아 줄마다 `{"line":N,"id":…,"closedEmphasis":…}` 를 낸다. 렌더 결과는 내지 않는다.
+
+- `id` 는 문자열이나 숫자이고 **받은 글자 그대로** 돌려준다 — 다시 직렬화하면 구현마다
+  이스케이프가 달라진다. 없어도 된다. `line` 은 1부터, 빈 줄도 센다
+- 못 읽은 줄은 `{"line":N,"error":"…"}` 로 적고 **멈추지 않는다** — 수백 줄 점검에서 한 줄
+  때문에 다시 돌리지 않게. 하나라도 있으면 끝에 실패로 끝난다
+- Rust·Go CLI 가 에러 문구까지 글자째 같다(Go 시험이 대조한다)
 
 ## 6. 정규화 강도
 

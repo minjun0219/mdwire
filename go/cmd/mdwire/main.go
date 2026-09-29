@@ -1,9 +1,12 @@
 // mdwire CLI 의 Go 판 — stdin 을 읽어 채널 하나로 내보낸다. 러스트 CLI 와 인자·출력이 같다:
-// 조각은 NUL 로 구분하고, --stream 이면 받는 대로 내보낸다.
+// 조각은 NUL 로 구분하고, --stream 이면 받는 대로 내보낸다. --batch jsonl 이면 문서 여럿의
+// 고친 것을 한 줄씩 낸다.
 package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +29,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 // runWith 는 run 에 stderr 를 따로 받는다 — --report 가 거기로 나간다.
 func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 	var channel string
-	stream, report := false, false
+	stream, report, batch := false, false, false
 	var opts mdwire.Options
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -40,6 +43,15 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			stream = true
 		case "--report":
 			report = true
+		case "--batch":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--batch 에 값이 없다")
+			}
+			i++
+			if args[i] != "jsonl" {
+				return fmt.Errorf("모르는 --batch 형식: %s (jsonl 만 받는다)", args[i])
+			}
+			batch = true
 		case "--from":
 			if i+1 >= len(args) {
 				return fmt.Errorf("--from 에 값이 없다")
@@ -51,7 +63,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			}
 			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|plain [--from markdown|slack-mrkdwn] [--stream] [--report] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|plain [--from markdown|slack-mrkdwn] [--stream] [--report] [--batch jsonl] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])
@@ -64,6 +76,19 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 	// 쓰기·비우기 실패를 삼키지 않는다 — 닫힌 파이프나 가득 찬 장치에 잘린 출력을 내고 0 으로
 	// 끝나면 호출자가 배달 실패를 알 수 없다.
 	w := bufio.NewWriter(out)
+	if batch {
+		if stream {
+			return fmt.Errorf("--batch 와 --stream 은 같이 쓸 수 없다")
+		}
+		failed, err := batchJSONL(ch, opts, in, w)
+		if err != nil {
+			return err
+		}
+		if failed > 0 {
+			return fmt.Errorf("%d줄을 읽지 못했다", failed)
+		}
+		return nil
+	}
 	if stream {
 		s := mdwire.NewStreamerWith(ch, opts)
 		r := bufio.NewReader(in)
@@ -131,7 +156,70 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 
 // writeReport 는 고친 것을 JSON 한 줄로 낸다 — 러스트 CLI 와 같은 키다.
 func writeReport(w io.Writer, r mdwire.Repairs) error {
-	_, err := fmt.Fprintf(w, "{\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d}\n",
-		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+	_, err := fmt.Fprintf(w, "{%s}\n", repairsFields(r))
 	return err
+}
+
+func repairsFields(r mdwire.Repairs) string {
+	return fmt.Sprintf("\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d",
+		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+}
+
+// batchJSONL 은 줄마다 문서 하나를 읽어 고친 것을 한 줄씩 낸다. 못 읽은 줄 수를 돌려준다.
+// 러스트 CLI 와 출력이 글자까지 같다 — 못 읽은 줄은 그 줄만 error 로 적고 계속 가고, 빈 줄은
+// 건너뛰되 번호(line, 1부터)는 센다.
+func batchJSONL(ch mdwire.Channel, opts mdwire.Options, in io.Reader, w *bufio.Writer) (int, error) {
+	r := bufio.NewReader(in)
+	failed := 0
+	for n := 1; ; n++ {
+		line, err := r.ReadBytes('\n')
+		if len(line) == 0 && err == io.EOF {
+			break
+		}
+		if err != nil && err != io.EOF {
+			return failed, err
+		}
+		line = bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r"))
+		// 러스트의 is_ascii_whitespace 와 같은 글자만 빈칸으로 본다 — TrimSpace 는 NBSP 도 턴다.
+		if len(bytes.Trim(line, " \t\n\f\r")) > 0 {
+			id, text, msg := readDoc(line)
+			if msg != "" {
+				failed++
+				fmt.Fprintf(w, "{\"line\":%d,\"error\":\"%s\"}\n", n, msg)
+			} else {
+				if id != "" {
+					id = "\"id\":" + id + ","
+				}
+				fmt.Fprintf(w, "{\"line\":%d,%s%s}\n", n, id, repairsFields(mdwire.RenderWith(text, ch, opts).Repairs))
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+	return failed, w.Flush()
+}
+
+// readDoc 은 한 줄을 (id, text) 로 읽는다. id 는 받은 글자 그대로다 — 다시 직렬화하면
+// 구현마다 이스케이프가 달라진다. 에러 문구는 러스트 CLI 와 같다.
+func readDoc(line []byte) (id, text, msg string) {
+	// encoding/json 은 잘못된 UTF-8 을 U+FFFD 로 바꿔 받는다. 러스트는 거절한다 — 같게 거절한다.
+	var fields map[string]json.RawMessage
+	if !utf8.Valid(line) || json.Unmarshal(line, &fields) != nil || fields == nil {
+		return "", "", "JSON 객체가 아니다"
+	}
+	raw, ok := fields["text"]
+	if !ok {
+		return "", "", "text 가 없다"
+	}
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &text) != nil {
+		return "", "", "text 는 문자열이어야 한다"
+	}
+	if raw, ok := fields["id"]; ok {
+		if c := raw[0]; c != '"' && c != '-' && (c < '0' || c > '9') {
+			return "", "", "id 는 문자열이나 숫자여야 한다"
+		}
+		id = string(raw)
+	}
+	return id, text, ""
 }
