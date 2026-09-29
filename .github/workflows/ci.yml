@@ -68,7 +68,10 @@ jobs:
       # **빌드만으로는 경계 너머가 안 잡힌다.** 만든 패키지를 빈 프로젝트에 실제로
       # 설치해서 `exports` 맵을 거쳐 불러 보고, 첫 소비자의 TypeScript 설정으로
       # 타입까지 본다.
+      #
+      # **Bun 도 깐다.** 러너 이미지에 없어서 스모크가 Bun 확인을 조용히 건너뛰고
+      # 있었다. 액션 대신 npm 으로 받는다 — typescript 와 같은 길이다.
       - name: npm 스모크
         run: |
-          npm install -g typescript
+          npm install -g typescript bun
           ./scripts/smoke.sh
