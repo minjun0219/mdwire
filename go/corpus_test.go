@@ -22,6 +22,7 @@ func corpusDir(t *testing.T) string {
 type corpusCase struct {
 	name     string
 	input    string
+	opts     Options           // from 파일이 있으면 그 입력 방언
 	expected map[string]string // 채널 이름 → 기대 출력(없는 채널은 대조하지 않는다)
 }
 
@@ -42,6 +43,13 @@ func loadCases(t *testing.T) []corpusCase {
 			continue
 		}
 		c := corpusCase{name: e.Name(), input: string(input), expected: map[string]string{}}
+		if b, err := os.ReadFile(filepath.Join(dir, e.Name(), "from")); err == nil {
+			d, ok := ParseDialect(strings.TrimSpace(string(b)))
+			if !ok {
+				t.Fatalf("%s: 모르는 입력 방언 %q", e.Name(), b)
+			}
+			c.opts.From = d
+		}
 		for _, ch := range Channels() {
 			b, err := os.ReadFile(filepath.Join(dir, e.Name(), ch.Name()+".txt"))
 			if err == nil {
@@ -66,7 +74,7 @@ func TestCorpus(t *testing.T) {
 			if !ok {
 				continue
 			}
-			got := strings.Join(Render(c.input, ch), "\x00")
+			got := strings.Join(RenderWith(c.input, ch, c.opts).Parts, "\x00")
 			if normalize(got) != normalize(want) {
 				t.Errorf("%s · %s\n  got  %q\n  want %q", c.name, ch.Name(), normalize(got), normalize(want))
 			}
@@ -79,14 +87,14 @@ func TestCorpus(t *testing.T) {
 func TestStreamingAgreesWithBatch(t *testing.T) {
 	for _, c := range loadCases(t) {
 		for _, ch := range Channels() {
-			parts := Render(c.input, ch)
+			parts := RenderWith(c.input, ch, c.opts).Parts
 			// 한도를 넘겨 나뉜 케이스는 건너뛴다 — 조각은 앞머리 줄바꿈을 털고 시작하므로
 			// 도로 이어 붙이면 스트리밍과 달라지는 것이 정상이다. 스트리밍은 한도를 모른다.
 			if len(parts) != 1 {
 				continue
 			}
 			for _, size := range []int{1, 2, 3, 7, 64} {
-				s := NewStreamer(ch)
+				s := NewStreamerWith(ch, c.opts)
 				var got []byte
 				for _, chunk := range chunksOf(c.input, size) {
 					s.PushTo(chunk, &got)
@@ -104,7 +112,7 @@ func TestStreamingAgreesWithBatch(t *testing.T) {
 // Push 와 PushTo 는 같은 코드를 부른다. 서명만 다르다.
 func TestOwnedAndBorrowedSignaturesAgree(t *testing.T) {
 	for _, c := range loadCases(t) {
-		a, b := NewStreamer(TelegramHTML), NewStreamer(TelegramHTML)
+		a, b := NewStreamerWith(TelegramHTML, c.opts), NewStreamerWith(TelegramHTML, c.opts)
 		var gotA strings.Builder
 		var gotB []byte
 		for _, chunk := range chunksOf(c.input, 11) {
