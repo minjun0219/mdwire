@@ -1,6 +1,6 @@
 // 타입만 본다 — 실행하지 않는다. `smoke.sh` 가 nodenext 설정으로 tsc 를 돌린다.
-import { render, renderWithReport, limit, Streamer } from "mdwire";
-import type { RenderOptions } from "mdwire";
+import { render, renderWithReport, limit, Streamer } from "@minjun0219/mdwire";
+import type { RenderOptions } from "@minjun0219/mdwire";
 
 const parts: string[] = render("**굵게**", "slack-markdown");
 const n: number = limit("slack-markdown");

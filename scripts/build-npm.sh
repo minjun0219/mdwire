@@ -8,7 +8,9 @@
 #
 # **루트 package.json 은 여기서 직접 쓴다.** wasm-pack 은 `name` 을 crate 이름에서
 # 가져오는데, crate 는 `mdwire-wasm` 이어야 하고(코어의 lib 이름이 `mdwire` 라 겹친다)
-# npm 에 올릴 이름은 `mdwire` 다. 버전은 워크스페이스 `Cargo.toml` 이 정본이다.
+# npm 에 올릴 이름은 `@minjun0219/mdwire` 다 — 스코프 없는 `mdwire` 는 npm 이 기존 패키지
+# `rewire` 와 너무 비슷하다고 거절했다(2026-09-29). 스코프 패키지는 기본이 비공개라
+# `publishConfig.access` 를 public 으로 둔다. 버전은 워크스페이스 `Cargo.toml` 이 정본이다.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -33,7 +35,7 @@ cp README.md LICENSE "$OUT/"
 
 cat > "$OUT/package.json" <<JSON
 {
-  "name": "mdwire",
+  "name": "@minjun0219/mdwire",
   "version": "$VERSION",
   "description": "Streaming Markdown renderer for chat channels. Telegram HTML, Slack markdown_text, plain text.",
   "license": "MIT",
@@ -51,7 +53,8 @@ cat > "$OUT/package.json" <<JSON
     }
   },
   "sideEffects": ["./bundler/mdwire.js"],
-  "files": ["bundler", "node"]
+  "files": ["bundler", "node"],
+  "publishConfig": { "access": "public" }
 }
 JSON
 
