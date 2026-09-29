@@ -1,6 +1,7 @@
 package mdwire
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -30,8 +31,8 @@ var fuzzPieces = []string{
 	"[", "]", "(", ")", "[텍스트](https://a.com/x_y)", "[괄호 (안) 텍스트](https://a.com/p)", "<", ">",
 	"<https://a.com/a/very/long/path/that/keeps/going/and/going/past/eighty/characters/for/sure/index.html|긴 링크>",
 	"<b>", "</b>", "<sub>", "</sub>",
-	"<br>", "<!-- 주석 -->", "<https://a.com/p|문서>", "<https://a.com/q>", "|", "| a | b |\n|---|---|\n",
-	"#", "## ", "> ", "- ", "  - ", "1. ", "---\n", "\n", "\n\n", " ", "  ", "\t",
+	"<br>", "<!-- 주석 -->", "<!-- 이건 아주 긴 주석이라 팔십 글자를 한참 넘어간다 — 스트리밍에서 이걸 놓으면 꺾쇠가 글자로 샌다 -->", "<https://a.com/p|문서>", "<https://a.com/q>", "|", "| a | b |\n|---|---|\n",
+	"#", "## ", "> ", "- ", "  - ", "1. ", "---\n", "\n", "\n\n", "\r\n", " ", "  ", "\t",
 	"가", "나다", "한글 조사가", "이다.", "word", "x", "2", "का_x", "&", "😀", "①", "•", ".md", "@id", "#40",
 }
 
@@ -84,6 +85,22 @@ func telegramBalanced(part string) bool {
 	return len(stack) == 0
 }
 
+type channelDialect struct {
+	ch   Channel
+	from Dialect
+}
+
+// channelDialects 는 채널 × 입력 방언 전부다.
+func channelDialects() []channelDialect {
+	var out []channelDialect
+	for _, ch := range Channels() {
+		for _, d := range []Dialect{Markdown, SlackMrkdwn} {
+			out = append(out, channelDialect{ch, d})
+		}
+	}
+	return out
+}
+
 func fuzzRounds() int {
 	if v := os.Getenv("MDWIRE_FUZZ_ROUNDS"); v != "" {
 		n := 0
@@ -103,8 +120,10 @@ func TestRandomInputNeverBreaksTheInvariants(t *testing.T) {
 	failures := 0
 	for round := 0; round < fuzzRounds() && failures < 10; round++ {
 		input := fuzzDoc(&r)
-		for _, ch := range Channels() {
-			parts := Render(input, ch)
+		for _, c := range channelDialects() {
+			ch, opts := c.ch, Options{From: c.from}
+			rendered := RenderWith(input, ch, opts)
+			parts := rendered.Parts
 			for _, p := range parts {
 				if utf8.RuneCountInString(p) > ch.Limit() {
 					t.Errorf("#%d %s: 한도 초과\n  입력: %q", round, ch.Name(), input)
@@ -119,14 +138,20 @@ func TestRandomInputNeverBreaksTheInvariants(t *testing.T) {
 				continue
 			}
 			for _, size := range []int{1, 3, 11} {
-				s := NewStreamer(ch)
+				s := NewStreamerWith(ch, opts)
 				var got []byte
-				for _, c := range chunksOf(input, size) {
-					s.PushTo(c, &got)
+				for _, piece := range chunksOf(input, size) {
+					s.PushTo(piece, &got)
 				}
 				s.FinishTo(&got)
 				if string(got) != parts[0] {
-					t.Errorf("#%d %s 조각 %d: 스트리밍이 다르다\n  입력: %q\n  완성본: %q\n  스트리밍: %q", round, ch.Name(), size, input, parts[0], got)
+					t.Errorf("#%d %s %s 조각 %d: 스트리밍이 다르다\n  입력: %q\n  완성본: %q\n  스트리밍: %q", round, ch.Name(), c.from.Name(), size, input, parts[0], got)
+					failures++
+					break
+				}
+				// 고친 것도 조각 크기와 무관하게 같아야 한다.
+				if s.Repairs() != rendered.Repairs {
+					t.Errorf("#%d %s %s 조각 %d: 고친 것이 다르다 %+v ≠ %+v\n  입력: %q", round, ch.Name(), c.from.Name(), size, s.Repairs(), rendered.Repairs, input)
 					failures++
 					break
 				}
@@ -147,16 +172,26 @@ func TestParityWithRustCore(t *testing.T) {
 	failures := 0
 	for round := 0; round < rounds && failures < 10; round++ {
 		input := fuzzDoc(&r)
-		for _, ch := range Channels() {
-			cmd := exec.Command(bin, "--channel", ch.Name())
+		for _, c := range channelDialects() {
+			cmd := exec.Command(bin, "--channel", c.ch.Name(), "--from", c.from.Name(), "--report")
 			cmd.Stdin = strings.NewReader(input)
+			var stderr strings.Builder
+			cmd.Stderr = &stderr
 			want, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("러스트 CLI 실행 실패: %v", err)
 			}
-			got := strings.Join(Render(input, ch), "\x00")
+			rendered := RenderWith(input, c.ch, Options{From: c.from})
+			got := strings.Join(rendered.Parts, "\x00")
 			if got != string(want) {
-				t.Errorf("#%d %s: 러스트와 다르다\n  입력: %q\n  go   %q\n  rust %q", round, ch.Name(), input, got, want)
+				t.Errorf("#%d %s %s: 러스트와 다르다\n  입력: %q\n  go   %q\n  rust %q", round, c.ch.Name(), c.from.Name(), input, got, want)
+				failures++
+			}
+			r := rendered.Repairs
+			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d}`,
+				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+			if report != strings.TrimSpace(stderr.String()) {
+				t.Errorf("#%d %s %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, c.ch.Name(), c.from.Name(), input, report, stderr.String())
 				failures++
 			}
 		}

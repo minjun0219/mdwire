@@ -23,7 +23,7 @@ use crate::inline::Inline;
 use crate::sink::Sink;
 use crate::vocab::{Emph, Vocab};
 use crate::width::str_width;
-use crate::Channel;
+use crate::{Channel, Dialect, Options, Repairs};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -60,6 +60,17 @@ pub(crate) struct Engine {
     scratch: String,
     table: Table,
     fence: FenceState,
+    /// 조각이 `\r` 로 끝났다. 다음 조각이 `\n` 으로 시작하면 CRLF 라 버리고, 아니면 글자다.
+    ///
+    /// **`\r` 를 줄에 먼저 넣으면 안 된다.** 넣는 순간 그 줄은 `\r` 로 끝나는 줄로 판정된다
+    /// — `---\r` 는 구분선이 아니라 문단이 되고, `\r` 하나뿐인 줄은 빈 줄이 아니라 문단이
+    /// 된다. 완성본은 `\r\n` 을 한 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면
+    /// 다음 글자를 볼 때까지 들고 있어야 한다.
+    cr: bool,
+    /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
+    closed_fence: usize,
+    /// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
+    dialect: Dialect,
 }
 
 #[derive(Default)]
@@ -72,10 +83,10 @@ struct FenceState {
 }
 
 impl Engine {
-    pub fn new(channel: Channel) -> Self {
+    pub fn new(channel: Channel, options: Options) -> Self {
         Self {
             v: Vocab::new(channel),
-            inline: Inline::new(),
+            inline: Inline::new(options.from),
             pending: Vec::new(),
             line_open: false,
             kind: LineKind::Para,
@@ -88,10 +99,26 @@ impl Engine {
             scratch: String::new(),
             table: Table::default(),
             fence: FenceState::default(),
+            cr: false,
+            closed_fence: 0,
+            dialect: options.from,
         }
     }
 
+    /// 지금까지 정규화가 고친 것.
+    pub fn repairs(&self) -> Repairs {
+        let mut r = self.inline.repairs;
+        r.closed_fence += self.closed_fence;
+        r
+    }
+
     pub fn feed<S: Sink>(&mut self, chunk: &str, sink: &mut S) {
+        if chunk.is_empty() {
+            return;
+        }
+        if std::mem::take(&mut self.cr) && !chunk.starts_with('\n') {
+            self.pending.push('\r');
+        }
         for seg in chunk.split_inclusive('\n') {
             match seg.strip_suffix('\n') {
                 Some(rest) => {
@@ -101,6 +128,13 @@ impl Engine {
                     self.progress(true, sink);
                 }
                 None => {
+                    let seg = match seg.strip_suffix('\r') {
+                        Some(s) => {
+                            self.cr = true;
+                            s
+                        }
+                        None => seg,
+                    };
                     self.pending.extend(seg.chars());
                     self.progress(false, sink);
                 }
@@ -109,11 +143,18 @@ impl Engine {
     }
 
     pub fn finish<S: Sink>(&mut self, sink: &mut S) {
+        // 문서가 `\r` 로 끝났다 — 뒤에 `\n` 이 없으니 글자다.
+        if std::mem::take(&mut self.cr) {
+            self.pending.push('\r');
+        }
         if !self.pending.is_empty() || self.line_open {
             self.progress(true, sink);
         }
         if let Some(held) = self.held.take() {
             self.whole_para(&held, sink);
+        }
+        if self.state == State::Fence {
+            self.closed_fence += 1;
         }
         self.close_block(sink);
         self.flush_all(sink);
@@ -456,7 +497,7 @@ impl Engine {
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);
                 self.start_line();
-                table.render(&self.v, &mut self.out);
+                table.render(&self.v, self.dialect, &mut self.inline.repairs, &mut self.out);
                 table.clear();
                 self.table = table;
             }
@@ -662,6 +703,23 @@ fn safe_cut(p: &[char]) -> usize {
     // **태그 모양의 `<` 도 붙든다.** `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로
     // 나가 버린다. `>` 가 오거나 태그라기엔 길어지면 놓는다 — `1 < 2` 처럼 뒤가
     // 공백이면 애초에 안 붙든다. 다음 글자가 아직 안 왔으면(`<` 가 마지막) 일단 붙든다.
+    // **주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다.** 긴 주석을 80자에서 놓으면 `<` 가
+    // 글자로 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄
+    // 안이라 안 닫힌 주석도 줄 끝에서 풀린다. 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
+    let mut i = 0;
+    while i + 4 <= k {
+        if p[i..].starts_with(&['<', '!', '-', '-']) {
+            match p[i + 4..k].windows(3).position(|w| w == ['-', '-', '>']) {
+                Some(end) => i += 4 + end + 3,
+                None => {
+                    k = i;
+                    break;
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
     if let Some(at) = p[..k].iter().rposition(|&c| c == '<') {
         let body = &p[at + 1..k];
         if !p[at..k].contains(&'>') {
@@ -834,7 +892,7 @@ impl Table {
 
     /// 고정폭 블록으로 그린다. **열은 표시 폭으로 맞춘다** — 문자 수로 맞추면
     /// 한글이 든 표는 반드시 어긋난다(`SPEC.md` 7절).
-    fn render(&mut self, v: &Vocab, out: &mut String) {
+    fn render(&mut self, v: &Vocab, dialect: Dialect, repairs: &mut Repairs, out: &mut String) {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
         // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
@@ -842,7 +900,9 @@ impl Table {
         let cell_vocab = if v.tables_native() { v } else { &plain };
         let rows = std::mem::take(&mut self.rows);
         let mut cells: Vec<Vec<String>> = Vec::with_capacity(rows.len());
-        let mut inline = Inline::new();
+        // 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의
+        // `**x` 를 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
+        let mut inline = Inline::new(dialect);
         let mut chars: Vec<char> = Vec::new();
         for row in &rows {
             let mut line = Vec::with_capacity(cols);
@@ -873,6 +933,7 @@ impl Table {
             cells.push(line);
         }
         self.rows = rows;
+        repairs.add(inline.repairs);
 
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);

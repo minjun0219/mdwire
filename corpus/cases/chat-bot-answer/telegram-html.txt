@@ -1,0 +1,11 @@
+<b>상품 상세 화면</b>은 <code>web-app</code> 에 있어요.
+<b>첫 줄 설명이
+둘째 줄까지</b> 이어져요.
+
+<b>영향 범위: 세 화면
+예시:</b>
+<pre><code class="language-ts">const a = 1;
+
+| 화면 | 경로 |
+|---|---|
+| 상품 상세 | /items/[id] |</code></pre>

@@ -10,7 +10,7 @@ import (
 // 경로다 — 블록 접두사가 없는 문단은 완성본 파이프라인과 같은 답을 낸다.
 func renderLine(input string, ch Channel) string {
 	v := vocab{channel: ch}
-	in := newInline()
+	in := newInline(Markdown)
 	var out []byte
 	for i, l := range strings.Split(input, "\n") {
 		if i > 0 {
@@ -98,6 +98,23 @@ func TestBlocksMatchRustCore(t *testing.T) {
 		}
 		for i, input := range inputs {
 			if got := strings.Join(Render(input, ch), "\x00"); got != want[i] {
+				t.Errorf("%s %q:\n  got  %q\n  want %q", ch.Name(), input, got, want[i])
+			}
+		}
+	}
+}
+
+// 입력 방언 — 레거시 mrkdwn 으로 쓴 입력. 기대값은 러스트 CLI `--from slack-mrkdwn` 에서 뽑았다.
+func TestMrkdwnMatchesRustCore(t *testing.T) {
+	inputs := readCases(t, "mrkdwn-input.txt")
+	for _, ch := range Channels() {
+		want := readCases(t, "mrkdwn."+ch.Name()+".txt")
+		if len(want) != len(inputs) {
+			t.Fatalf("%s: 기대값 %d개, 입력 %d개 — regen.sh 를 다시 돌린다", ch.Name(), len(want), len(inputs))
+		}
+		for i, input := range inputs {
+			got := strings.Join(RenderWith(input, ch, Options{From: SlackMrkdwn}).Parts, "\x00")
+			if got != want[i] {
 				t.Errorf("%s %q:\n  got  %q\n  want %q", ch.Name(), input, got, want[i])
 			}
 		}

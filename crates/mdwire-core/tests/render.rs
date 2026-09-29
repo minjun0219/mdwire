@@ -733,3 +733,78 @@ fn a_long_space_free_span_is_cut_within_the_limit() {
         }
     }
 }
+
+// ── 입력 방언 · 고친 것 ─────────────────────────────────────────────────
+
+fn mrkdwn(input: &str, channel: Channel) -> String {
+    let out = mdwire::render_with(input, channel, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn });
+    out.parts.join("")
+}
+
+/// **레거시 mrkdwn 으로 쓴 입력.** 슬랙에 답하는 에이전트는 흔히 이 표기로 쓴다 —
+/// 표준으로 읽으면 `*굵게*` 가 기울임이 되고 `~취소~` 는 글자로 남는다.
+#[test]
+fn slack_mrkdwn_input_reads_single_markers_as_bold_and_strike() {
+    let input = "*상품 상세 화면*은 `web-app` 에 있어요. ~예전 방식~ 대신 <https://x.io|서비스웹> 으로.";
+    assert_eq!(
+        mrkdwn(input, Channel::SlackMarkdown),
+        "**상품 상세 화면**은 `web-app` 에 있어요. ~~예전 방식~~ 대신 [서비스웹](https://x.io) 으로."
+    );
+    assert_eq!(
+        mrkdwn(input, Channel::TelegramHtml),
+        "<b>상품 상세 화면</b>은 <code>web-app</code> 에 있어요. <s>예전 방식</s> 대신 <a href=\"https://x.io\">서비스웹</a> 으로."
+    );
+    // 표준 표기가 섞여도 같은 뜻이다.
+    assert_eq!(mrkdwn("**굵게** 와 ~~취소~~ 와 _기울임_", Channel::TelegramHtml), "<b>굵게</b> 와 <s>취소</s> 와 <i>기울임</i>");
+    // 코드 안은 글자다.
+    assert_eq!(mrkdwn("`코드 안 *별표*`", Channel::SlackMarkdown), "`코드 안 *별표*`");
+}
+
+/// **한국어의 물결표는 mrkdwn 에서도 글자다.** 근사값(`~40km`)·범위(`5~6월`)는 취소선을
+/// 열지도 닫지도 않고, 안 닫힌 `~` 는 블록 끝까지 긋지 않고 글자로 되돌린다.
+#[test]
+fn slack_mrkdwn_keeps_korean_tildes_literal() {
+    assert_eq!(mrkdwn("약 ~40km, 5~6월 이동 ~취소~가 된다", Channel::SlackMarkdown), "약 ~40km, 5~6월 이동 ~~취소~~가 된다");
+    assert_eq!(mrkdwn("1~2일, ~3시간", Channel::TelegramHtml), "1~2일, ~3시간");
+    assert_eq!(mrkdwn("가격 ~만원 할인", Channel::TelegramHtml), "가격 ~만원 할인");
+}
+
+/// **정규화가 고친 것을 센다.** 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
+#[test]
+fn repairs_count_what_the_normalizer_fixed() {
+    let out = mdwire::render_with("**영향 범위\n```ts\nconst a = `b;\n", Channel::TelegramHtml, mdwire::Options::default());
+    assert_eq!(out.repairs.closed_emphasis, 1, "{:?}", out.repairs);
+    assert_eq!(out.repairs.closed_fence, 1, "{:?}", out.repairs);
+
+    let out = mdwire::render_with("앞 ` 뒤 **굵게** 와 꼬리**", Channel::TelegramHtml, mdwire::Options::default());
+    assert_eq!(out.repairs.reverted_code_span, 1, "{:?}", out.repairs);
+    assert_eq!(out.repairs.dropped_marker, 1, "{:?}", out.repairs);
+
+    // 멀쩡한 입력은 아무것도 안 고친다.
+    let out = mdwire::render_with("**굵게** 와 `코드`\n```\n펜스\n```", Channel::SlackMarkdown, mdwire::Options::default());
+    assert!(!out.repairs.any(), "{:?}", out.repairs);
+
+    // 표 셀에서 고친 것도 센다 — 셀을 그리는 인라인이 따로 돌아도 문서의 것이다.
+    for ch in [Channel::SlackMarkdown, Channel::TelegramHtml] {
+        let out = mdwire::render_with("| a |\n|---|\n| **x |", ch, mdwire::Options::default());
+        assert_eq!(out.repairs.closed_emphasis, 1, "{ch:?} {:?}", out.repairs);
+    }
+}
+
+/// 스트리밍도 같은 수를 센다 — 조각 크기와 무관하게.
+#[test]
+fn streamer_counts_the_same_repairs() {
+    let input = "**영향 범위\n다음 줄\n\n앞 ` 뒤 꼬리**\n```ts\nconst a = 1;";
+    let batch = mdwire::render_with(input, Channel::TelegramHtml, mdwire::Options::default());
+    for size in [1usize, 3, 64] {
+        let mut s = Streamer::new(Channel::TelegramHtml);
+        let mut got = String::new();
+        let chars: Vec<char> = input.chars().collect();
+        for chunk in chars.chunks(size) {
+            s.push_into(&chunk.iter().collect::<String>(), &mut got);
+        }
+        s.finish_into(&mut got);
+        assert_eq!(got, batch.parts.join(""), "조각 {size}");
+        assert_eq!(s.repairs(), batch.repairs, "조각 {size}");
+    }
+}

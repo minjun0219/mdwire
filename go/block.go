@@ -101,16 +101,44 @@ type engine struct {
 	hasHeld bool
 	table   table
 	fence   fenceState
+	// 조각이 `\r` 로 끝났다. 다음 조각이 `\n` 으로 시작하면 CRLF 라 버리고, 아니면 글자다.
+	// `\r` 를 줄에 먼저 넣으면 `---\r` 가 구분선이 아니라 문단이 된다 — 완성본은 `\r\n` 을 한
+	// 번에 봐서 안 갈린다. 스트리밍이 같은 답을 내려면 다음 글자를 볼 때까지 들고 있어야 한다.
+	cr bool
+	// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
+	closedFence int
+	// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
+	dialect Dialect
 }
 
-func newEngine(ch Channel) *engine {
-	return &engine{v: vocab{channel: ch}, inline: newInline()}
+func newEngine(ch Channel, o Options) *engine {
+	return &engine{v: vocab{channel: ch}, inline: newInline(o.From), dialect: o.From}
+}
+
+// repairs 는 지금까지 정규화가 고친 것이다.
+func (e *engine) repairs() Repairs {
+	r := e.inline.repairs
+	r.ClosedFence += e.closedFence
+	return r
 }
 
 func (e *engine) feed(chunk string, s sink) {
+	if chunk == "" {
+		return
+	}
+	if e.cr {
+		e.cr = false
+		if chunk[0] != '\n' {
+			e.pending = append(e.pending, '\r')
+		}
+	}
 	for len(chunk) > 0 {
 		nl := strings.IndexByte(chunk, '\n')
 		if nl < 0 {
+			if strings.HasSuffix(chunk, "\r") {
+				e.cr = true
+				chunk = chunk[:len(chunk)-1]
+			}
 			e.pending = appendRunes(e.pending, chunk)
 			e.progress(false, s)
 			return
@@ -125,6 +153,11 @@ func (e *engine) feed(chunk string, s sink) {
 }
 
 func (e *engine) finish(s sink) {
+	// 문서가 `\r` 로 끝났다 — 뒤에 `\n` 이 없으니 글자다.
+	if e.cr {
+		e.cr = false
+		e.pending = append(e.pending, '\r')
+	}
 	if len(e.pending) > 0 || e.lineOpen {
 		e.progress(true, s)
 	}
@@ -132,6 +165,9 @@ func (e *engine) finish(s sink) {
 		held := e.held
 		e.held, e.hasHeld = "", false
 		e.wholePara(held, s)
+	}
+	if e.state == stateFence {
+		e.closedFence++
 	}
 	e.closeBlock(s)
 	e.flushAll(s)
@@ -431,7 +467,7 @@ func (e *engine) closeBlock(s sink) {
 		e.blockCloseMarkup(&e.out)
 	case stateTable:
 		e.startLine()
-		e.table.render(e.v, &e.out)
+		e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
 		e.table.clear()
 	}
 	e.state = stateNone
@@ -629,6 +665,21 @@ func safeCut(p []rune) int {
 	}
 	// 태그 모양의 `<` 도 붙든다. `<sub>` 가 `<su` / `b>` 로 갈리면 앞쪽이 글자로 나가 버린다.
 	// `>` 가 오거나 태그라기엔 길어지면 놓는다. 다음 글자가 아직 안 왔으면 일단 붙든다.
+	// 주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다. 긴 주석을 80자에서 놓으면 `<` 가 글자로
+	// 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄 안이다.
+	// 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
+	for i := 0; i+4 <= k; {
+		if startsWith(p[i:], "<!--") {
+			end := findSeq(p[i+4:k], "-->")
+			if end < 0 {
+				k = i
+				break
+			}
+			i += 4 + end + 3
+		} else {
+			i++
+		}
+	}
 	if at := lastIndexRune(p[:k], '<'); at >= 0 && indexRune(p[at:k], '>') < 0 {
 		body := p[at+1 : k]
 		if prefixMatch(body, "http://") || prefixMatch(body, "https://") {
@@ -813,7 +864,7 @@ func (t *table) clear() {
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
 // 표는 반드시 어긋난다(SPEC 7절). 표를 직접 그리는 채널은 GFM 그대로 낸다.
-func (t *table) render(v vocab, out *[]byte) {
+func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
@@ -821,7 +872,9 @@ func (t *table) render(v vocab, out *[]byte) {
 	if v.tablesNative() {
 		cellVocab = v
 	}
-	in := newInline()
+	// 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
+	// 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
+	in := newInline(d)
 	cells := make([][]string, 0, len(t.rows))
 	for _, row := range t.rows {
 		line := make([]string, 0, cols)
@@ -847,6 +900,7 @@ func (t *table) render(v vocab, out *[]byte) {
 		}
 		cells = append(cells, line)
 	}
+	repairs.add(in.repairs)
 
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)

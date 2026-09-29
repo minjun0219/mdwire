@@ -20,8 +20,14 @@ func main() {
 }
 
 func run(args []string, in io.Reader, out io.Writer) error {
+	return runWith(args, in, out, os.Stderr)
+}
+
+// runWith 는 run 에 stderr 를 따로 받는다 — --report 가 거기로 나간다.
+func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 	var channel string
-	stream := false
+	stream, report := false, false
+	var opts mdwire.Options
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--channel":
@@ -32,8 +38,20 @@ func run(args []string, in io.Reader, out io.Writer) error {
 			channel = args[i]
 		case "--stream":
 			stream = true
+		case "--report":
+			report = true
+		case "--from":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--from 에 값이 없다")
+			}
+			i++
+			d, ok := mdwire.ParseDialect(args[i])
+			if !ok {
+				return fmt.Errorf("모르는 방언: %q (markdown · slack-mrkdwn)", args[i])
+			}
+			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|plain [--stream] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|plain [--from markdown|slack-mrkdwn] [--stream] [--report] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])
@@ -47,7 +65,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	// 끝나면 호출자가 배달 실패를 알 수 없다.
 	w := bufio.NewWriter(out)
 	if stream {
-		s := mdwire.NewStreamer(ch)
+		s := mdwire.NewStreamerWith(ch, opts)
 		r := bufio.NewReader(in)
 		var piece []byte
 		var chunk []byte
@@ -79,13 +97,20 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		if _, err := w.Write(piece); err != nil {
 			return err
 		}
-		return w.Flush()
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		if report {
+			return writeReport(errOut, s.Repairs())
+		}
+		return nil
 	}
 	input, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
-	for i, part := range mdwire.Render(string(input), ch) {
+	rendered := mdwire.RenderWith(string(input), ch, opts)
+	for i, part := range rendered.Parts {
 		if i > 0 {
 			if err := w.WriteByte(0); err != nil {
 				return err
@@ -95,5 +120,18 @@ func run(args []string, in io.Reader, out io.Writer) error {
 			return err
 		}
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	if report {
+		return writeReport(errOut, rendered.Repairs)
+	}
+	return nil
+}
+
+// writeReport 는 고친 것을 JSON 한 줄로 낸다 — 러스트 CLI 와 같은 키다.
+func writeReport(w io.Writer, r mdwire.Repairs) error {
+	_, err := fmt.Fprintf(w, "{\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d}\n",
+		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+	return err
 }

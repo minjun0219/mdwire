@@ -1,8 +1,16 @@
 // 타입만 본다 — 실행하지 않는다. `smoke.sh` 가 nodenext 설정으로 tsc 를 돌린다.
-import { render, limit, Streamer } from "mdwire";
+import { render, renderWithReport, limit, Streamer } from "mdwire";
+import type { RenderOptions } from "mdwire";
 
 const parts: string[] = render("**굵게**", "slack-markdown");
 const n: number = limit("slack-markdown");
 const s = new Streamer("slack-markdown");
 const out: string = s.push("조각") + s.closeOpen() + s.finish();
-void [parts, n, out];
+
+// 옵션은 좁은 타입이다 — 방언 이름을 틀리면 컴파일에서 걸린다.
+const opts: RenderOptions = { from: "slack-mrkdwn" };
+const withOpts: string[] = render("*굵게*", "slack-markdown", opts);
+const report = renderWithReport("**열림", "telegram-html", opts);
+const closed: number = report.repairs.closedEmphasis + s.repairs().closedFence;
+const reportParts: string[] = report.parts;
+void [parts, n, out, withOpts, closed, reportParts];

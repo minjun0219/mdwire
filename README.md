@@ -31,6 +31,10 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 ```sh
 cat agent-output.md | mdwire --channel telegram-html          # parts separated by NUL
 cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arrives
+
+# The agent wrote Slack's legacy mrkdwn (*bold*, ~strike~)? Say so. --report prints what
+# the normalizer fixed (unclosed emphasis, unclosed fence, …) as one JSON line on stderr.
+cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
 ```
 
 ```rust
@@ -42,18 +46,36 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import { render, Streamer } from "mdwire";   // npm — works under a bundler and in plain Node
+import { render, renderWithReport, Streamer } from "mdwire";   // npm — bundlers, Node, Bun
 
 const parts = render(markdown, "telegram-html");
+const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 
+// A channel that rewrites the whole message (Telegram edit): send acc plus the tail
+// that closes open blocks. Keep acc itself untouched.
 const s = new Streamer("telegram-html");
 let acc = "";
 for await (const chunk of tokens) {
   acc += s.push(chunk);
-  await edit(acc + s.closeOpen());   // closeOpen is for sending mid-stream; keep acc as is
+  await edit(acc + s.closeOpen());
 }
 acc += s.finish();
+
+// An append-only channel (Slack appendStream): send each piece as is — never closeOpen.
+const t = new Streamer("slack-markdown");
+for await (const chunk of tokens) {
+  const piece = t.push(chunk);
+  if (piece) await append(piece);
+}
+await append(t.finish());
 ```
+
+**Append-only contract.** What `push` returns is final — a later chunk never rewrites it —
+and `finish` only appends the tail. So the pieces concatenated equal a one-shot `render`,
+whatever the chunk size (unless the document is long enough to be split into parts).
+This is tested on the corpus, by fuzzing, and by `mdwire-check --scan <dir>`, which streams
+every file one character and 64 characters at a time and reports any divergence. Runs in
+Node, Bun, and bundlers. See `SPEC.md` §8.2.
 
 The streamer holds back only what it must: a prefix it cannot classify yet, a marker run
 at the end of a chunk, and the inside of an emphasis that has not closed. Paragraphs are

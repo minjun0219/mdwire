@@ -17,6 +17,11 @@ pub trait Renderer {
     fn name(&self) -> String;
     /// 입력을 채널용으로 변환한다. 조각이 여럿이면 NUL 로 잇는다.
     fn render(&self, input: &str, channel: Channel) -> Result<String, String>;
+    /// 입력을 `chunk` 글자씩 흘려 넣고, 돌려받은 것을 **이어 붙이기만** 한 결과.
+    /// 스트리밍이 없는 구현은 `None` 이다 — 그러면 스트리밍 불일치는 재지 않는다.
+    fn stream(&self, _input: &str, _channel: Channel, _chunk: usize) -> Option<String> {
+        None
+    }
 }
 
 /// 이 저장소의 구현.
@@ -30,6 +35,19 @@ impl Renderer for Mdwire {
 
     fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
         Ok(mdwire::render(input, channel).join("\0"))
+    }
+
+    fn stream(&self, input: &str, channel: Channel, chunk: usize) -> Option<String> {
+        let mut s = mdwire::Streamer::new(channel);
+        let mut out = String::new();
+        let mut rest = input;
+        while !rest.is_empty() {
+            let end = rest.char_indices().nth(chunk).map_or(rest.len(), |(i, _)| i);
+            out.push_str(s.push(&rest[..end]));
+            rest = &rest[end..];
+        }
+        out.push_str(s.finish());
+        Some(out)
     }
 }
 
