@@ -12,8 +12,11 @@ shape() {
     /^#+ / { match($0, /^#+/); levels = levels RLENGTH " " }
     END { print "절 깊이: " levels; print "코드 블록: " fence / 2; print "코드 줄: " code }
   ' "$1"
+  # 링크는 맨 URL 과 마크다운 링크의 목적지 둘 다 본다. 언어 전환 링크(README*.md)는 두 벌이
+  # 서로를 가리켜 원래 다르다 — 뺀다.
   echo "링크:"
-  grep -o 'https\?://[^ )>`"]*' "$1" | sort -u
+  { grep -o 'https\?://[^ )>`"]*' "$1"; grep -o '](\([^)]*\))' "$1" | sed 's/^](//; s/)$//'; } \
+    | grep -v '^README\(\.[a-z]*\)\?\.md$' | sort -u
 }
 
 if ! diff <(shape README.md) <(shape README.ko.md) > /dev/null; then
