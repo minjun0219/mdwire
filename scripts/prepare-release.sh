@@ -37,10 +37,11 @@ perl -pi -e 's/^version = ".*"/version = "'"$next"'"/ if /^\[workspace\.package\
 perl -pi -e 's/(mdwire-core = \{ path = "\.\.\/mdwire-core", version = ")[^"]*/${1}'"$next"'/' crates/mdwire-cli/Cargo.toml
 cargo update --workspace --quiet
 
-# README 의 설치 줄은 이 판의 산출물을 가리킨다. 안 나간 버전을 가리키면 404 다.
-# 영어·한국어 두 벌을 같이 고친다.
+# README 의 설치 줄은 이 판의 산출물을 가리킨다. 안 나간 버전을 가리키면 404 다. 머리의
+# 상태 줄(`**Status: vX.**` · `**상태: vX.**`)도 같은 판을 적는다. 영어·한국어 두 벌을 같이 고친다.
 perl -pi -e 's{releases/download/v[0-9.]+/mdwire-[0-9.]+\.tgz}{releases/download/v'"$next"'/mdwire-'"$next"'.tgz}g;
-             s{releases/download/v[0-9.]+/mdwire-v[0-9.]+-}{releases/download/v'"$next"'/mdwire-v'"$next"'-}g' README.md README.ko.md
+             s{releases/download/v[0-9.]+/mdwire-v[0-9.]+-}{releases/download/v'"$next"'/mdwire-v'"$next"'-}g;
+             s{^\*\*(Status|상태): v[0-9.]+\.\*\*}{**$1: v'"$next"'.**}' README.md README.ko.md
 
 # 변경 기록은 태그 전체에서 다시 만든다 — 손으로 고친 흔적이 남지 않는다.
 git cliff --tag "v$next" --output CHANGELOG.md 2>/dev/null
