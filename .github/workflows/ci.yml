@@ -23,6 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # README 는 영어·한국어 두 벌이 같이 간다(AGENTS.md). 가장 싼 검사라 맨 앞에 둔다.
+      - name: README 두 벌
+        run: ./scripts/readme-sync.sh
+
       - name: 툴체인
         run: |
           rustup update --no-self-update stable
