@@ -1,0 +1,17 @@
+:root { font-family: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif; color-scheme: light dark; }
+body { margin: 0; padding: 16px; }
+header { max-width: 72ch; margin-bottom: 16px; }
+header h1 { font-size: 1.25rem; margin: 0 0 8px; }
+label { display: inline-flex; gap: 8px; align-items: center; margin-right: 12px; }
+.panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.pane { border: 1px solid #8884; border-radius: 8px; padding: 12px; min-width: 0; }
+.pane h2 { font-size: 0.95rem; margin: 0 0 8px; }
+.pane h2 small { font-weight: normal; opacity: 0.6; }
+.body { overflow-wrap: anywhere; line-height: 1.6; }
+.body table { border-collapse: collapse; }
+.body th, .body td { border: 1px solid #8886; padding: 2px 8px; }
+.body pre { background: #8881; padding: 8px; border-radius: 6px; overflow-x: auto; }
+.body blockquote { margin: 0; padding-left: 12px; border-left: 3px solid #8886; }
+/* Streamdown 은 Tailwind 클래스로 칠한다 — 이 예제엔 Tailwind 가 없어서 굵게·기울임만 직접 준다. */
+[data-streamdown="strong"] { font-weight: 700; }
+[data-streamdown="link"] { color: LinkText; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
