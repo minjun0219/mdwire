@@ -58,6 +58,9 @@ type inline struct {
 	inCell bool
 	// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
 	strippedTags []uint8
+	// preview 면 미리보기 복제본이다 — 블록이 끝날 때 안 닫힌 코드 스팬을 글자로 되돌리지 않고
+	// 닫는다. 러스트 쪽 Inline::preview.
+	preview bool
 }
 
 func newInline(d Dialect) *inline {
@@ -65,14 +68,6 @@ func newInline(d Dialect) *inline {
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
-// openCodeRun 은 열려 있는 코드 스팬의 백틱 런 길이다. 코드 스팬 안에서는 다른 것이 안 열려 늘 맨 위다.
-func (in *inline) openCodeRun() (int, bool) {
-	if n := len(in.open); n > 0 && in.open[n-1].emph == emphCode {
-		return in.open[n-1].run, true
-	}
-	return 0, false
-}
-
 func (in *inline) reset() {
 	in.open = in.open[:0]
 	in.prev = noChar
@@ -306,7 +301,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 // finishBlock: 블록이 끝났다. 열린 것을 전부 정리한다.
 func (in *inline) finishBlock(out *[]byte, v vocab) {
 	for len(in.open) > 0 {
-		if in.open[len(in.open)-1].emph == emphCode {
+		if in.open[len(in.open)-1].emph == emphCode && !in.preview {
 			in.revertCodeSpan(out, v)
 			continue
 		}

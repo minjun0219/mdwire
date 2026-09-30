@@ -1125,6 +1125,19 @@ fn preview_draws_what_push_holds() {
     }
     assert_eq!(snap(Channel::TelegramHtml, "앞말 **굵"), ("앞말 ".into(), "<b>굵</b>".into()));
     assert_eq!(snap(Channel::TelegramHtml, "앞 `코드"), ("앞 ".into(), "<code>코드</code>".into()));
+    // 닫는 백틱이 조각 끝에 붙들려 있어도, 줄을 넘어 열려 있어도 코드로 닫는다 — 닫는 백틱을
+    // 입력으로 흘려 넣던 때는 `` ` `` 두 개가 합쳐지고, 새 줄 첫머리의 펜스로 읽혔다(자체 리뷰).
+    for (channel, input) in [
+        (Channel::TelegramHtml, "앞 `코드`"),
+        (Channel::TelegramHtml, "앞 `코드` "),
+        (Channel::Html, "> a ```b\n"),
+        (Channel::Html, "> a `b\n"),
+        (Channel::Html, "- a `b\n"),
+    ] {
+        let (acc, tail) = snap(channel, input);
+        let got = acc + &tail;
+        assert!(!got.contains('`') && !got.contains("<pre>"), "{input:?} → {got:?}");
+    }
     let (acc, tail) = snap(Channel::Html, "| a | b |\n|---|---|\n| 1 | 2 |\n| 3");
     assert!(acc.is_empty() && tail.starts_with("<table>") && tail.contains("<td>1</td>"), "{tail}");
     // 미리보기는 상태를 바꾸지 않는다 — 이어서 흘린 결과가 일괄 렌더와 같다.
@@ -1164,4 +1177,9 @@ fn revised_tells_whether_the_last_preview_was_final() {
     s.push_into(" 뒤", &mut acc);
     s.finish_into(&mut acc);
     assert!(s.revised(), "미리보기 뒤에 조각이 더 왔다");
+    assert_eq!(s.preview(), "", "끝난 뒤에는 더 그릴 꼬리가 없다");
+    let mut s = Streamer::new(Channel::TelegramHtml);
+    s.push_into("앞 **굵", &mut acc);
+    s.finish_into(&mut acc);
+    assert_eq!(s.preview(), "", "미리보기 없이 끝났어도 마찬가지");
 }

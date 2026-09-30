@@ -134,8 +134,8 @@ type Streamer struct {
 	started bool
 	// tail 은 마지막 Preview 의 꼬리다. 재사용 버퍼 — 열린 블록만큼이지 문서 전체가 아니다.
 	tail []byte
-	// previewed 는 미리보기를 한 번이라도 했는가, dirty 는 그 뒤에 조각이 더 들어왔는가다.
-	previewed, dirty bool
+	// dirty 는 tail 이 지금 상태를 반영하지 않는가다 — 미리보기를 안 했거나 그 뒤에 조각이 더 왔다.
+	dirty bool
 	// revised 는 Revised 의 답이다. Finish 가 정한다.
 	revised bool
 }
@@ -147,7 +147,7 @@ func NewStreamer(ch Channel) *Streamer {
 
 // NewStreamerWith 는 옵션을 주고 만든다 — 입력 방언 따위.
 func NewStreamerWith(ch Channel, o Options) *Streamer {
-	return &Streamer{e: newEngine(ch, o), revised: true}
+	return &Streamer{e: newEngine(ch, o), dirty: true, revised: true}
 }
 
 // Repairs 는 지금까지 정규화가 고친 것이다. Finish 뒤에 보면 문서 전체의 값이다.
@@ -174,7 +174,9 @@ func (s *Streamer) FinishTo(dst *[]byte) {
 	from := len(*dst)
 	s.e.finish(bytesSink{dst})
 	s.trimLeading(dst, from)
-	s.revised = !s.previewed || s.dirty || !bytes.Equal(s.tail, (*dst)[from:])
+	s.revised = s.dirty || !bytes.Equal(s.tail, (*dst)[from:])
+	// 끝난 엔진에 더 그릴 꼬리는 없다. 비워 두지 않으면 뒤이은 Preview 가 finish 꼬리를 한 번 더 낸다.
+	s.tail, s.dirty = s.tail[:0], false
 }
 
 // PreviewTo 는 지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리를 dst 에 붙인다 — 러스트 쪽
@@ -186,12 +188,17 @@ func (s *Streamer) FinishTo(dst *[]byte) {
 // 있다. 끝난 뒤 마지막 미리보기와 달라졌는지는 Revised 가 알려 준다. 비용은 열린 블록 크기에
 // 비례한다(엔진을 복제한다). 조각마다 말고 화면을 그릴 때 부른다.
 func (s *Streamer) PreviewTo(dst *[]byte) {
-	s.tail = s.tail[:0]
-	s.e.preview(bytesSink{&s.tail})
-	if !s.started {
-		s.tail = bytes.TrimLeft(s.tail, "\n")
+	// 그 뒤로 조각이 안 왔으면 같은 답이다 — 다시 그리는 쪽은 조각과 무관하게도 자주 부른다.
+	if s.dirty {
+		s.tail = s.tail[:0]
+		s.e.preview(bytesSink{&s.tail})
+		if !s.started {
+			// 앞을 잘라 낸 부분 슬라이스를 남기면 버퍼 앞쪽 용량을 매번 버린다 — 당겨 쓴다.
+			n := len(s.tail) - len(bytes.TrimLeft(s.tail, "\n"))
+			s.tail = s.tail[:copy(s.tail, s.tail[n:])]
+		}
+		s.dirty = false
 	}
-	s.previewed, s.dirty = true, false
 	*dst = append(*dst, s.tail...)
 }
 
@@ -205,7 +212,8 @@ func (s *Streamer) Preview() string {
 // Revised 는 완성본이 마지막 미리보기와 다른가다 — Finish 뒤에 본다. 거짓이면 마지막으로 그린
 // 화면(누적본 + Preview)이 곧 완성본이라 다시 그릴 필요가 없다. 텔레그램은 같은 내용으로 편집하면
 // 400("message is not modified")을 주므로 이걸 보고 마지막 편집을 건너뛴다. 미리보기를 안 했거나
-// 그 뒤에 조각이 더 왔으면 참이다.
+// 그 뒤에 조각이 더 왔으면 참이다 — 참은 "다를 수 있다"는 뜻이다. 편집을 솎아 보내 마지막
+// 미리보기가 마지막 조각보다 앞서면 완성본이 같아도 참이니, 그런 쪽은 보낸 문자열과 직접 비교한다.
 func (s *Streamer) Revised() bool { return s.revised }
 
 // Finish 는 FinishTo 의 편의 서명이다.
