@@ -3,6 +3,7 @@ package mdwire
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 채널별 출력 어휘.
@@ -61,10 +62,11 @@ type vocab struct {
 func newVocab(ch Channel, o Options) vocab {
 	limit := o.Limit
 	switch {
-	case limit == 0:
+	// 브라우저 채널은 나누지 않는다 — 분할기가 <p>·<ul> 을 여닫지 않는다.
+	case limit == 0 || ch == HTML:
 		limit = ch.Limit()
-	case limit < 1:
-		limit = 1
+	case limit < MinLimit:
+		limit = MinLimit
 	}
 	return vocab{
 		channel:    ch,
@@ -448,10 +450,10 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 	switch v.channel {
 	case TelegramHTML, HTML:
 		*out = append(*out, "<pre>"...)
-		if info != "" {
+		if lang := fenceLang(info); lang != "" {
 			*out = append(*out, `<code class="language-`...)
 			// 속성값이다 — `"` 까지 escape 한다. 안 하면 info 가 속성을 하나 더 끼워 넣는다.
-			appendAttr(info, out)
+			appendAttr(lang, out)
 			*out = append(*out, `">`...)
 		}
 	case Plain:
@@ -459,6 +461,16 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 		*out = append(*out, "```"...)
 		*out = append(*out, info...)
 	}
+}
+
+// fenceLang 은 코드펜스 info 에서 class 에 넣을 언어다 — 러스트 쪽 fence_lang. 첫 단어이고,
+// 32자를 넘으면 언어 이름이 아니라서 버린다.
+func fenceLang(info string) string {
+	f := strings.Fields(info)
+	if len(f) == 0 || utf8.RuneCountInString(f[0]) > 32 {
+		return ""
+	}
+	return f[0]
 }
 
 // verbatimBodyNewline 은 여는 마크업과 첫 내용 줄 사이에 줄바꿈이 필요한가다.
@@ -470,7 +482,7 @@ func (v vocab) verbatimBodyNewline() bool {
 func (v vocab) verbatimClose(info string, out *[]byte) {
 	switch v.channel {
 	case TelegramHTML, HTML:
-		if info != "" {
+		if fenceLang(info) != "" {
 			*out = append(*out, "</code>"...)
 		}
 		*out = append(*out, "</pre>"...)
