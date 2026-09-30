@@ -41,6 +41,12 @@ pub enum Channel {
     GithubMarkdown,
     /// 모든 마크업 제거. 폴백 경로.
     Plain,
+    /// 브라우저에 넣을 HTML 조각. 헤딩·목록·표·코드블록을 태그로 그린다. 한도 없음.
+    ///
+    /// `innerHTML` 로 바로 넣는 것을 전제로 한다 — 글자는 전부 escape 하고, 원문의 HTML 은
+    /// 속성을 버린 인라인 태그만 살리며, 링크는 `http(s)`·`mailto` 만 `<a>` 로 낸다.
+    /// 스트리밍 누적본에 [`Streamer::close_open`] 을 붙이면 그대로 넣어도 되는 모양이 된다.
+    Html,
 }
 
 impl Channel {
@@ -51,12 +57,13 @@ impl Channel {
             Channel::SlackMarkdown => "slack-markdown",
             Channel::GithubMarkdown => "github-markdown",
             Channel::Plain => "plain",
+            Channel::Html => "html",
         }
     }
 
     /// 내보낼 수 있는 채널 전부. 코퍼스와 하네스가 이 목록을 돈다.
-    pub fn all() -> [Channel; 4] {
-        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain]
+    pub fn all() -> [Channel; 5] {
+        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain, Channel::Html]
     }
 
     /// 이름으로 채널을 찾는다.
@@ -71,6 +78,8 @@ impl Channel {
             Channel::SlackMarkdown | Channel::Plain => 12_000,
             // 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
             Channel::GithubMarkdown => 65_536,
+            // 브라우저에는 메시지 한도가 없다. 나누지 않는다.
+            Channel::Html => usize::MAX,
         }
     }
 }

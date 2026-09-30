@@ -2,6 +2,7 @@ package mdwire
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strings"
@@ -34,6 +35,8 @@ var fuzzPieces = []string{
 	"<br>", "<!-- 주석 -->", "<!-- 이건 아주 긴 주석이라 팔십 글자를 한참 넘어간다 — 스트리밍에서 이걸 놓으면 꺾쇠가 글자로 샌다 -->", "<https://a.com/p|문서>", "<https://a.com/q>", "|", "| a | b |\n|---|---|\n",
 	"#", "## ", "> ", "- ", "  - ", "1. ", "---\n", "\n", "\n\n", "\r\n", " ", "  ", "\t",
 	"가", "나다", "한글 조사가", "이다.", "word", "x", "2", "का_x", "&", "😀", "①", "•", ".md", "@id", "#40",
+	// 브라우저 채널이 막아야 하는 것들 — 스킴, 이벤트 속성, 속성값에 드는 info, 마스킹 번호.
+	"[x](javascript:alert(1))", "[m](MAILTO:a@b.c)", `<span onclick="x">`, "</span>", "<SUB>", "```x\" y=\"z\n", "4***-****-003*",
 }
 
 func fuzzDoc(r *xorshift) string {
@@ -200,13 +203,17 @@ func TestParityWithRustCore(t *testing.T) {
 
 // 공백 없는 긴 강조를 글자로 끊어도 조각이 한도를 지킨다 — 러스트 쪽 같은 이름의 테스트.
 func TestLongSpaceFreeSpanIsCutWithinTheLimit(t *testing.T) {
-	// 가장 큰 한도보다 길어야 모든 채널이 나눈다.
+	// 가장 큰 한도보다 길어야 모든 채널이 나눈다. 한도가 없는 채널(html)은 나누지 않으니 뺀다.
+	var splits []Channel
 	longest := 0
 	for _, ch := range Channels() {
-		longest = max(longest, ch.Limit())
+		if ch.Limit() < math.MaxInt {
+			splits = append(splits, ch)
+			longest = max(longest, ch.Limit())
+		}
 	}
 	input := "**" + strings.Repeat("a", longest+longest/2) + "**"
-	for _, ch := range Channels() {
+	for _, ch := range splits {
 		parts := Render(input, ch)
 		if len(parts) < 2 {
 			t.Errorf("%s: 나뉘어야 한다", ch.Name())

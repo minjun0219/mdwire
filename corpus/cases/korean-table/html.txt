@@ -1,0 +1,4 @@
+<table>
+<thead><tr><th>환경</th><th style="text-align:center">재현</th><th style="text-align:right">응답 시간</th></tr></thead>
+<tbody><tr><td>스테이징</td><td style="text-align:center">예</td><td style="text-align:right">120ms</td></tr><tr><td>프로덕션</td><td style="text-align:center">예</td><td style="text-align:right">340ms</td></tr><tr><td>로컬</td><td style="text-align:center">아니오</td><td style="text-align:right">15ms</td></tr></tbody>
+</table>

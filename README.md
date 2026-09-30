@@ -9,8 +9,9 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: v0.1.7.** Normalizing, rendering, splitting and streaming work for four
-channels — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), and plain text — from a Rust core, a CLI,
+**Status: v0.1.7.** Normalizing, rendering, splitting and streaming work for five
+targets — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), plain text, and HTML for
+the browser — from a Rust core, a CLI,
 an npm package (WASM), and a Go port. See `SPEC.md` for what is in v0.1 and what was
 deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
 
@@ -26,7 +27,10 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
    character goes out escaped (`\~`, `\<`), and emphasis GFM would not close — `**(a)**`
-   followed directly by a Korean particle — goes out as `<strong>`.
+   followed directly by a Korean particle — goes out as `<strong>`. For the browser, `html` draws
+   blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
+   source keep no attributes, and only `http(s)`/`mailto` links become `<a>`. While streaming,
+   the accumulated output plus `closeOpen()` is always balanced HTML.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
 

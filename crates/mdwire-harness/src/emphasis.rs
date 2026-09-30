@@ -52,6 +52,9 @@ pub struct Unpaired {
 pub struct Scan {
     pub spans: Vec<Span>,
     pub unpaired: Vec<Unpaired>,
+    /// 마커 글자별로 **글자로 남긴** 개수. 참조 모델도 강조로 읽지 않은 별표(마스킹 번호
+    /// `4***-****`)는 출력에 글자로 남아도 결함이 아니다 — 남은 마커 검사가 예산으로 쓴다.
+    pub literal: std::collections::HashMap<char, usize>,
 }
 
 /// 짝짓기 모드.
@@ -373,7 +376,9 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         }
 
         let marker: String = ch[i..i + take].iter().collect();
-        let prev = if i > 0 { Some(ch[i - 1]) } else { None };
+        // 쪼갠 런의 남은 조각도 런 전체의 앞 글자를 본다. 규칙은 코어와 같다.
+        let start = i - ch[..i].iter().rev().take_while(|&&x| x == c).count();
+        let prev = if start > 0 { Some(ch[start - 1]) } else { None };
         let next = ch.get(i + take).copied();
 
         let after_space = prev.is_none_or(char::is_whitespace);
@@ -392,7 +397,10 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
 
         match open_same {
             // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
-            Some(at) if stack[at].guess && (!left || !after_space) => push_text(&mut stack, &mut root, &marker),
+            Some(at) if stack[at].guess && (!left || !after_space) => {
+                *scan.literal.entry(c).or_default() += take;
+                push_text(&mut stack, &mut root, &marker)
+            }
             // 여는 자리의 마커가 왔는데 열린 것이 추측이다 — 추측이 틀렸다. 되돌리고 연다.
             Some(at) if stack[at].guess => {
                 // 위에 열린 것들을 먼저 정리한다 — 아래만 빼면 순서가 깨진다. 규칙은 코어와 같다.
@@ -405,6 +413,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     push_text(&mut stack, &mut root, &text);
                 }
                 let old = stack.pop().expect("at 은 유효한 인덱스다");
+                *scan.literal.entry(c).or_default() += old.marker.chars().count();
                 let restored = format!("{}{}", old.marker, old.buf);
                 push_text(&mut stack, &mut root, &restored);
                 stack.push(Open { kind, marker, guess: false, buf: String::new() });
@@ -440,7 +449,10 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             None if mode == Mode::Repair => {
                 stack.push(Open { kind, marker, guess: true, buf: String::new() })
             }
-            None => push_text(&mut stack, &mut root, &marker),
+            None => {
+                *scan.literal.entry(c).or_default() += take;
+                push_text(&mut stack, &mut root, &marker)
+            }
         }
         i += take;
     }
@@ -455,6 +467,9 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         }
         if open.guess {
             // 추측이 빗나갔다. 마커를 글자로 되돌린다.
+            if let Some(m) = open.marker.chars().next() {
+                *scan.literal.entry(m).or_default() += open.marker.chars().count();
+            }
             let restored = format!("{}{}", open.marker, open.buf);
             push_text(&mut stack, &mut root, &restored);
         } else {
@@ -605,6 +620,14 @@ pub fn scan_html(src: &str) -> Scan {
                 if in_pre {
                     continue;
                 }
+                // **빈 요소는 스택에 올리지 않는다.** `<br/>` 을 여는 태그로 올리면 뒤따르는
+                // 글이 전부 그 안으로 들어가 강조 범위가 끊겨 보인다. `<br>` 은 줄바꿈이다.
+                if matches!(name.as_str(), "br" | "hr" | "img" | "input" | "wbr") {
+                    if name == "br" {
+                        push_html_text(&mut stack, &mut root, "\n");
+                    }
+                    continue;
+                }
                 let kind = tag_kind(&name);
                 if closing {
                     match stack.iter().rposition(|(_, n, _)| *n == name) {
@@ -704,7 +727,20 @@ pub(crate) fn parse_entity(ch: &[char], at: usize) -> Option<(char, usize)> {
             return Some((c, at + n));
         }
     }
-    None
+    // **숫자 엔티티도 읽는다** — `&#x27;` · `&#39;`. React 의 정적 렌더가 따옴표를 이렇게
+    // 적는데, 못 읽으면 다른 구현의 멀쩡한 escape 를 누락으로 신고한다.
+    if ch.get(at + 1) != Some(&'#') {
+        return None;
+    }
+    let hex = matches!(ch.get(at + 2), Some('x' | 'X'));
+    let from = at + if hex { 3 } else { 2 };
+    let len = ch[from.min(ch.len())..].iter().take_while(|c| if hex { c.is_ascii_hexdigit() } else { c.is_ascii_digit() }).count();
+    if len == 0 || len > 6 || ch.get(from + len) != Some(&';') {
+        return None;
+    }
+    let digits: String = ch[from..from + len].iter().collect();
+    let n = u32::from_str_radix(&digits, if hex { 16 } else { 10 }).ok()?;
+    Some((char::from_u32(n)?, from + len + 1))
 }
 
 fn tag_kind(name: &str) -> Option<Kind> {
@@ -720,6 +756,19 @@ fn tag_kind(name: &str) -> Option<Kind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 다른 구현의 출력도 잰다 — React 의 정적 렌더는 따옴표를 `&#x27;` 로, 줄바꿈을
+    /// `<br/>` 로 적는다. 앞엣것을 못 읽으면 escape 누락으로, 뒤엣것을 여는 태그로 올리면
+    /// 뒤따르는 글이 그 안에 갇혀 강조 범위가 끊긴 것으로 잡혔다.
+    #[test]
+    fn html_scan_reads_numeric_entities_and_void_br() {
+        let ch: Vec<char> = "&#x27;&#39;&#1;".chars().collect();
+        assert_eq!(parse_entity(&ch, 0), Some(('\'', 6)));
+        assert_eq!(parse_entity(&ch, 6), Some(('\'', 11)));
+        let spans = scan_html("<strong>둘째 줄<br/>이어짐</strong> 뒤").spans;
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].text, "둘째 줄 이어짐");
+    }
 
     fn bolds(scan: &Scan) -> Vec<String> {
         scan.spans.iter().filter(|s| s.kind == Kind::Bold).map(|s| s.text.clone()).collect()

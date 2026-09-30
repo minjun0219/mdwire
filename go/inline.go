@@ -34,6 +34,9 @@ type openMark struct {
 	soft bool
 	// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
 	before rune
+	// 더 긴 런(`***`)의 첫 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한 덩어리의
+	// 글자였다(마스킹 번호 `4***-…`).
+	split bool
 }
 
 type inline struct {
@@ -206,7 +209,14 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			continue
 		}
 
-		prev := in.prevChar(line, i)
+		// 쪼갠 런의 남은 조각은 런 전체의 앞 글자를 본다. 남은 `*` 가 제 앞 별표를 앞 글자로
+		// 보면 열 수 있는 자리가 되어, 마스킹 번호 `4***-****-****-003*` 가 기울어졌다(실측).
+		start := i
+		for start > 0 && line[start-1] == c {
+			start--
+		}
+		split := start == i && runLen(line, i, c) > take
+		prev := in.prevChar(line, start)
 		next := noChar
 		if i+take < len(line) {
 			next = line[i+take]
@@ -231,7 +241,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		softBlockedOpen := soft && ((prev != noChar && isWordChar(prev)) || (next >= '0' && next <= '9'))
 		softBlockedClose := soft && next != noChar && next < 0x80 && isASCIIAlnum(next)
 		left := canOpen(prev, next) && !intraword && !softBlockedOpen
-		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev}
+		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev, split: split}
 
 		switch {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
@@ -323,7 +333,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	}
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
-	if old.run == 1 || (old.guess && old.afterSpace) {
+	if old.run == 1 || (old.guess && (old.afterSpace || old.split)) {
 		insertMarker(out, old.at, old.ch, old.run, v)
 	} else {
 		in.repairs.DroppedMarker++
@@ -378,12 +388,22 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	o := in.open[n-1]
 	in.open = in.open[:n-1]
 
+	// 원문의 태그는 마커가 아니다 — 되돌릴 글자도, 저자 대신 고친 강조도 없다. 비었으면
+	// 버리고, 아니면 여닫는다.
+	if o.emph >= emphTag {
+		if len(*out) > o.at {
+			insertAt(out, o.at, v.open(o.emph))
+			*out = append(*out, v.close(o.emph)...)
+		}
+		return
+	}
+
 	// 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
 	empty := len(*out) == o.at
 	if o.guess || empty || (o.soft && !matched) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
-		if o.afterSpace || o.run == 1 {
+		if o.afterSpace || o.run == 1 || o.split {
 			insertMarker(out, o.at, o.ch, o.run, v)
 		} else {
 			in.repairs.DroppedMarker++
@@ -526,31 +546,55 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	// 태그는 자리와 무관하게 그런다. 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이
 	// 붙들지 않도록 첫머리면 벗긴다.
 	//
-	// 살릴 때는 속성을 버리고 이름만 소문자로 다시 쓴다 — 조각을 나눌 때 싱크가 이 모양을 스팬으로
-	// 알아보고 끊는 자리에서 닫고 다시 연다. 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다. 벗긴 여는
-	// 태그는 이름째 기억해서 이름이 맞는 닫는 태그만 벗긴다 — `<sub>a <kbd>x</kbd></sub>` 의
-	// `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
-	if t := inlineTag(name); v.htmlEmphasis() && t >= 0 {
+	// 브라우저 채널은 자리와 상관없이 살린다 — 마크다운으로 다시 읽히지 않는다.
+	//
+	// 살릴 때는 속성을 버리고 이름만 다시 쓰고, 강조와 같은 스택에 올린다. 출력이 innerHTML 로
+	// 들어가는 채널에서 `<span onclick=…>` 을 그대로 내면 안 되고, 원문의 태그는 짝이 안
+	// 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`) 일쑤다(퍼즈가 잡았다).
+	// 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 — 짝 없는 닫는 태그는 버리고,
+	// 안 닫힌 여는 태그는 블록 끝에서 닫는다.
+	tag := inlineTag(name)
+	br := eqIgnoreCase(name, "br")
+	if (v.isHTML() || v.htmlEmphasis()) && (tag >= 0 || br) {
 		p := in.prevChar(line, i)
+		// 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
 		atLineStart := !in.inCell && (p == noChar || p == '\n')
+		githubStart := !v.isHTML() && atLineStart
 		n := len(in.strippedTags)
 		switch {
-		case closing && n > 0 && in.strippedTags[n-1] == uint8(t):
+		case closing && !v.isHTML() && tag >= 0 && n > 0 && in.strippedTags[n-1] == uint8(tag):
+			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. 이름이 맞을 때만이다 —
+			// `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
 			in.strippedTags = in.strippedTags[:n-1]
-		case atLineStart && !closing && inlineTags[t] != "br":
-			in.strippedTags = append(in.strippedTags, uint8(t))
-		case !atLineStart:
-			*out = append(*out, '<')
-			if closing {
-				*out = append(*out, '/')
+		case githubStart:
+			if !closing && tag >= 0 {
+				in.strippedTags = append(in.strippedTags, uint8(tag))
 			}
-			*out = append(*out, inlineTags[t]...)
-			*out = append(*out, '>')
+		default:
+			switch {
+			case tag < 0:
+				if !closing {
+					*out = append(*out, "<br>"...)
+				}
+			case closing:
+				if at := in.lastOpen(tagEmph(tag)); at >= 0 {
+					in.afterClose = noChar
+					in.closeAt(at, out, v)
+				}
+			default:
+				in.open = append(in.open, openMark{
+					emph:   tagEmph(tag),
+					at:     len(*out),
+					run:    1,
+					ch:     '<',
+					before: p,
+				})
+			}
 			in.prev = '>'
 			return closeAt + 1
 		}
 	}
-	if !closing && eqIgnoreCase(name, "br") {
+	if !closing && br {
 		// 표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다 — 칸 안에 `\n` 이 들어가면 GFM 은 그 뒤를
 		// 새 행으로 읽어 내용이 엉뚱한 열로 간다. 그걸 그리는 GitHub 에는 그대로 두고,
 		// 나머지는 공백으로 편다.
@@ -608,17 +652,11 @@ func findLink(line []rune, at int) (t0, t1, u0, u1 int, ok bool) {
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때
 // 쓰는 것들이다. 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
-// inlineTags 는 살려 두는 인라인 태그다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
-// 싱크가 분할할 때 같은 목록으로 스팬을 알아본다.
-var inlineTags = [...]string{
-	"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark", "kbd",
-}
-
-// inlineTag 는 살려 둘 인라인 태그의 번호다. 없으면 -1.
+// inlineTag 는 살려 둘 인라인 태그의 번호(inlineTags)다. 없으면 -1. <br> 은 짝이 없어 여기 없다.
 func inlineTag(name []rune) int {
-	for i, t := range inlineTags {
-		if eqIgnoreCase(name, t) {
-			return i
+	for k, t := range inlineTags {
+		if eqIgnoreCase(name, t[0]) {
+			return k
 		}
 	}
 	return -1

@@ -7,20 +7,27 @@ import (
 )
 
 // renderLine 은 한 문단을 인라인 파서만으로 렌더한다. 블록 층이 없는 지금 단계의 시험
-// 경로다 — 블록 접두사가 없는 문단은 완성본 파이프라인과 같은 답을 낸다.
+// 경로다 — 블록 접두사가 없는 문단은 완성본 파이프라인과 같은 답을 낸다. html 은 문단을
+// 태그로 감싸고 줄바꿈 앞에 <br> 을 두므로 블록 층이 하는 그 둘만 여기서 흉내 낸다.
 func renderLine(input string, ch Channel) string {
 	v := vocab{channel: ch}
 	in := newInline(Markdown)
 	var out []byte
+	if v.isHTML() {
+		out = append(out, "<p>"...)
+	}
 	for i, l := range strings.Split(input, "\n") {
 		if i > 0 {
-			out = append(out, '\n')
+			out = append(out, v.lineBreak()...)
 			in.noteRaw("\n")
 			in.endLine()
 		}
 		in.render([]rune(l), &out, v)
 	}
 	in.finishBlock(&out, v)
+	if v.isHTML() {
+		out = append(out, "</p>"...)
+	}
 	return string(out)
 }
 

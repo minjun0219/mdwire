@@ -35,6 +35,8 @@ const PIECES: &[&str] = &[
     "<br>", "<!-- 주석 -->", "<!-- 이건 아주 긴 주석이라 팔십 글자를 한참 넘어간다 — 스트리밍에서 이걸 놓으면 꺾쇠가 글자로 샌다 -->",  "<https://a.com/p|문서>", "<https://a.com/q>", "|", "| a | b |\n|---|---|\n",
     "#", "## ", "> ", "- ", "  - ", "1. ", "---\n", "\n", "\n\n", "\r\n", " ", "  ", "\t",
     "가", "나다", "한글 조사가", "이다.", "word", "x", "2", "का_x",  "&", "😀", "①", "•", ".md", "@id", "#40",
+    // 브라우저 채널이 막아야 하는 것들 — 스킴, 이벤트 속성, 속성값에 드는 info, 마스킹 번호.
+    "[x](javascript:alert(1))", "[m](MAILTO:a@b.c)", "<span onclick=\"x\">", "</span>", "<SUB>", "```x\" y=\"z\n", "4***-****-003*",
 ];
 
 fn doc(rng: &mut Rng) -> String {
@@ -121,7 +123,8 @@ fn random_long_input_splits_cleanly() {
         // **GitHub 한도(65,536)는 열 번에 한 번만 넘긴다.** 매번 채우면 퍼즈가 여덟 배
         // 느려지는데(8초 → 67초) 분할 경로는 슬랙과 같은 코드다.
         let wide = round % 10 == 0;
-        let reach = |c: &Channel| wide || c.limit() <= Channel::SlackMarkdown.limit();
+        // 한도가 없는 채널(html)은 나누지 않으니 이 시험 밖이다.
+        let reach = |c: &Channel| c.limit() < usize::MAX && (wide || c.limit() <= Channel::SlackMarkdown.limit());
         let target = Channel::all().iter().filter(|c| reach(c)).map(|c| c.limit()).max().expect("채널이 있다") * 2;
         while input.chars().count() < target {
             input.push_str(&doc(&mut rng));

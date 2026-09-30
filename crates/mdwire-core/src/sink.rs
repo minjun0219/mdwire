@@ -305,7 +305,7 @@ enum SpanKind {
 /// 렌더러가 내는 짝 있는 태그 이름 — 마커 대신 내는 `strong`·`em`·`del` 과 살려 둔 원문 인라인
 /// 태그(GitHub). 둘 다 속성 없이 이름만으로 다시 쓴 것이라 이 목록으로 알아본다. `br` 은 짝이 없다.
 fn emph_tags() -> impl Iterator<Item = &'static str> {
-    ["strong", "em", "del"].into_iter().chain(crate::inline::INLINE_TAGS.into_iter().filter(|t| *t != "br"))
+    ["strong", "em", "del"].into_iter().chain(crate::vocab::INLINE_TAGS.iter().map(|(name, _, _)| *name))
 }
 
 impl SpanKind {

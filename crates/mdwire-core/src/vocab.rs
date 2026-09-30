@@ -13,7 +13,30 @@ pub(crate) enum Emph {
     Italic,
     Strike,
     Code,
+    /// 원문에 적힌 인라인 HTML 태그 — [`INLINE_TAGS`] 의 번호. 태그를 그리는 채널(html ·
+    /// GitHub)에서 강조와 같은 스택에 올려 짝과 중첩을 맞춘다.
+    Tag(u8),
 }
+
+/// 살려 둘 수 있는 인라인 태그 — (이름, 여는 태그, 닫는 태그). 속성은 버리고 이 모양으로
+/// 다시 쓴다. `<br>` 은 짝이 없어 따로 다룬다. GitHub 이 받는 것만 — `font` 는 새니타이저가 지운다.
+pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
+    ("sub", "<sub>", "</sub>"),
+    ("sup", "<sup>", "</sup>"),
+    ("b", "<b>", "</b>"),
+    ("strong", "<strong>", "</strong>"),
+    ("i", "<i>", "</i>"),
+    ("em", "<em>", "</em>"),
+    ("u", "<u>", "</u>"),
+    ("s", "<s>", "</s>"),
+    ("strike", "<strike>", "</strike>"),
+    ("del", "<del>", "</del>"),
+    ("code", "<code>", "</code>"),
+    ("span", "<span>", "</span>"),
+    ("small", "<small>", "</small>"),
+    ("mark", "<mark>", "</mark>"),
+    ("kbd", "<kbd>", "</kbd>"),
+];
 
 /// 채널 하나의 출력 어휘와 정책.
 #[derive(Debug, Clone, Copy)]
@@ -32,7 +55,23 @@ impl Vocab {
     /// 문서). 고정폭 코드블록으로 바꾸면 화면에서 표가 아니라 코드로 보인다. GitHub 은
     /// GFM 표가 원래 문법이다.
     pub fn tables_native(&self) -> bool {
-        matches!(self.channel, Channel::SlackMarkdown | Channel::GithubMarkdown)
+        matches!(self.channel, Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::Html)
+    }
+
+    /// 브라우저용 HTML 채널인가. 블록까지 태그로 그린다(`<p>` `<h2>` `<ul>` `<table>`).
+    pub fn is_html(&self) -> bool {
+        self.channel == Channel::Html
+    }
+
+    /// 출력이 HTML 이라 글자를 escape 해야 하는가. 텔레그램과 브라우저.
+    fn html_out(&self) -> bool {
+        matches!(self.channel, Channel::TelegramHtml | Channel::Html)
+    }
+
+    /// 블록 안의 줄바꿈. 브라우저는 `\n` 을 공백으로 접으므로 `<br>` 을 앞에 둔다 — 다른
+    /// 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
+    pub fn line_break(&self) -> &'static str {
+        if self.is_html() { "<br>\n" } else { "\n" }
     }
 
     /// 마크업 문법 자체가 없는 채널인가. 강조도 표도 글자로 내려앉는다.
@@ -42,11 +81,13 @@ impl Vocab {
 
     pub fn open(&self, e: Emph) -> &'static str {
         match (self.channel, e) {
+            (_, Emph::Tag(t)) => INLINE_TAGS[t as usize].1,
             (Channel::TelegramHtml, Emph::Bold) => "<b>",
             (Channel::TelegramHtml, Emph::Italic) => "<i>",
             (Channel::TelegramHtml, Emph::Strike) => "<s>",
             (Channel::TelegramHtml, Emph::Code) => "<code>",
             (Channel::Plain, _) => "",
+            (Channel::Html, _) => self.open_html(e),
             (_, Emph::Strike) => "~~",
             (_, Emph::Bold) => "**",
             // 기울임은 `_` 가 아니라 `*` 다. 슬랙 `markdown_text` 는 `_기울임_가` 를 글자
@@ -69,6 +110,7 @@ impl Vocab {
             Emph::Italic => "<em>",
             Emph::Strike => "<del>",
             Emph::Code => "<code>",
+            Emph::Tag(t) => INLINE_TAGS[t as usize].1,
         }
     }
 
@@ -78,15 +120,18 @@ impl Vocab {
             Emph::Italic => "</em>",
             Emph::Strike => "</del>",
             Emph::Code => "</code>",
+            Emph::Tag(t) => INLINE_TAGS[t as usize].2,
         }
     }
 
     pub fn close(&self, e: Emph) -> &'static str {
         match (self.channel, e) {
+            (_, Emph::Tag(t)) => INLINE_TAGS[t as usize].2,
             (Channel::TelegramHtml, Emph::Bold) => "</b>",
             (Channel::TelegramHtml, Emph::Italic) => "</i>",
             (Channel::TelegramHtml, Emph::Strike) => "</s>",
             (Channel::TelegramHtml, Emph::Code) => "</code>",
+            (Channel::Html, _) => self.close_html(e),
             _ => self.open(e),
         }
     }
@@ -99,10 +144,10 @@ impl Vocab {
     /// 쓴 것이고, `\~` · `\<` 는 화면에 `~` · `<` 로 보인다. 슬랙 `markdown_text` 는
     /// 둘 다 글자로 그려서 손대지 않는다.
     pub fn escape_char(&self, c: char, out: &mut String) {
-        match (self.channel, c) {
-            (Channel::TelegramHtml, '&') => out.push_str("&amp;"),
-            (Channel::TelegramHtml, '<') => out.push_str("&lt;"),
-            (Channel::TelegramHtml, '>') => out.push_str("&gt;"),
+        match c {
+            '&' if self.html_out() => out.push_str("&amp;"),
+            '<' if self.html_out() => out.push_str("&lt;"),
+            '>' if self.html_out() => out.push_str("&gt;"),
             _ if self.escapes(c) => {
                 out.push('\\');
                 out.push(c);
@@ -112,22 +157,27 @@ impl Vocab {
     }
 
     /// 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가.
+    ///
+    /// `*` 도 GitHub 에서는 탈출한다 — mdwire 가 글자로 판정한 별표를 GFM 이 다시 읽는다.
+    /// 마스킹 번호 `1***-****-****-001*` 의 `-****-` 가 `-<strong>-</strong>-` 로 먹혔다(실측
+    /// 2026-09-30). 강조 마커는 `open`/`close` 로 따로 나가니 여기 오는 별표는 전부 글자다.
     pub fn escapes(&self, c: char) -> bool {
-        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<')
+        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<' | '*')
     }
 
     /// 코드 안의 글자 하나를 적는다. **코드 안에서는 마크다운 탈출이 글자로 보인다** —
     /// 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
     pub fn code_char(&self, c: char, out: &mut String) {
-        match self.channel {
-            Channel::TelegramHtml => self.escape_char(c, out),
-            _ => out.push(c),
+        if self.html_out() {
+            self.escape_char(c, out);
+        } else {
+            out.push(c);
         }
     }
 
     /// 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 [`Vocab::escape_char`] 다.
     pub fn escape(&self, s: &str, out: &mut String) {
-        if self.channel != Channel::TelegramHtml {
+        if !self.html_out() {
             out.push_str(s);
             return;
         }
@@ -159,15 +209,26 @@ impl Vocab {
                     return;
                 }
                 out.push_str("<a href=\"");
-                for c in url.chars() {
-                    match c {
-                        '&' => out.push_str("&amp;"),
-                        '<' => out.push_str("&lt;"),
-                        '>' => out.push_str("&gt;"),
-                        '"' => out.push_str("&quot;"),
-                        _ => out.push(c),
+                push_attr(url, out);
+                out.push_str("\">");
+                out.push_str(text);
+                out.push_str("</a>");
+            }
+            Channel::Html => {
+                // **`innerHTML` 로 들어가는 출력이라 스킴을 가린다.** `[x](javascript:…)` 를
+                // 그대로 `<a href>` 로 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면
+                // 링크 없이 글과 주소만 낸다 — 내용은 살린다.
+                if !safe_href(url) {
+                    out.push_str(text);
+                    if !url.is_empty() && !escaped_eq(text, url) {
+                        out.push_str(" (");
+                        self.escape(url, out);
+                        out.push(')');
                     }
+                    return;
                 }
+                out.push_str("<a href=\"");
+                push_attr(url, out);
                 out.push_str("\">");
                 out.push_str(text);
                 out.push_str("</a>");
@@ -205,7 +266,7 @@ impl Vocab {
     /// 오히려 뜻을 바꾼다. HTML 로 가는 채널은 마커라는 개념이 없으니 그냥 escape 한다.
     pub fn literal(&self, c: char, out: &mut String) {
         match self.channel {
-            Channel::TelegramHtml | Channel::Plain => self.escape_char(c, out),
+            Channel::TelegramHtml | Channel::Plain | Channel::Html => self.escape_char(c, out),
             // **그 채널의 마크다운이 읽는 글자면 탈출을 지킨다.** 강조 마커만 지키면
             // `\# 제목` 이 제목이 되고 `\[x\](url)` 이 링크가 된다 — 저자가 글자로
             // 쓴 것을 채널이 구문으로 읽어 버린다.
@@ -231,30 +292,22 @@ impl Vocab {
     }
 
     pub fn quote_prefix(&self) -> &'static str {
-        match self.channel {
-            Channel::TelegramHtml => "",
-            _ => "> ",
-        }
+        if self.html_out() { "" } else { "> " }
     }
 
     pub fn quote_open(&self) -> &'static str {
-        match self.channel {
-            Channel::TelegramHtml => "<blockquote>",
-            _ => "",
-        }
+        if self.html_out() { "<blockquote>" } else { "" }
     }
 
     pub fn quote_close(&self) -> &'static str {
-        match self.channel {
-            Channel::TelegramHtml => "</blockquote>",
-            _ => "",
-        }
+        if self.html_out() { "</blockquote>" } else { "" }
     }
 
     /// 구분선. 텔레그램에도 Plain 에도 구문이 없어 글자로 그린다.
     pub fn rule(&self) -> &'static str {
         match self.channel {
             Channel::TelegramHtml | Channel::Plain => "──────────",
+            Channel::Html => "<hr>",
             _ => "---",
         }
     }
@@ -266,7 +319,7 @@ impl Vocab {
             // 그러니 더 깊이 적을 값이 없다 — 셋에서 끊는다.
             Channel::SlackMarkdown => 3,
             // GitHub 은 여섯 단계를 크기를 달리해 그린다.
-            Channel::GithubMarkdown => 6,
+            Channel::GithubMarkdown | Channel::Html => 6,
             Channel::TelegramHtml | Channel::Plain => 0,
         }
     }
@@ -274,11 +327,13 @@ impl Vocab {
     /// 고정폭 블록을 여닫는다. 표와 코드펜스가 같이 쓴다.
     pub fn verbatim_open(&self, info: &str, out: &mut String) {
         match self.channel {
-            Channel::TelegramHtml => {
+            Channel::TelegramHtml | Channel::Html => {
                 out.push_str("<pre>");
                 if !info.is_empty() {
                     out.push_str("<code class=\"language-");
-                    self.escape(info, out);
+                    // 속성값이다 — `"` 까지 escape 한다. 안 하면 ```` ```x" onmouseover="… ````
+                    // 가 속성을 하나 더 끼워 넣는다(innerHTML 로 들어가는 채널에서 스크립트).
+                    push_attr(info, out);
                     out.push_str("\">");
                 }
             }
@@ -293,12 +348,12 @@ impl Vocab {
     /// 여는 마크업과 첫 내용 줄 사이에 줄바꿈이 필요한가.
     /// ` ``` ` 는 필요하고, `<pre>` 는 넣으면 빈 줄이 하나 생긴다.
     pub fn verbatim_body_newline(&self) -> bool {
-        !matches!(self.channel, Channel::TelegramHtml | Channel::Plain)
+        !matches!(self.channel, Channel::TelegramHtml | Channel::Plain | Channel::Html)
     }
 
     pub fn verbatim_close(&self, info: &str, out: &mut String) {
         match self.channel {
-            Channel::TelegramHtml => {
+            Channel::TelegramHtml | Channel::Html => {
                 if !info.is_empty() {
                     out.push_str("</code>");
                 }
@@ -308,6 +363,28 @@ impl Vocab {
             _ => out.push_str("\n```"),
         }
     }
+}
+
+/// 속성값으로 escape 해서 적는다.
+fn push_attr(s: &str, out: &mut String) {
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+}
+
+/// 브라우저에서 눌러도 되는 주소인가 — `http(s)`·`mailto` 만. 대소문자·앞 공백으로 숨긴
+/// `JavaScript:` 도 스킴이 달라 걸러진다.
+fn safe_href(url: &str) -> bool {
+    let u = url.trim_start();
+    ["http://", "https://", "mailto:"]
+        .iter()
+        .any(|s| u.len() >= s.len() && u.as_bytes()[..s.len()].eq_ignore_ascii_case(s.as_bytes()))
 }
 
 /// escape 하고 나면 몇 글자가 되는가. **재기만 하고 만들지는 않는다** — 스트리밍

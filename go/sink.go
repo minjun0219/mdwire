@@ -315,9 +315,7 @@ func (sp span) reopenLen() int {
 var emphTags = func() []string {
 	tags := []string{"<strong>", "<em>", "<del>"}
 	for _, t := range inlineTags {
-		if t != "br" {
-			tags = append(tags, "<"+t+">")
-		}
+		tags = append(tags, t[1])
 	}
 	return tags
 }()

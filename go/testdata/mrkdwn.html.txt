@@ -1,0 +1,25 @@
+<p><strong>상품 상세 화면</strong>은 <code>web-app</code> 에 있어요.</p>
+----
+<p><del>예전 방식</del> 대신 <a href="https://x.io">서비스웹</a> 으로 가요.</p>
+----
+<p>약 ~40km, 5~6월 이동 <del>취소</del>가 된다</p>
+----
+<p>1~2일, ~3시간, 가격 ~만원 할인</p>
+----
+<p><strong>표준 굵게</strong> 와 <strong>mrkdwn 굵게</strong> 와 <em>기울임</em> 과 <del>표준 취소</del></p>
+----
+<p>snake_case_name 은 그대로, <code>코드 안 *별표* ~물결~</code> 도 그대로</p>
+----
+<p><strong>안 닫힌 굵게가<br>
+다음 줄까지</strong></p>
+----
+<ul><li><strong>항목 굵게</strong>
+</li><li><del>항목 취소</del></li></ul>
+<blockquote><strong>인용 굵게</strong></blockquote>
+----
+<p>&lt;@U012ABCDEF&gt; 님, &lt;#C012ABCDEF|채널&gt; 에서 <strong>확인</strong> 부탁해요</p>
+----
+<table>
+<thead><tr><th>화면</th><th>상태</th></tr></thead>
+<tbody><tr><td><strong>상세</strong></td><td><del>폐기</del></td></tr></tbody>
+</table>

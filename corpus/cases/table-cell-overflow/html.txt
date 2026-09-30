@@ -1,0 +1,4 @@
+<table>
+<thead><tr><th>바이트</th><th>필드</th><th>뜻</th><th>비고</th></tr></thead>
+<tbody><tr><td><code>[3]</code></td><td><code>side</code></td><td>사이드 플래그</td><td>비트필드</td></tr><tr><td><code>[4]</code></td><td>`vol</td><td>wlv`</td><td>볼륨/물수위 | 상위4비트=볼륨, 하위4비트=물수위</td></tr></tbody>
+</table>
