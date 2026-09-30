@@ -95,6 +95,11 @@ impl Vocab {
         )
     }
 
+    /// 표를 노션 `<table>` 로 내는가. 파이프 표로 내면 칸 안의 `|` 가 칸을 가른다(실측).
+    pub fn xml_tables(&self) -> bool {
+        self.channel == Channel::NotionMarkdown
+    }
+
     /// 브라우저용 HTML 채널인가. 블록까지 태그로 그린다(`<p>` `<h2>` `<ul>` `<table>`).
     pub fn is_html(&self) -> bool {
         self.channel == Channel::Html

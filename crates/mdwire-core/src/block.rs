@@ -602,9 +602,22 @@ impl Engine {
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);
                 self.start_line();
-                table.render(&self.v, self.dialect, &mut self.inline.repairs, &mut self.out);
+                let breaks = table.render(&self.v, self.dialect, &mut self.inline.repairs, &mut self.out);
                 table.clear();
                 self.table = table;
+                // 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보내 분할기가 표 한가운데를
+                // 자르지 않게 한다(노션).
+                if !breaks.is_empty() {
+                    let whole = std::mem::take(&mut self.out);
+                    let mut from = 0;
+                    for at in breaks {
+                        self.out.push_str(&whole[from..at]);
+                        self.flush_all(sink);
+                        sink.boundary();
+                        from = at;
+                    }
+                    self.out.push_str(&whole[from..]);
+                }
             }
         }
         self.state = State::None;
@@ -1060,7 +1073,9 @@ impl Table {
 
     /// 고정폭 블록으로 그린다. **열은 표시 폭으로 맞춘다** — 문자 수로 맞추면
     /// 한글이 든 표는 반드시 어긋난다(`SPEC.md` 7절).
-    fn render(&mut self, v: &Vocab, dialect: Dialect, repairs: &mut Repairs, out: &mut String) {
+    ///
+    /// 돌려주는 것은 표를 여럿으로 나눈 자리(`out` 의 바이트 위치)다 — 노션 표가 한도를 넘을 때만 있다.
+    fn render(&mut self, v: &Vocab, dialect: Dialect, repairs: &mut Repairs, out: &mut String) -> Vec<usize> {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
         // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
@@ -1106,11 +1121,14 @@ impl Table {
 
         if v.is_html() {
             write_html_table(out, &cells, &self.align);
-            return;
+            return Vec::new();
+        }
+        if v.xml_tables() {
+            return write_notion_table(out, &cells, v.limit);
         }
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);
-            return;
+            return Vec::new();
         }
 
         let mut widths = vec![0usize; cols];
@@ -1145,6 +1163,7 @@ impl Table {
         }
         v.escape(&body, out);
         v.verbatim_close("", out);
+        Vec::new()
     }
 }
 
@@ -1183,6 +1202,56 @@ fn write_html_table(out: &mut String, cells: &[Vec<String>], align: &[Align]) {
         out.push_str("</tbody>");
     }
     out.push_str("\n</table>");
+}
+
+/// 표를 노션 `<table>` 로 낸다. 칸은 노션 마크다운(굵게 `**` 따위)으로 렌더된 것을 받는다.
+///
+/// **GFM 파이프 표로 내면 칸 안의 `|` 가 칸을 가른다**(실측 2026-10-01). 노션은 코드 스팬 안의
+/// `` `a|b` `` 도, 탈출한 `a \| b` 도 칸 경계로 읽어 뒤의 내용을 버렸다. `<table>` 로 쓰면 `|` 는
+/// 그냥 글자다. 정렬은 노션 표에 없어 버린다.
+///
+/// **한도를 넘으면 머리글을 되풀이한 표 여럿으로 낸다.** 분할기는 태그를 모르는 채널에서 줄로
+/// 끊어서, 한 표를 가르면 앞 조각은 `</table>` 없이 끝나고 뒤 조각은 `<tr>` 로 시작한다. 나눈
+/// 자리(다음 표를 여는 빈 줄의 위치)를 돌려주면 엔진이 그 사이를 블록 경계로 내보낸다.
+fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> Vec<usize> {
+    const OPEN: &str = "<table header-row=\"true\">";
+    const CLOSE: &str = "\n</table>";
+    let row_len = |row: &[String]| -> usize {
+        "\n<tr>\n</tr>".len() + row.iter().map(|c| "\n<td></td>".len() + c.chars().count()).sum::<usize>()
+    };
+    let write_row = |out: &mut String, row: &[String]| {
+        out.push_str("\n<tr>");
+        for cell in row {
+            out.push_str("\n<td>");
+            out.push_str(cell);
+            out.push_str("</td>");
+        }
+        out.push_str("\n</tr>");
+    };
+    let Some((head, body)) = cells.split_first() else { return Vec::new() };
+    let base = OPEN.len() + CLOSE.len() + row_len(head);
+    let mut breaks = Vec::new();
+    out.push_str(OPEN);
+    write_row(out, head);
+    let mut used = base;
+    let mut rows_in = 0;
+    for row in body {
+        let n = row_len(row);
+        if rows_in > 0 && used + n > limit {
+            out.push_str(CLOSE);
+            breaks.push(out.len());
+            out.push_str("\n\n");
+            out.push_str(OPEN);
+            write_row(out, head);
+            used = base;
+            rows_in = 0;
+        }
+        write_row(out, row);
+        used += n;
+        rows_in += 1;
+    }
+    out.push_str(CLOSE);
+    breaks
 }
 
 /// 표를 GFM 그대로 낸다. 채널이 직접 그리는 곳용이라 열 너비를 맞추지 않는다.

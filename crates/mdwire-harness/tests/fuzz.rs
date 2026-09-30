@@ -166,9 +166,21 @@ fn smallest_caller_limit_splits_cleanly() {
         while input.chars().count() < mdwire::MIN_LIMIT * 4 {
             input.push_str(&doc(&mut rng));
         }
-        for channel in [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain] {
+        for channel in [
+            Channel::TelegramHtml,
+            Channel::SlackMarkdown,
+            Channel::GithubMarkdown,
+            Channel::NotionMarkdown,
+            Channel::Plain,
+        ] {
             let options = Options { limit: Some(mdwire::MIN_LIMIT), ..Default::default() };
             let parts = mdwire::render_with(&input, channel, options).parts;
+            // 노션 표는 조각마다 온전해야 한다 — 분할기는 태그를 모르고 줄로 끊는다.
+            if channel == Channel::NotionMarkdown
+                && parts.iter().any(|p| p.matches("<table ").count() != p.matches("</table>").count())
+            {
+                failures.push(format!("#{round} notion-markdown: 조각 안에서 표가 갈렸다"));
+            }
             if parts.iter().any(|p| p.chars().count() > mdwire::MIN_LIMIT) {
                 failures.push(format!("#{round} {}: 한도를 넘은 조각", channel.name()));
             }

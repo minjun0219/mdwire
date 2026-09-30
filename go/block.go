@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 블록 스캐너 — 줄 단위로 읽고, 줄 단위로 내보낸다.
@@ -602,8 +603,21 @@ func (e *engine) closeBlock(s sink) {
 		e.blockCloseMarkup(&e.out)
 	case stateTable:
 		e.startLine()
-		e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
+		breaks := e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
 		e.table.clear()
+		// 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보낸다(노션).
+		if len(breaks) > 0 {
+			whole := append([]byte(nil), e.out...)
+			e.out = e.out[:0]
+			from := 0
+			for _, at := range breaks {
+				e.out = append(e.out, whole[from:at]...)
+				e.flushAll(s)
+				s.boundary()
+				from = at
+			}
+			e.out = append(e.out, whole[from:]...)
+		}
 	}
 	e.state = stateNone
 	e.lists = e.lists[:0]
@@ -1068,7 +1082,7 @@ func (t *table) clear() {
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
 // 표는 반드시 어긋난다(SPEC 7절). 표를 직접 그리는 채널은 GFM 그대로 낸다.
-func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
+func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
@@ -1109,11 +1123,14 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 
 	if v.isHTML() {
 		writeHTMLTable(out, cells, t.align)
-		return
+		return nil
+	}
+	if v.xmlTables() {
+		return writeNotionTable(out, cells, v.limit)
 	}
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)
-		return
+		return nil
 	}
 
 	widths := make([]int, cols)
@@ -1150,6 +1167,56 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	}
 	v.escape(string(body), out)
 	v.verbatimClose("", out)
+	return nil
+}
+
+// writeNotionTable 은 표를 노션 <table> 로 낸다 — 러스트 쪽 write_notion_table. 파이프 표로 내면
+// 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버린다. 한도를 넘으면 머리글을 되풀이한
+// 표 여럿으로 내고, 나눈 자리(다음 표를 여는 빈 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록
+// 경계로 내보내 분할기가 표 한가운데를 자르지 않게 한다.
+func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
+	const open, closeTag = `<table header-row="true">`, "\n</table>"
+	rowLen := func(row []string) int {
+		n := len("\n<tr>\n</tr>")
+		for _, c := range row {
+			n += len("\n<td></td>") + utf8.RuneCountInString(c)
+		}
+		return n
+	}
+	writeRow := func(row []string) {
+		*out = append(*out, "\n<tr>"...)
+		for _, cell := range row {
+			*out = append(*out, "\n<td>"...)
+			*out = append(*out, cell...)
+			*out = append(*out, "</td>"...)
+		}
+		*out = append(*out, "\n</tr>"...)
+	}
+	if len(cells) == 0 {
+		return nil
+	}
+	head, body := cells[0], cells[1:]
+	base := len(open) + len(closeTag) + rowLen(head)
+	var breaks []int
+	*out = append(*out, open...)
+	writeRow(head)
+	used, rowsIn := base, 0
+	for _, row := range body {
+		n := rowLen(row)
+		if rowsIn > 0 && used+n > limit {
+			*out = append(*out, closeTag...)
+			breaks = append(breaks, len(*out))
+			*out = append(*out, "\n\n"...)
+			*out = append(*out, open...)
+			writeRow(head)
+			used, rowsIn = base, 0
+		}
+		writeRow(row)
+		used += n
+		rowsIn++
+	}
+	*out = append(*out, closeTag...)
+	return breaks
 }
 
 // writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.

@@ -1141,6 +1141,8 @@ fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
         let want = gfm_table_count(input);
         let got = if channel == Channel::Html {
             output.matches("<table>").count()
+        } else if channel == Channel::NotionMarkdown {
+            output.matches("<table header-row=").count()
         } else {
             output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>()
         };

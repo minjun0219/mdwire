@@ -294,3 +294,29 @@ func TestNotionClosesEmphasisAtEachLine(t *testing.T) {
 		}
 	}
 }
+
+// 노션에는 표를 <table> 로 낸다 — 러스트 쪽 notion_writes_tables_as_xml.
+func TestNotionWritesTablesAsXML(t *testing.T) {
+	got := strings.Join(Render("| 항목 | 비고 |\n|:--|--:|\n| **마통** | a \\| b |", NotionMarkdown), "")
+	want := "<table header-row=\"true\">\n<tr>\n<td>항목</td>\n<td>비고</td>\n</tr>\n<tr>\n<td>**마통**</td>\n<td>a | b</td>\n</tr>\n</table>"
+	if got != want {
+		t.Fatalf("\n  got  %q\n  want %q", got, want)
+	}
+}
+
+// 한도를 넘는 노션 표는 머리글을 되풀이한 표 여럿으로 나눈다 — 러스트 쪽 같은 이름의 테스트.
+func TestNotionSplitsLongTablesIntoWholeTables(t *testing.T) {
+	input := "| a | b |\n|---|---|\n"
+	for i := 0; i < 40; i++ {
+		input += fmt.Sprintf("| 행%d | 값%d 가나다라 |\n", i, i)
+	}
+	parts := RenderWith(input, NotionMarkdown, Options{Limit: 300}).Parts
+	if len(parts) < 2 {
+		t.Fatal("나뉘어야 한다")
+	}
+	for _, p := range parts {
+		if utf8.RuneCountInString(p) > 300 || !strings.HasPrefix(p, "<table header-row=\"true\">\n<tr>\n<td>a</td>") || !strings.HasSuffix(p, "</table>") {
+			t.Fatalf("온전한 표가 아니다: %q", p)
+		}
+	}
+}

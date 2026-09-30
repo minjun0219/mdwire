@@ -762,6 +762,40 @@ fn notion_closes_emphasis_at_each_line() {
     assert_eq!(one("**줄을\n넘는**", Channel::GithubMarkdown), "**줄을\n넘는**");
 }
 
+/// **노션에는 표를 `<table>` 로 낸다**(실측 2026-10-01). 파이프 표로 내면 칸 안의 `|` 가 — 코드
+/// 스팬 안이든 `\|` 로 탈출했든 — 칸을 갈라 뒤의 내용이 사라졌다. `<table>` 에서는 글자다.
+#[test]
+fn notion_writes_tables_as_xml() {
+    let out = one("| 항목 | 비고 |\n|:--|--:|\n| **마통** | a \\| b |", Channel::NotionMarkdown);
+    assert_eq!(
+        out,
+        "<table header-row=\"true\">\n<tr>\n<td>항목</td>\n<td>비고</td>\n</tr>\n<tr>\n<td>**마통**</td>\n<td>a | b</td>\n</tr>\n</table>"
+    );
+}
+
+/// **한도를 넘는 노션 표는 머리글을 되풀이한 표 여럿으로 나눈다.** 분할기는 태그를 모르고 줄로
+/// 끊어서, 한 표를 가르면 앞 조각은 `</table>` 없이 끝나고 뒤 조각은 `<tr>` 로 시작했다.
+#[test]
+fn notion_splits_long_tables_into_whole_tables() {
+    let mut input = String::from("| a | b |\n|---|---|\n");
+    for i in 0..40 {
+        input.push_str(&format!("| 행{i} | 값{i} 가나다라 |\n"));
+    }
+    let opts = mdwire::Options { limit: Some(300), ..Default::default() };
+    let parts = mdwire::render_with(&input, Channel::NotionMarkdown, opts).parts;
+    assert!(parts.len() > 1);
+    for p in &parts {
+        assert!(p.chars().count() <= 300, "{p}");
+        assert!(p.starts_with("<table header-row=\"true\">\n<tr>\n<td>a</td>") && p.ends_with("</table>"), "{p}");
+    }
+    // 스트리밍은 채널 한도(65,536)로 재므로 이 크기는 표 하나다.
+    let mut s = mdwire::Streamer::new(Channel::NotionMarkdown);
+    let mut acc = String::new();
+    s.push_into(&input, &mut acc);
+    s.finish_into(&mut acc);
+    assert_eq!(acc.matches("<table ").count(), 1);
+}
+
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
 /// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
 #[test]
