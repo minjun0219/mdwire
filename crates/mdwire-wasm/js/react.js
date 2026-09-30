@@ -84,8 +84,9 @@ export function toElements(html, components = {}, schemes = DEFAULT_SCHEMES) {
 }
 
 /**
- * 에이전트 마크다운을 그린다 — 완성된 글용. 스트리밍 중인 누적본을 넘겨도 그려지지만, 반쪽
- * 마커(`**굵`, 여는 백틱, `##`)가 잠깐 글자로 보였다가 사라진다. 스트리밍은 [`useMarkdownStream`].
+ * 에이전트 마크다운을 그린다 — 완성된 글용. 스트리밍 중인 누적본을 토큰마다 넘기면 매번
+ * 처음부터 다시 변환해 전체 비용이 제곱으로 늘고, 반쪽 마커(`**굵`, 여는 백틱, `##`)가 잠깐 글자로
+ * 보였다가 사라진다. 스트리밍은 [`useMarkdownStream`].
  * @param {import("./react.d.ts").MarkdownProps} props
  */
 export function Markdown({ text, from, components, options }) {
