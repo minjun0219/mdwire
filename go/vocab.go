@@ -197,7 +197,7 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 
 // escapes 는 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가다.
 func (v vocab) escapes(c rune) bool {
-	return v.channel == GithubMarkdown && (c == '~' || c == '<')
+	return v.channel == GithubMarkdown && (c == '~' || c == '<' || c == '*')
 }
 
 // codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 탈출이 글자로 보인다 —

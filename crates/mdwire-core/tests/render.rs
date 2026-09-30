@@ -65,8 +65,11 @@ fn an_orphaned_double_marker_is_dropped_but_a_single_stays() {
     // 진짜 기울임은 살아 있다.
     assert_eq!(tg("/* a */ 다음 *z* 끝"), "/* a */ 다음 <i>z</i> 끝");
     // 추측이 둘 겹쳐 있을 때 아래쪽이 물러나도 죽지 않는다 — 위쪽(홑마커)부터 정리한다.
-    // 아래쪽 `**` 는 앞이 글자라 버린다.
-    assert_eq!(tg("a*** **x"), "a* <b>x</b>");
+    // `***` 는 어디에도 못 열린 한 덩어리라 셋 다 글자로 남는다 — 앞 조각 `**` 를 짝 잃은
+    // 닫기로 보고 버리면 마스킹 번호(`4***-****`)의 별표가 사라진다.
+    assert_eq!(tg("a*** **x"), "a*** <b>x</b>");
+    // 마스킹 번호. 쪼갠 런의 남은 `*` 가 제 앞 별표를 앞 글자로 봐서 기울임을 열었다(실측).
+    assert_eq!(tg("본인 4***-****-****-003* 확인"), "본인 4***-****-****-003* 확인");
     // 블록이 갈리면 강조는 넘어가지 않고, 넘어가려던 홑마커는 글자로 남는다.
     assert_eq!(
         tg("문단에서 *기울임이 열리고\n> 인용 줄이 온다* 뒤"),
@@ -969,6 +972,9 @@ fn html_output_is_safe_for_inner_html() {
     assert_eq!(h("<div>블록</div> <script>x</script>"), "<p>블록 &lt;script&gt;x&lt;/script&gt;</p>");
     assert_eq!(h("**a<sub>b**c</sub>"), "<p><strong>a<sub>b</sub></strong>c</p>");
     assert_eq!(h("<sub>안 닫힘 뒤 </b> 끝"), "<p><sub>안 닫힘 뒤  끝</sub></p>");
+    // 줄을 넘은 코드 스팬이 안 닫혀 글자로 되돌아가도 줄바꿈 `<br>` 은 남는다.
+    assert_eq!(h("앞 `a\nb 뒤"), "<p>앞 `a<br>\nb 뒤</p>");
+    assert_eq!(h("- 앞 `a\n  b 뒤"), "<ul><li>앞 `a<br>\n  b 뒤</li></ul>");
     // 코드펜스 info 는 속성값이라 `"` 까지 escape 한다 — 속성 주입을 막는다.
     assert_eq!(
         h("```x\" onmouseover=\"alert(1)\ncode\n```"),

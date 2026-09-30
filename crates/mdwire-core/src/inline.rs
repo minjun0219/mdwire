@@ -41,6 +41,9 @@ struct Open {
     soft: bool,
     /// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
     before: Option<char>,
+    /// 더 긴 런(`***`)을 쪼갠 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한
+    /// 덩어리의 글자였다(마스킹 번호 `4***-…`).
+    split: bool,
 }
 
 pub(crate) struct Inline {
@@ -205,6 +208,7 @@ impl Inline {
                     after_space: prev.is_none_or(char::is_whitespace),
                     soft: false,
                     before: prev,
+                    split: false,
                 });
                 i += run;
                 continue;
@@ -261,7 +265,15 @@ impl Inline {
                 continue;
             }
 
-            let prev = self.prev_char(line, i);
+            // **쪼갠 런의 남은 조각은 런 전체의 앞 글자를 본다.** `***` 를 `**` 와 `*` 로 나눠
+            // 읽을 때, 남은 `*` 가 제 앞의 별표를 앞 글자로 보면 "구두점 뒤"라 열 수 있는 자리가
+            // 된다. 마스킹 번호 `4***-****-****-003*` 의 별표가 진짜 기울임을 열어 `-****-…-003`
+            // 이 기울어졌다(실측). CommonMark 도 flanking 은 런 전체로 정한다.
+            let start = i - line[..i].iter().rev().take_while(|&&x| x == c).count();
+            // 런의 **첫 조각**만 쪼갠 조각으로 친다. 뒤 조각은 앞 조각이 이미 무언가를 닫은 뒤의
+            // 나머지일 수 있어서(`*기울임 **굵게***` 의 끝 `**`) 전처럼 버린다.
+            let split = start == i && run_len(line, i, c) > take;
+            let prev = self.prev_char(line, start);
             let next = line.get(i + take).copied();
 
             let after_space = prev.is_none_or(char::is_whitespace);
@@ -306,7 +318,7 @@ impl Inline {
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
                 // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
-                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev)),
+                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev, split)),
                 // mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
                 Some(_) if !after_space && soft_blocked_close => v.escape_char(c, out),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
@@ -320,7 +332,7 @@ impl Inline {
                 // 열린 마커는 앞이 공백이었으면 글자로 되돌리고, 글자였으면 버린다. 여기서
                 // "닫기"로 읽으면 강조 범위가 뒤집힌다 — 그 고장이 원본이다. 규칙 2.
                 Some(at) if left && at + 1 == self.open.len() => {
-                    self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev))
+                    self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev, split))
                 }
                 // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
                 Some(_) if left => {}
@@ -337,6 +349,7 @@ impl Inline {
                     after_space,
                     soft,
                     before: prev,
+                    split,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
                 None => self.open.push(Open {
@@ -348,6 +361,7 @@ impl Inline {
                     after_space,
                     soft,
                     before: prev,
+                    split,
                 }),
             }
             i += take;
@@ -410,21 +424,21 @@ impl Inline {
         at: usize,
         out: &mut String,
         v: &Vocab,
-        fresh: (Emph, usize, char, bool, bool, Option<char>),
+        fresh: (Emph, usize, char, bool, bool, Option<char>, bool),
     ) {
-        let (emph, take, c, after_space, soft, before) = fresh;
+        let (emph, take, c, after_space, soft, before, split) = fresh;
         // `at` 위에 열린 것들은 먼저 정리한다 — `a*** **x` 처럼 추측 둘이 겹쳐 있을 때
         // 아래쪽이 물러난다. 위쪽을 두고 아래만 빼면 열린 것들의 순서가 깨진다.
         while self.open.len() > at + 1 {
             self.finalize(out, v, false);
         }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
-        if old.run == 1 || (old.guess && old.after_space) {
+        if old.run == 1 || (old.guess && (old.after_space || old.split)) {
             insert_marker(out, old.at, old.ch, old.run, v);
         } else {
             self.repairs.dropped_marker += 1;
         }
-        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, soft, before });
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, soft, before, split });
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
@@ -469,7 +483,7 @@ impl Inline {
             // (`underfront.*`), 곱셈(`2 * 3`)으로 쓰이는 글자라 버리면 내용 손실이다.
             // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
             // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
-            if open.after_space || open.run == 1 {
+            if open.after_space || open.run == 1 || open.split {
                 insert_marker(out, open.at, open.ch, open.run, v);
             } else {
                 self.repairs.dropped_marker += 1;
@@ -648,6 +662,7 @@ impl Inline {
                         after_space: false,
                         soft: false,
                         before: self.prev_char(line, i),
+                        split: false,
                     }),
                 }
                 self.prev = Some('>');

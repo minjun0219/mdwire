@@ -822,6 +822,8 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
                 }
                 *escaped.entry((marker, n)).or_default() += 1;
             }
+            // 참조 모델도 글자로 읽은 마커는 글자 수만큼 넘어간다(마스킹 번호 `4***-****`).
+            let mut literal = emphasis::scan_markdown(input, Mode::Repair).literal;
             let ch: Vec<char> = text.chars().collect();
             let mut i = 0;
             while i < ch.len() {
@@ -851,6 +853,13 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
                         if let Some(n) = escaped.get_mut(&(c, run)) {
                             if *n > 0 {
                                 *n -= 1;
+                                i += run;
+                                continue;
+                            }
+                        }
+                        if let Some(n) = literal.get_mut(&c) {
+                            if *n >= run {
+                                *n -= run;
                                 i += run;
                                 continue;
                             }
@@ -955,7 +964,16 @@ fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
                     // **이벤트 속성은 어떤 태그에 붙어도 안 된다.** 출력이 `innerHTML` 로
                     // 들어가는 채널에서 원문의 `onclick=` 이 새면 스크립트가 돈다.
                     let tag: String = ch[i..end].iter().collect::<String>().to_ascii_lowercase();
-                    if tag.split(char::is_whitespace).skip(1).any(|a| a.starts_with("on") && a.contains('=')) {
+                    let attrs = attr_names(&tag);
+                    // 브라우저 채널만 — 링크 주소가 `innerHTML` 에서 눌리는 곳이다.
+                    let browser = allowed.contains(&"table");
+                    let unsafe_href = browser
+                        && attrs.iter().any(|a| a == "href")
+                        && !["href=\"http://", "href=\"https://", "href=\"mailto:"].iter().any(|p| tag.contains(p));
+                    if unsafe_href {
+                        out.push(Finding { rule: Rule::DisallowedTag, detail: format!("안전하지 않은 링크 주소: {tag}") });
+                    }
+                    if attrs.iter().any(|a| a.starts_with("on")) {
                         out.push(Finding {
                             rule: Rule::DisallowedTag,
                             detail: format!("이벤트 속성이 샌 태그: {tag}"),
@@ -1006,6 +1024,34 @@ fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
     for n in stack {
         out.push(Finding { rule: Rule::UnclosedTag, detail: format!("<{n}> 이 끝까지 안 닫혔다") });
     }
+}
+
+/// 태그의 속성 이름들. **따옴표 안은 값이라 보지 않는다** — 값 안에 escape 된 글자로 든
+/// `onclick=` 은 속성이 아니다. 이름은 공백이나 `/` 뒤에 온다(`<sub/onclick=…>`).
+fn attr_names(tag: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut quote: Option<char> = None;
+    let mut cur = String::new();
+    // 태그 이름을 건너뛴다.
+    let body = tag.trim_start_matches('<').trim_start_matches('/');
+    let body = &body[body.find(|c: char| c.is_whitespace() || c == '/' || c == '>').unwrap_or(body.len())..];
+    for c in body.chars() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == '"' || c == '\'' => quote = Some(c),
+            None if c.is_ascii_alphanumeric() || c == '-' => cur.push(c),
+            None => {
+                if !cur.is_empty() {
+                    names.push(std::mem::take(&mut cur));
+                }
+            }
+        }
+    }
+    if !cur.is_empty() {
+        names.push(cur);
+    }
+    names
 }
 
 fn context(ch: &[char], at: usize) -> String {

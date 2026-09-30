@@ -462,4 +462,30 @@ mod gate {
         });
         assert_eq!(counts.allocs, 0, "GitHub 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
+
+    /// **브라우저 채널만 도는 경로도 할당하지 않는다** — 문단·헤딩 태그, 목록 스택, `<br>`,
+    /// 원문 인라인 태그. 위 두 게이트의 산문으로는 이 경로를 안 탄다.
+    #[test]
+    fn html_prose_streaming_is_allocation_free_once_warm() {
+        let unit = "## 제목\n\n세 환경 중 **두 곳에서**\n재현됐다. H<sub>2</sub>O 와 줄<br>바꿈.\n\n\
+                    - 스테이징: 재현됨\n  - 본문이 비어 있다\n- 로컬: 재현 안 됨\n\n> 조치는 **허용 목록을 명시**한다.\n\n";
+        let doc = unit.repeat(12);
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::Html);
+        let mut out = String::new();
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        assert!(out.contains("<ul><li>") && out.contains("<sub>"), "재는 경로를 실제로 탔다: {out}");
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "html 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
 }

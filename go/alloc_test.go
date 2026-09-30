@@ -88,6 +88,34 @@ func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
+// 브라우저 채널만 도는 경로도 할당하지 않는다 — 문단·헤딩 태그, 목록 스택, `<br>`, 원문
+// 인라인 태그. 러스트 쪽 같은 이름의 테스트.
+func TestHTMLProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
+	unit := "## 제목\n\n세 환경 중 **두 곳에서**\n재현됐다. H<sub>2</sub>O 와 줄<br>바꿈.\n\n" +
+		"- 스테이징: 재현됨\n  - 본문이 비어 있다\n- 로컬: 재현 안 됨\n\n> 조치는 **허용 목록을 명시**한다.\n\n"
+	pieces := splitChunks(strings.Repeat(unit, 12), 64)
+	s := NewStreamer(HTML)
+	var out []byte
+	for _, p := range pieces {
+		s.PushTo(p, &out)
+	}
+	s.FinishTo(&out)
+	if !strings.Contains(string(out), "<ul><li>") || !strings.Contains(string(out), "<sub>") {
+		t.Fatalf("재는 경로를 타지 않았다: %s", out)
+	}
+
+	allocs := testing.AllocsPerRun(3, func() {
+		out = out[:0]
+		for _, p := range pieces {
+			s.PushTo(p, &out)
+		}
+		s.FinishTo(&out)
+	})
+	if allocs != 0 {
+		t.Fatalf("html 산문 스트리밍이 할당한다 — 회귀다: 회당 %.1f 회", allocs)
+	}
+}
+
 // 회귀 감시용 벤치. 절대값보다 이전 회차와의 비교에 뜻이 있다 — 러스트와 나란한 순위표는
 // 만들지 않는다(SPEC 9절).
 func BenchmarkProseStreaming(b *testing.B) {

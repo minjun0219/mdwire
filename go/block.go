@@ -323,7 +323,7 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 		// 리스트 항목이 다음 줄로 이어진다. 항목은 아직 끝나지 않았다 — 여기서 끊으면 줄을
 		// 넘는 강조가 항목 안에서만 안 잡힌다. 80열 wrap 은 불릿 안에서도 똑같이 일어난다.
 		e.out = append(e.out, e.v.lineBreak()...)
-		e.inline.noteRaw("\n")
+		e.inline.noteRaw(e.v.lineBreak())
 		e.inline.endLine()
 		for i := 0; i < min(prefix, 8); i++ {
 			e.out = append(e.out, ' ')
@@ -341,7 +341,7 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 			// 문단 안의 줄바꿈은 살린다. 강조는 이 줄바꿈을 넘어 이어진다 — 80열 wrap 된
 			// 산문에서 그게 일상이고, 그것이 이 라이브러리의 첫 고장이었다.
 			e.out = append(e.out, e.v.lineBreak()...)
-			e.inline.noteRaw("\n")
+			e.inline.noteRaw(e.v.lineBreak())
 			e.inline.endLine()
 		}
 	case k.k == lineHeading:
@@ -357,7 +357,7 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 			e.out = append(e.out, e.v.quoteOpen()...)
 		} else {
 			e.out = append(e.out, e.v.lineBreak()...)
-			e.inline.noteRaw("\n")
+			e.inline.noteRaw(e.v.lineBreak())
 			e.inline.endLine()
 		}
 		e.out = append(e.out, e.v.quotePrefix()...)

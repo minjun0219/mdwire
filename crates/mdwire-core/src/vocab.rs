@@ -157,8 +157,12 @@ impl Vocab {
     }
 
     /// 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가.
+    ///
+    /// `*` 도 GitHub 에서는 탈출한다 — mdwire 가 글자로 판정한 별표를 GFM 이 다시 읽는다.
+    /// 마스킹 번호 `1***-****-****-001*` 의 `-****-` 가 `-<strong>-</strong>-` 로 먹혔다(실측
+    /// 2026-09-30). 강조 마커는 `open`/`close` 로 따로 나가니 여기 오는 별표는 전부 글자다.
     pub fn escapes(&self, c: char) -> bool {
-        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<')
+        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<' | '*')
     }
 
     /// 코드 안의 글자 하나를 적는다. **코드 안에서는 마크다운 탈출이 글자로 보인다** —

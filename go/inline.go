@@ -34,6 +34,9 @@ type openMark struct {
 	soft bool
 	// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
 	before rune
+	// 더 긴 런(`***`)의 첫 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한 덩어리의
+	// 글자였다(마스킹 번호 `4***-…`).
+	split bool
 }
 
 type inline struct {
@@ -206,7 +209,14 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			continue
 		}
 
-		prev := in.prevChar(line, i)
+		// 쪼갠 런의 남은 조각은 런 전체의 앞 글자를 본다. 남은 `*` 가 제 앞 별표를 앞 글자로
+		// 보면 열 수 있는 자리가 되어, 마스킹 번호 `4***-****-****-003*` 가 기울어졌다(실측).
+		start := i
+		for start > 0 && line[start-1] == c {
+			start--
+		}
+		split := start == i && runLen(line, i, c) > take
+		prev := in.prevChar(line, start)
 		next := noChar
 		if i+take < len(line) {
 			next = line[i+take]
@@ -231,7 +241,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		softBlockedOpen := soft && ((prev != noChar && isWordChar(prev)) || (next >= '0' && next <= '9'))
 		softBlockedClose := soft && next != noChar && next < 0x80 && isASCIIAlnum(next)
 		left := canOpen(prev, next) && !intraword && !softBlockedOpen
-		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev}
+		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev, split: split}
 
 		switch {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
@@ -323,7 +333,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	}
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
-	if old.run == 1 || (old.guess && old.afterSpace) {
+	if old.run == 1 || (old.guess && (old.afterSpace || old.split)) {
 		insertMarker(out, old.at, old.ch, old.run, v)
 	} else {
 		in.repairs.DroppedMarker++
@@ -393,7 +403,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	if o.guess || empty || (o.soft && !matched) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
-		if o.afterSpace || o.run == 1 {
+		if o.afterSpace || o.run == 1 || o.split {
 			insertMarker(out, o.at, o.ch, o.run, v)
 		} else {
 			in.repairs.DroppedMarker++

@@ -22,7 +22,7 @@
 ----
 <p>/* a */ 다음 <em>z</em> 끝</p>
 ----
-<p>a* <strong>x</strong></p>
+<p>a*** <strong>x</strong></p>
 ----
 <p><strong><em>세 개 별표</em></strong></p>
 ----
