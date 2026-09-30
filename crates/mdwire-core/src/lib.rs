@@ -114,10 +114,29 @@ impl Dialect {
     }
 }
 
-/// 변환 옵션. 지금은 입력 방언 하나다.
+/// 호출자가 줄 수 있는 가장 작은 조각 한도.
+///
+/// **조각마다 마크업을 닫고 다시 열 자리가 있어야 한다.** 한도가 태그보다 작으면 분할기가 태그 글자
+/// 사이를 가른다 — 텔레그램 `**x**` 를 한도 1 로 나누면 `<` · `b` · `></b>` 가 됐다(리뷰에서 나왔다).
+/// 중첩된 여는 태그 몇 개(인용·굵게·코드·`<pre><code class="language-…">`)가 들어가고도 내용이 남는
+/// 값이다. 실제 쓰임(텔레그램 4096 에서 머리글 몫을 빼는 것)과는 거리가 멀다.
+pub const MIN_LIMIT: usize = 256;
+
+/// 변환 옵션 — 입력 방언과 조각 한도.
+///
+/// 필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Options {
     pub from: Dialect,
+    /// 한 조각의 한도(렌더한 출력의 글자 수). `None` 이면 [`Channel::limit`].
+    ///
+    /// **한도는 보내는 쪽이 정한다.** 채널이 정해 주지 못하는 경우가 있다 — plain 은 어디로
+    /// 가는지 모르는 폴백이라 텔레그램으로 보내면 4096 이어야 하고(12,000 으로 나눈 7,153자
+    /// 조각이 400 을 받았다), 앞에 제목을 붙여 보내는 쪽은 그만큼 덜 써야 한다.
+    /// 스트리밍([`Streamer`])은 나누지 않으므로 이 값을 보지 않는다. 브라우저 채널([`Channel::Html`])도
+    /// 나누지 않는다 — 분할기가 블록 태그를 여닫지 않아 태그 한가운데서 갈린다. [`MIN_LIMIT`] 보다 작은
+    /// 값은 그만큼 올린다.
+    pub limit: Option<usize>,
 }
 
 /// 정규화가 고친 것의 개수. **모델이 얼마나 자주 서식을 깨는지**를 재는 데 쓴다.
@@ -305,13 +324,14 @@ pub fn render(input: &str, channel: Channel) -> Vec<String> {
 /// ```
 /// use mdwire::{render_with, Channel, Dialect, Options};
 ///
-/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, Options { from: Dialect::SlackMrkdwn });
+/// let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
+/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
 /// assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
 /// assert_eq!(out.repairs.closed_emphasis, 1);
 /// ```
 pub fn render_with(input: &str, channel: Channel, options: Options) -> Rendered {
     let mut engine = Engine::new(channel, options);
-    let mut sink = PartsSink::new(Vocab::new(channel));
+    let mut sink = PartsSink::new(Vocab::with_limit(channel, options.limit));
     engine.feed(input, &mut sink);
     engine.finish(&mut sink);
     Rendered { repairs: engine.repairs(), parts: sink.into_parts() }

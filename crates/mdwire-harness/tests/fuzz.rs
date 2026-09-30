@@ -69,7 +69,7 @@ fn random_input_never_breaks_the_invariants() {
     for round in 0..rounds {
         let input = doc(&mut rng);
         for (channel, from) in Channel::all().into_iter().flat_map(|c| [(c, Dialect::Markdown), (c, Dialect::SlackMrkdwn)]) {
-            let options = Options { from };
+            let options = Options { from, ..Default::default() };
             let parts = mdwire::render_with(&input, channel, options).parts;
             let joined = parts.join("\0");
             // 한도 · 태그 · 이스케이프. 강조 범위와 낱말 손실은 여기서 보지 않는다 — 무작위
@@ -146,6 +146,40 @@ fn random_long_input_splits_cleanly() {
             }
             if parts.iter().any(|p| p.is_empty()) {
                 failures.push(format!("#{round} {}: 빈 조각", channel.name()));
+            }
+        }
+        if failures.len() >= 10 {
+            break;
+        }
+    }
+    assert!(failures.is_empty(), "{}건 실패:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// 호출자가 준 가장 작은 한도(`MIN_LIMIT`)에서도 조각마다 한도를 지키고 태그를 닫는가. 한도가 작을수록
+/// 마크업을 닫고 다시 여는 몫이 커서 분할기의 가장자리가 드러난다.
+#[test]
+fn smallest_caller_limit_splits_cleanly() {
+    let mut rng = Rng(0x5EED_0000_0000_0256);
+    let mut failures = Vec::new();
+    for round in 0..200 {
+        let mut input = String::new();
+        while input.chars().count() < mdwire::MIN_LIMIT * 4 {
+            input.push_str(&doc(&mut rng));
+        }
+        for channel in [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain] {
+            let options = Options { limit: Some(mdwire::MIN_LIMIT), ..Default::default() };
+            let parts = mdwire::render_with(&input, channel, options).parts;
+            if parts.iter().any(|p| p.chars().count() > mdwire::MIN_LIMIT) {
+                failures.push(format!("#{round} {}: 한도를 넘은 조각", channel.name()));
+            }
+            if channel == Channel::TelegramHtml {
+                let bad: Vec<_> = check(&input, &parts.join("\0"), channel)
+                    .into_iter()
+                    .filter(|f| matches!(f.rule, Rule::UnclosedTag | Rule::DisallowedTag | Rule::RawHtmlChar))
+                    .collect();
+                if !bad.is_empty() {
+                    failures.push(format!("#{round} telegram-html: {bad:?}"));
+                }
             }
         }
         if failures.len() >= 10 {

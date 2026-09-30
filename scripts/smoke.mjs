@@ -32,6 +32,12 @@ assert.deepEqual(
   render("*굵게* ~취소~ <https://x.io|링크>", "slack-markdown", { from: "slack-mrkdwn" }),
   ["**굵게** ~~취소~~ [링크](https://x.io)"],
 );
+// 한도는 호출자가 정한다 — plain 폴백을 텔레그램으로 보낼 때 4096.
+const long = "가나다 ".repeat(3000);
+assert.ok(render(long, "plain").length === 1, "plain 기본 한도는 12,000 이다");
+const capped = render(long, "plain", { limit: 4096 });
+assert.ok(capped.length > 1 && capped.every((p) => [...p].length <= 4096), "limit 을 넘는 조각이 있다");
+assert.throws(() => render(long, "plain", { limit: 0 }), /limit/);
 const ms = new Streamer("telegram-html", { from: "slack-mrkdwn" });
 assert.equal(ms.push("*굵") + ms.push("게*") + ms.finish(), "<b>굵게</b>");
 assert.throws(() => render("x", "plain", { from: "mrkdwn" }), /모르는 방언/);

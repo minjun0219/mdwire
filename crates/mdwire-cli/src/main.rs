@@ -33,6 +33,7 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
 옵션:
   --channel <이름>      필수
   --from <방언>         입력 표기. markdown(기본) · slack-mrkdwn
+  --limit <글자 수>     조각 한도. 기본은 채널의 한도 — plain 을 텔레그램에 보내면 4096
   --stream              stdin 을 읽는 대로 내보낸다. 한도 분할은 하지 않는다
   --report              정규화가 고친 것을 stderr 에 JSON 한 줄로 낸다
   --batch jsonl         문서 여럿을 JSON lines 로 받아 문서마다 고친 것을 stdout 에
@@ -86,6 +87,11 @@ fn run() -> Result<(), String> {
                     return Err(format!("모르는 --batch 형식: {v} (jsonl 만 받는다)"));
                 }
                 batch = true;
+            }
+            "--limit" => {
+                let v = value()?;
+                let n: usize = v.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("--limit 은 1 이상의 정수다: {v}"))?;
+                options.limit = Some(n);
             }
             "--from" => {
                 let v = value()?;
@@ -292,7 +298,7 @@ mod tests {
 
     fn batch(input: &str) -> (String, usize) {
         let mut out = Vec::new();
-        let options = Options { from: Dialect::SlackMrkdwn };
+        let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
         let failed = batch_jsonl(Channel::SlackMarkdown, options, input.as_bytes(), &mut out).expect("쓰기");
         (String::from_utf8(out).expect("UTF-8"), failed)
     }

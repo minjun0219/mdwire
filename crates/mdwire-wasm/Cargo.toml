@@ -15,7 +15,8 @@ crate-type = ["cdylib", "rlib"]
 mdwire-core = { path = "../mdwire-core" }
 wasm-bindgen = "0.2"
 
-# **`wasm-opt` 에 bulk memory 를 켜 준다.** wasm-pack 이 들고 오는 `wasm-opt` 는
-# 기본값이 옛 명세라, 요즘 rustc 가 내는 `memory.fill` 을 보고 검증에서 죽는다.
+# **`wasm-opt` 에 bulk memory 와 non-trapping float-to-int 를 켜 준다.** wasm-pack 이 들고
+# 오는 `wasm-opt` 는 기본값이 옛 명세라, 요즘 rustc 가 내는 `memory.fill` 과 `f64 → 정수` 변환
+# (`i32.trunc_sat_f64_u`, 옵션의 `limit` 을 읽을 때)을 보고 검증에서 죽는다.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ['-O', '--enable-bulk-memory']
+wasm-opt = ['-O', '--enable-bulk-memory', '--enable-nontrapping-float-to-int']

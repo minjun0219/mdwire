@@ -39,11 +39,11 @@ impl Renderer for Mdwire {
     }
 
     fn render(&self, input: &str, channel: Channel, from: Dialect) -> Result<String, String> {
-        Ok(mdwire::render_with(input, channel, Options { from }).parts.join("\0"))
+        Ok(mdwire::render_with(input, channel, Options { from, ..Default::default() }).parts.join("\0"))
     }
 
     fn stream(&self, input: &str, channel: Channel, from: Dialect, chunk: usize) -> Option<String> {
-        let mut s = mdwire::Streamer::with_options(channel, Options { from });
+        let mut s = mdwire::Streamer::with_options(channel, Options { from, ..Default::default() });
         let mut out = String::new();
         let mut rest = input;
         while !rest.is_empty() {

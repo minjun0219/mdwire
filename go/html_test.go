@@ -16,7 +16,7 @@ func TestHTMLOutputIsSafeForInnerHTML(t *testing.T) {
 		{`H<sub onclick="x()">2</sub>O`, "<p>H<sub>2</sub>O</p>"},
 		{"<div>블록</div> <script>x</script>", "<p>블록 &lt;script&gt;x&lt;/script&gt;</p>"},
 		{"**a<sub>b**c</sub>", "<p><strong>a<sub>b</sub></strong>c</p>"},
-		{"```x\" onmouseover=\"alert(1)\ncode\n```", `<pre><code class="language-x&quot; onmouseover=&quot;alert(1)">code</code></pre>`},
+		{"```x\"onmouseover=\"alert(1)\ncode\n```", `<pre><code class="language-x&quot;onmouseover=&quot;alert(1)">code</code></pre>`},
 	}
 	for _, c := range cases {
 		if got := strings.Join(Render(c[0], HTML), ""); got != c[1] {
@@ -85,5 +85,26 @@ func balancedHTML(s string) bool {
 		} else {
 			stack = append(stack, name)
 		}
+	}
+}
+
+// 한도는 호출자가 정한다 — 러스트 쪽 caller_limit_overrides_the_channel_limit.
+func TestCallerLimitOverridesTheChannelLimit(t *testing.T) {
+	long := strings.Repeat("가나다 ", 3000)
+	if n := len(Render(long, Plain)); n != 1 {
+		t.Fatalf("plain 기본 한도는 12,000 이다: %d 조각", n)
+	}
+	parts := RenderWith(long, Plain, Options{Limit: 4096}).Parts
+	if len(parts) < 2 {
+		t.Fatalf("나뉘어야 한다")
+	}
+	for _, p := range parts {
+		if n := len([]rune(p)); n > 4096 {
+			t.Fatalf("%d자 조각 — 한도 4096", n)
+		}
+	}
+	input := "[문서](https://a.com/" + strings.Repeat("x", 300) + ")"
+	if out := strings.Join(RenderWith(input, TelegramHTML, Options{Limit: MinLimit}).Parts, ""); strings.Contains(out, "<a href") {
+		t.Fatalf("한도 256 에 300자 주소 링크: %s", out)
 	}
 }

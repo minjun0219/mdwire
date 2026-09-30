@@ -42,11 +42,23 @@ pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Vocab {
     pub channel: Channel,
+    /// 한 조각의 한도. 채널 기본값이거나 호출자가 [`crate::Options::limit`] 로 준 값이다.
+    pub limit: usize,
 }
 
 impl Vocab {
     pub fn new(channel: Channel) -> Self {
-        Self { channel }
+        Self { channel, limit: channel.limit() }
+    }
+
+    /// 한도를 정해 만든다. `None` 이면 채널 기본값, [`crate::MIN_LIMIT`] 아래는 올린다.
+    pub fn with_limit(channel: Channel, limit: Option<usize>) -> Self {
+        let limit = match limit {
+            // 브라우저 채널은 나누지 않는다 — 분할기가 `<p>`·`<ul>` 을 여닫지 않는다.
+            Some(n) if channel != Channel::Html => n.max(crate::MIN_LIMIT),
+            _ => channel.limit(),
+        };
+        Self { channel, limit }
     }
 
     /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
@@ -64,7 +76,7 @@ impl Vocab {
     }
 
     /// 출력이 HTML 이라 글자를 escape 해야 하는가. 텔레그램과 브라우저.
-    fn html_out(&self) -> bool {
+    pub(crate) fn html_out(&self) -> bool {
         matches!(self.channel, Channel::TelegramHtml | Channel::Html)
     }
 
@@ -199,7 +211,7 @@ impl Vocab {
                 // 다 차지하면 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다.
                 // 주소는 괄호에 넣어 글로 내보낸다 — 링크는 죽어도 내용은 산다.
                 let markup = escaped_len(url) + "<a href=\"\"></a>".len();
-                if markup >= self.channel.limit() {
+                if markup >= self.limit {
                     out.push_str(text);
                     if !url.is_empty() && !escaped_eq(text, url) {
                         out.push_str(" (");
@@ -329,11 +341,12 @@ impl Vocab {
         match self.channel {
             Channel::TelegramHtml | Channel::Html => {
                 out.push_str("<pre>");
-                if !info.is_empty() {
+                let lang = fence_lang(info);
+                if !lang.is_empty() {
                     out.push_str("<code class=\"language-");
                     // 속성값이다 — `"` 까지 escape 한다. 안 하면 ```` ```x" onmouseover="… ````
                     // 가 속성을 하나 더 끼워 넣는다(innerHTML 로 들어가는 채널에서 스크립트).
-                    push_attr(info, out);
+                    push_attr(lang, out);
                     out.push_str("\">");
                 }
             }
@@ -354,7 +367,7 @@ impl Vocab {
     pub fn verbatim_close(&self, info: &str, out: &mut String) {
         match self.channel {
             Channel::TelegramHtml | Channel::Html => {
-                if !info.is_empty() {
+                if !fence_lang(info).is_empty() {
                     out.push_str("</code>");
                 }
                 out.push_str("</pre>");
@@ -363,6 +376,14 @@ impl Vocab {
             _ => out.push_str("\n```"),
         }
     }
+}
+
+/// 코드펜스 info 에서 `<code class="language-…">` 에 넣을 언어. info 의 첫 단어다(CommonMark).
+/// 32자를 넘으면 언어 이름이 아니라서 버린다 — 여는 태그가 한도만큼 길어지면 분할기가 태그
+/// 한가운데를 가른다(최소 한도 256 퍼즈에서 나왔다).
+fn fence_lang(info: &str) -> &str {
+    let lang = info.split_whitespace().next().unwrap_or("");
+    if lang.chars().count() <= 32 { lang } else { "" }
 }
 
 /// 속성값으로 escape 해서 적는다.

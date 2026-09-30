@@ -3,6 +3,7 @@ package mdwire
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 채널별 출력 어휘.
@@ -49,6 +50,20 @@ var inlineTags = [15][3]string{
 // vocab 은 채널 하나의 출력 어휘와 정책이다.
 type vocab struct {
 	channel Channel
+	// limit 은 한 조각의 한도다. 채널 기본값이거나 Options.Limit 이다.
+	limit int
+}
+
+// newVocab 은 한도를 정해 만든다. limit 이 0 이면 채널 기본값, 음수는 1 로 올린다.
+func newVocab(ch Channel, limit int) vocab {
+	switch {
+	// 브라우저 채널은 나누지 않는다 — 분할기가 <p>·<ul> 을 여닫지 않는다.
+	case limit == 0 || ch == HTML:
+		limit = ch.Limit()
+	case limit < MinLimit:
+		limit = MinLimit
+	}
+	return vocab{channel: ch, limit: limit}
 }
 
 // tablesNative 는 채널이 표를 직접 그리는가다. 그리면 고정폭으로 내리는 것이 손해다 —
@@ -230,7 +245,7 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다. 주소는 괄호에 넣어 글로
 		// 내보낸다 — 링크는 죽어도 내용은 산다.
 		markup := escapedLen(url) + len(`<a href=""></a>`)
-		if markup >= v.channel.Limit() {
+		if markup >= v.limit {
 			*out = append(*out, text...)
 			if url != "" && !escapedEq(text, url) {
 				*out = append(*out, " ("...)
@@ -364,10 +379,10 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 	switch v.channel {
 	case TelegramHTML, HTML:
 		*out = append(*out, "<pre>"...)
-		if info != "" {
+		if lang := fenceLang(info); lang != "" {
 			*out = append(*out, `<code class="language-`...)
 			// 속성값이다 — `"` 까지 escape 한다. 안 하면 info 가 속성을 하나 더 끼워 넣는다.
-			appendAttr(info, out)
+			appendAttr(lang, out)
 			*out = append(*out, `">`...)
 		}
 	case Plain:
@@ -375,6 +390,16 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 		*out = append(*out, "```"...)
 		*out = append(*out, info...)
 	}
+}
+
+// fenceLang 은 코드펜스 info 에서 class 에 넣을 언어다 — 러스트 쪽 fence_lang. 첫 단어이고,
+// 32자를 넘으면 언어 이름이 아니라서 버린다.
+func fenceLang(info string) string {
+	f := strings.Fields(info)
+	if len(f) == 0 || utf8.RuneCountInString(f[0]) > 32 {
+		return ""
+	}
+	return f[0]
 }
 
 // verbatimBodyNewline 은 여는 마크업과 첫 내용 줄 사이에 줄바꿈이 필요한가다.
@@ -386,7 +411,7 @@ func (v vocab) verbatimBodyNewline() bool {
 func (v vocab) verbatimClose(info string, out *[]byte) {
 	switch v.channel {
 	case TelegramHTML, HTML:
-		if info != "" {
+		if fenceLang(info) != "" {
 			*out = append(*out, "</code>"...)
 		}
 		*out = append(*out, "</pre>"...)
