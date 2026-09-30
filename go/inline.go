@@ -57,7 +57,7 @@ type inline struct {
 	// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
 	inCell bool
 	// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
-	strippedTags int
+	strippedTags []uint8
 }
 
 func newInline(d Dialect) *inline {
@@ -68,7 +68,7 @@ func newInline(d Dialect) *inline {
 func (in *inline) reset() {
 	in.open = in.open[:0]
 	in.prev = noChar
-	in.strippedTags = 0
+	in.strippedTags = in.strippedTags[:0]
 }
 
 // safeLen 은 지금 out 에서 내보내도 안전한 길이다. 열린 마커가 있으면 그 앞까지다.
@@ -557,15 +557,18 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	br := eqIgnoreCase(name, "br")
 	if (v.isHTML() || v.htmlEmphasis()) && (tag >= 0 || br) {
 		p := in.prevChar(line, i)
-		atLineStart := p == noChar || p == '\n'
+		// 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
+		atLineStart := !in.inCell && (p == noChar || p == '\n')
 		githubStart := !v.isHTML() && atLineStart
+		n := len(in.strippedTags)
 		switch {
-		case closing && in.strippedTags > 0 && !v.isHTML():
-			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
-			in.strippedTags--
+		case closing && !v.isHTML() && tag >= 0 && n > 0 && in.strippedTags[n-1] == uint8(tag):
+			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. 이름이 맞을 때만이다 —
+			// `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
+			in.strippedTags = in.strippedTags[:n-1]
 		case githubStart:
-			if !closing && !br {
-				in.strippedTags++
+			if !closing && tag >= 0 {
+				in.strippedTags = append(in.strippedTags, uint8(tag))
 			}
 		default:
 			switch {

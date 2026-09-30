@@ -310,8 +310,15 @@ func (sp span) reopenLen() int {
 	return sp.run * 2
 }
 
-// emphTags 는 렌더러가 마커 대신 내는 태그다. 여는 태그에 속성이 없다.
-var emphTags = [...]string{"<strong>", "<em>", "<del>"}
+// emphTags 는 렌더러가 내는 짝 있는 태그다 — 마커 대신 내는 strong·em·del 과 살려 둔 원문 인라인
+// 태그(GitHub). 둘 다 속성 없이 이름만으로 다시 쓴 것이라 이 목록으로 알아본다. br 은 짝이 없다.
+var emphTags = func() []string {
+	tags := []string{"<strong>", "<em>", "<del>"}
+	for _, t := range inlineTags {
+		tags = append(tags, t[1])
+	}
+	return tags
+}()
 
 // emphTagAt 은 at 에서 렌더러가 낸 강조 태그가 시작하면 (여는 태그, 닫는 태그인가, 길이)다.
 func emphTagAt(ch []rune, at int) (string, bool, int) {

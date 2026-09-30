@@ -71,7 +71,7 @@ pub(crate) struct Inline {
     /// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
     pub in_cell: bool,
     /// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
-    stripped_tags: usize,
+    stripped_tags: Vec<u8>,
 }
 
 impl Inline {
@@ -85,7 +85,7 @@ impl Inline {
             repairs: Repairs::default(),
             after_close: None,
             in_cell: false,
-            stripped_tags: 0,
+            stripped_tags: Vec::new(),
         }
     }
 
@@ -93,7 +93,7 @@ impl Inline {
     pub fn reset(&mut self) {
         self.open.clear();
         self.prev = None;
-        self.stripped_tags = 0;
+        self.stripped_tags.clear();
     }
 
     /// 지금 `out` 에서 **내보내도 안전한 길이**. 열린 마커가 있으면 그 앞까지다.
@@ -631,14 +631,16 @@ impl Inline {
         let tag = inline_tag(name);
         let br = eq_ignore_case(name, "br");
         if (v.is_html() || v.html_emphasis()) && (tag.is_some() || br) {
-            let at_line_start = self.prev_char(line, i).is_none_or(|c| c == '\n');
+            // 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
+            let at_line_start = !self.in_cell && self.prev_char(line, i).is_none_or(|c| c == '\n');
             let github_start = !v.is_html() && at_line_start;
-            if closing && self.stripped_tags > 0 && !v.is_html() {
-                // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
-                self.stripped_tags -= 1;
+            if closing && !v.is_html() && tag.is_some() && self.stripped_tags.last() == tag.as_ref() {
+                // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. **이름이 맞을 때만**이다 —
+                // `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
+                self.stripped_tags.pop();
             } else if github_start {
-                if !closing && !br {
-                    self.stripped_tags += 1;
+                if let (false, Some(t)) = (closing, tag) {
+                    self.stripped_tags.push(t);
                 }
             } else {
                 match tag {

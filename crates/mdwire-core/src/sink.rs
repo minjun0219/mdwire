@@ -302,8 +302,11 @@ enum SpanKind {
     Tag(&'static str),
 }
 
-/// 렌더러가 마커 대신 내는 태그 이름. 여는 태그에 속성이 없다.
-const EMPH_TAGS: [&str; 3] = ["strong", "em", "del"];
+/// 렌더러가 내는 짝 있는 태그 이름 — 마커 대신 내는 `strong`·`em`·`del` 과 살려 둔 원문 인라인
+/// 태그(GitHub). 둘 다 속성 없이 이름만으로 다시 쓴 것이라 이 목록으로 알아본다. `br` 은 짝이 없다.
+fn emph_tags() -> impl Iterator<Item = &'static str> {
+    ["strong", "em", "del"].into_iter().chain(crate::vocab::INLINE_TAGS.iter().map(|(name, _, _)| *name))
+}
 
 impl SpanKind {
     fn write_open(self, out: &mut String) {
@@ -348,7 +351,7 @@ fn emph_tag_at(ch: &[char], at: usize) -> Option<(&'static str, bool, usize)> {
     let rest = &ch[at..];
     let closing = rest.get(1) == Some(&'/');
     let from = if closing { 2 } else { 1 };
-    EMPH_TAGS.into_iter().find_map(|name| {
+    emph_tags().find_map(|name| {
         let end = from + name.len();
         let hit = rest.len() > end
             && rest[from..end].iter().copied().eq(name.chars())
