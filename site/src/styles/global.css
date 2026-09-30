@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --fg: #1c1c1a;
+  --muted: #6b6b66;
+  --line: #e4e4e0;
+  --panel: #ffffff;
+  --code-bg: #f3f3f0;
+  --accent: #0f766e;
+  --accent-soft: #e6f4f2;
+  --warn: #b45309;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413;
+    --fg: #ececea;
+    --muted: #9b9b95;
+    --line: #2d2d2a;
+    --panel: #1b1b1a;
+    --code-bg: #232321;
+    --accent: #2dd4bf;
+    --accent-soft: #10302c;
+    --warn: #f59e0b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 var(--sans);
+}
+
+a {
+  color: var(--accent);
+}
+
+code,
+pre,
+textarea {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+:not(pre) > code {
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.site-header a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.site-header a:hover,
+.site-header a[aria-current="page"] {
+  color: var(--accent);
+}
+
+.brand {
+  font-weight: 700;
+  font-family: var(--mono);
+}
+
+.site-header nav,
+.header-end {
+  display: flex;
+  gap: 1rem;
+}
+
+.header-end {
+  margin-left: auto;
+  font-size: 0.9rem;
+}
+
+.doc {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+/* 본문 글줄은 좁게, 데모는 넓게. */
+.doc > :not(.wide) {
+  max-width: 44rem;
+}
+
+.doc h1 {
+  font-size: 2rem;
+  line-height: 1.25;
+  margin: 0.5rem 0 1rem;
+}
+
+.doc h2 {
+  margin-top: 2.5rem;
+  font-size: 1.35rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 1.25rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}

@@ -34,6 +34,7 @@ cargo build -p mdwire-cli && (cd go && test -z "$(gofmt -l .)" && go vet ./... \
   && MDWIRE_RUST=../target/debug/mdwire go test ./...)   # 없으면 러스트 대조가 조용히 빠진다
 ./scripts/build-npm.sh && CI=1 ./scripts/smoke.sh          # Node · Bun · TypeScript
 (cd examples/react-streaming && npm install && npm run build)  # 예제는 pkg/ 를 쓴다
+(cd site && npm ci && npm run check && npm run build)           # site/ 를 바꿨을 때
 ```
 
 Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — 코어 동작을 바꾸면 다시 뽑는다.
@@ -45,6 +46,7 @@ Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — �
 - `crates/mdwire-wasm` — npm `@minjun0219/mdwire`의 바인딩(`scripts/build-npm.sh`)
 - `crates/mdwire-harness` — 코퍼스 대조·불변식 채점(`mdwire-check`), `crates/mdwire-bench` — 할당·처리량
 - `go/` — Go 이식, `corpus/` — 정본 케이스
+- `site/` — 문서·데모 사이트(Astro, 독립 패키지). npm 에 올라간 패키지를 쓴다. 배포는 `site/README.md`
 
 ## 릴리스
 

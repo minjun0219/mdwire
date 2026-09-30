@@ -1,0 +1,13 @@
+// Cloudflare Workers Static Assets — Worker 스크립트 없이 `dist/` 만 올린다.
+// 계정 ID 는 두지 않는다. Workers Builds 가 연결된 계정으로 올리고, 로컬에서 올릴 때는
+// `wrangler login` 한 계정을 쓴다.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mdwire-site",
+  "compatibility_date": "2026-09-30",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}

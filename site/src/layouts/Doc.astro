@@ -1,0 +1,62 @@
+---
+// MDX 페이지가 frontmatter 의 `layout` 으로 쓰는 틀. 언어는 경로(`/ko/…`)에서 온다.
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+import "../styles/global.css";
+
+interface Props {
+  frontmatter: { title: string; description?: string };
+}
+
+const { title, description } = Astro.props.frontmatter;
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang];
+const other = lang === "en" ? "ko" : "en";
+
+// 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
+const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const href = (page: string) => getRelativeLocaleUrl(lang, page);
+const switchHref = getRelativeLocaleUrl(other, rest);
+const nav = [
+  { page: "", label: t.nav.home },
+  { page: "demo", label: t.nav.demo },
+];
+const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description ?? t.tagline} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="alternate" hreflang={other} href={new URL(switchHref, Astro.site)} />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href={href("")}>mdwire</a>
+      <nav>
+        {
+          nav.map(({ page, label }) => (
+            <a href={href(page)} aria-current={rest === page ? "page" : undefined}>
+              {label}
+            </a>
+          ))
+        }
+      </nav>
+      <div class="header-end">
+        <a href={switchHref} hreflang={other} lang={other}>{t.switchTo}</a>
+        <a href="https://github.com/minjun0219/mdwire">GitHub</a>
+      </div>
+    </header>
+    <main class="doc">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      {t.footer} <a href="https://github.com/minjun0219/mdwire">{t.source}</a>
+    </footer>
+  </body>
+</html>
