@@ -141,10 +141,13 @@ func splitHard(text string, limit int, v vocab) []string {
 				var cutProbe markup
 				for {
 					end = runeOffset(rest, take)
+					if v.htmlOut() {
+						end = entityCut(rest, end)
+					}
 					cutProbe = m.clone()
 					cutProbe.feed(rest[:end], v)
 					reserve := cutProbe.reserve()
-					need := length + take + reserve
+					need := length + utf8.RuneCountInString(rest[:end]) + reserve
 					// 다시 열 수 없을 만큼 큰 마크업(budget == 0, 한도만 한 여는 태그)은 줄여 봐야
 					// 소용없다 — cut 이 버린다. 한 글자씩 조각만 쏟아지니 그대로 간다.
 					if need <= limit || take == 1 || budget == 0 || reserve >= limit {
@@ -168,6 +171,30 @@ func splitHard(text string, limit int, v vocab) []string {
 }
 
 // runeOffset 은 n 번째 글자가 시작하는 바이트 위치다. 글자가 모자라면 끝이다.
+// entityCut 은 글자 단위로 자르는 자리가 엔티티(&amp; &lt; …) 한가운데면 & 앞으로 당긴다 —
+// 러스트 쪽 entity_cut. 엔티티가 맨 앞이라 당길 데가 없으면 엔티티 끝까지 넘긴다.
+func entityCut(s string, end int) int {
+	at := strings.LastIndexByte(s[:end], '&')
+	if at < 0 {
+		return end
+	}
+	tail := s[at+1:]
+	semi := strings.IndexByte(tail, ';')
+	if semi <= 0 || semi > 8 || at+1+semi < end {
+		return end
+	}
+	for i := 0; i < semi; i++ {
+		b := tail[i]
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '#') {
+			return end
+		}
+	}
+	if at > 0 {
+		return at
+	}
+	return at + 1 + semi + 1
+}
+
 func runeOffset(s string, n int) int {
 	i := 0
 	for k := 0; k < n && i < len(s); k++ {
