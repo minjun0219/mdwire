@@ -88,6 +88,34 @@ func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
+// 노션만 도는 경로도 할당하지 않는다 — `*`·`\` 탈출, 줄마다 닫는 강조(인용·목록 안 포함), 살려
+// 둔 `<br>`. 러스트 쪽 같은 이름의 테스트.
+func TestNotionProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
+	unit := "카드 1***-001* 과 백슬래시 \\ 하나. **배포를 금요일에\n하지 않는다** 이고\n" +
+		"> **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝\n\n"
+	pieces := splitChunks(strings.Repeat(unit, 12), 64)
+	s := NewStreamer(NotionMarkdown)
+	var out []byte
+	for _, p := range pieces {
+		s.PushTo(p, &out)
+	}
+	s.FinishTo(&out)
+	if !strings.Contains(string(out), `\*\*\*`) || !strings.Contains(string(out), "금요일에**\n**하지") {
+		t.Fatalf("재는 경로를 타지 않았다: %s", out)
+	}
+
+	allocs := testing.AllocsPerRun(3, func() {
+		out = out[:0]
+		for _, p := range pieces {
+			s.PushTo(p, &out)
+		}
+		s.FinishTo(&out)
+	})
+	if allocs != 0 {
+		t.Fatalf("노션 산문 스트리밍이 할당한다 — 회귀다: 회당 %.1f 회", allocs)
+	}
+}
+
 // 브라우저 채널만 도는 경로도 할당하지 않는다 — 문단·헤딩 태그, 목록 스택, `<br>`, 원문
 // 인라인 태그. 러스트 쪽 같은 이름의 테스트.
 func TestHTMLProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {

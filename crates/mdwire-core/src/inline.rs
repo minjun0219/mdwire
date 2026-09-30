@@ -78,6 +78,8 @@ pub(crate) struct Inline {
     /// 되돌리면 여는 백틱이 비친다. 닫는 백틱을 입력으로 흘려 넣으면 붙들린 꼬리(`` ` ``)와
     /// 합쳐지거나 새 줄 첫머리로 읽혀서, 인라인 층에서 직접 닫는다.
     pub preview: bool,
+    /// 노션에서 강조를 줄마다 감쌀 때 범위를 옮겨 두는 버퍼([`wrap_per_line`]). 재사용한다.
+    wrap: String,
 }
 
 impl Inline {
@@ -92,6 +94,7 @@ impl Inline {
             after_close: None,
             in_cell: false,
             stripped_tags: Vec::new(),
+            wrap: String::new(),
             preview: false,
         }
     }
@@ -532,6 +535,13 @@ impl Inline {
         // 채널에서 백틱 하나로 감싸면 ``` ``` ``` 가 되어 코드 블록으로 읽힌다.
         // 내용 안의 가장 긴 런보다 하나 긴 울타리를 쓰고, 내용이 백틱으로 시작하거나
         // 끝나면 공백을 하나 끼워 마커와 떼어 놓는다(CommonMark).
+        // 노션은 줄을 넘는 코드 스팬도 줄마다 닫는다 — 울타리는 줄마다 잡는다.
+        if open.emph == Emph::Code && v.line_emphasis() && out[open.at..].contains('\n') {
+            let mut buf = std::mem::take(&mut self.wrap);
+            wrap_per_line(out, open.at, ("`", "`"), true, &mut buf);
+            self.wrap = buf;
+            return;
+        }
         if open.emph == Emph::Code && v.open(Emph::Code) == "`" {
             let body = &out[open.at..];
             let longest = longest_run(body, '`');
@@ -566,7 +576,9 @@ impl Inline {
             return;
         }
         if v.line_emphasis() && out[open.at..].contains('\n') {
-            wrap_per_line(out, open.at, v.open(open.emph), v.close(open.emph));
+            let mut buf = std::mem::take(&mut self.wrap);
+            wrap_per_line(out, open.at, (v.open(open.emph), v.close(open.emph)), false, &mut buf);
+            self.wrap = buf;
             return;
         }
         out.insert_str(open.at, v.open(open.emph));
@@ -766,17 +778,21 @@ fn gfm_pairs(before: Option<char>, body: &str, after: Option<char>) -> bool {
     left && right
 }
 
-/// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
-/// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
 /// 강조 범위를 **줄마다** 감싼다 — `at` 부터 끝까지가 범위다. 줄 끝에서 닫고, 다음 줄은 블록 층이
 /// 쓴 접두사(`> `·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로 뺀다 — 공백 뒤의
 /// 닫는 마커는 닫기가 아니다. 내용이 없는 줄은 감싸지 않는다(`****` 가 된다).
 ///
 /// 노션이 줄을 넘는 `**…**` 의 짝을 못 맞춰서다(실측 2026-10-01): `**줄을\n넘는 굵게**` 는 굵게가
 /// 사라지고 `**` 가 비쳤고, 인용·목록 안에서는 굵게가 통째로 사라졌다. 줄마다 감싸면 다 그렸다.
-fn wrap_per_line(out: &mut String, at: usize, open: &str, close: &str) {
-    let body = out.split_off(at);
-    for (i, line) in body.split('\n').enumerate() {
+///
+/// `code` 면 코드 스팬이다 — 울타리를 줄마다 그 줄의 가장 긴 백틱 런보다 하나 길게 잡고, 줄이
+/// 백틱으로 시작하거나 끝나면 공백을 끼운다(CommonMark). 범위는 `buf` 에 옮겨 두고 다시 쓴다 —
+/// 재사용 버퍼라 데워진 뒤에는 할당이 없다.
+fn wrap_per_line(out: &mut String, at: usize, marker: (&str, &str), code: bool, buf: &mut String) {
+    buf.clear();
+    buf.push_str(&out[at..]);
+    out.truncate(at);
+    for (i, line) in buf.split('\n').enumerate() {
         if i > 0 {
             out.push('\n');
         }
@@ -788,13 +804,29 @@ fn wrap_per_line(out: &mut String, at: usize, open: &str, close: &str) {
             out.push_str(rest);
             continue;
         }
-        out.push_str(open);
-        out.push_str(text);
-        out.push_str(close);
+        if code {
+            let fence = longest_run(text, '`') + 1;
+            let pad = text.starts_with('`') || text.ends_with('`');
+            out.extend(std::iter::repeat_n('`', fence));
+            if pad {
+                out.push(' ');
+            }
+            out.push_str(text);
+            if pad {
+                out.push(' ');
+            }
+            out.extend(std::iter::repeat_n('`', fence));
+        } else {
+            out.push_str(marker.0);
+            out.push_str(text);
+            out.push_str(marker.1);
+        }
         out.push_str(&rest[text.len()..]);
     }
 }
 
+/// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
+/// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
 fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab) {
     let escaped = v.escapes(c);
     for _ in 0..run {

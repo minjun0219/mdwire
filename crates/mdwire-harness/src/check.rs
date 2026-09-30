@@ -251,13 +251,7 @@ fn strip_list_numbers(input: &str) -> String {
 ///
 /// 코어는 GFM 이 마커를 못 읽는 자리(`**설정(config)**을`)에서 `<strong>` 따위로 낸다.
 /// 범위와 짝을 재는 쪽은 마크다운 마커로 읽으므로, 같은 뜻의 마커로 바꿔 놓고 잰다.
-///
-/// 노션은 반대로 **줄마다 닫고 다시 연 강조를 한 범위로 잇는다** — `**줄을**\n**넘는**` 는 원문
-/// `**줄을\n넘는**` 과 같은 뜻이다(코어가 노션에서 그렇게 낸다).
 fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> {
-    if channel == Channel::NotionMarkdown && output.contains('\n') {
-        return std::borrow::Cow::Owned(rejoin_line_markers(output));
-    }
     if channel != Channel::GithubMarkdown || !output.contains('<') {
         return std::borrow::Cow::Borrowed(output);
     }
@@ -266,29 +260,6 @@ fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> 
         s = s.replace(&format!("<{tag}>"), marker).replace(&format!("</{tag}>"), marker);
     }
     std::borrow::Cow::Owned(s)
-}
-
-/// 줄 끝의 닫는 마커와 다음 줄 접두사(`> `·들여쓰기) 뒤의 같은 여는 마커를 함께 지운다.
-fn rejoin_line_markers(output: &str) -> String {
-    let mut s = output.to_string();
-    let mut from = 0;
-    while let Some(off) = s[from..].find('\n') {
-        let nl = from + off;
-        from = nl + 1;
-        let before = &s[..nl];
-        let Some(m) = before.chars().last().filter(|c| matches!(c, '*' | '~' | '`')) else { continue };
-        let run = before.len() - before.trim_end_matches(m).len();
-        let after = &s[nl + 1..];
-        let lead = after.len() - after.trim_start_matches([' ', '\t', '>']).len();
-        let reopen = &after[lead..];
-        if reopen.len() - reopen.trim_start_matches(m).len() != run {
-            continue;
-        }
-        s.replace_range(nl + 1 + lead..nl + 1 + lead + run, "");
-        s.replace_range(nl - run..nl, "");
-        from = nl - run + 1;
-    }
-    s
 }
 
 /// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.
@@ -730,7 +701,24 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
         // 마크업을 지우는 채널이라 잴 것이 없다. 여기서 억지로 재면 규칙이 거짓말을 한다.
         return;
     }
-    let want = emphasis::scan_markdown(input, Mode::Repair).spans;
+    let wanted = emphasis::scan_markdown(input, Mode::Repair);
+    let mut want = wanted.spans;
+    // **노션은 강조를 줄마다 닫는다** — 코어가 `**줄을\n넘는**` 을 `**줄을**\n**넘는**` 으로 낸다. 출력을
+    // 이어 붙여 재면 원래 줄마다 따로 쓴 `**a**\n**b**` 까지 하나로 붙어 거짓 실패가 나고, 한 범위로
+    // 보면 줄 사이가 어긋나도 통과한다. 원문 범위를 줄에서 나눠 줄마다 잰다.
+    if channel == Channel::NotionMarkdown {
+        want = want
+            .into_iter()
+            .zip(wanted.raw)
+            .flat_map(|(w, raw)| {
+                raw.split('\n')
+                    .map(emphasis::normalize_ws)
+                    .filter(|t| !t.is_empty())
+                    .map(|text| Span { kind: w.kind, text })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+    }
     if want.is_empty() {
         return;
     }
@@ -1668,15 +1656,16 @@ mod tests {
     }
 
 
-    /// 노션은 줄마다 닫고 다시 연 강조를 한 범위로 본다 — 줄을 넘는 원문과 같은 뜻이다.
+    /// 노션은 원문 범위를 줄에서 나눠 잰다 — 코어가 강조를 줄마다 닫는다.
     #[test]
-    fn notion_line_wrapped_emphasis_is_one_span() {
-        assert_eq!(rejoin_line_markers("**줄을**\n**넘는**"), "**줄을\n넘는**");
-        assert_eq!(rejoin_line_markers("> **인용**\n> **안의** 굵게"), "> **인용\n> 안의** 굵게");
-        assert_eq!(rejoin_line_markers("*a **b***\n***c** d*"), "*a **b\nc** d*");
-        // 다른 마커끼리는 잇지 않는다.
-        assert_eq!(rejoin_line_markers("**a**\n*b*"), "**a**\n*b*");
+    fn notion_measures_emphasis_per_line() {
         let f = check("**줄을\n넘는 굵게**", "**줄을**\n**넘는 굵게**", Channel::NotionMarkdown);
         assert!(f.is_empty(), "{f:?}");
+        // 원래 줄마다 따로 쓴 강조는 그대로 통과한다(한 범위로 이으면 거짓 실패였다).
+        let f = check("**a**\n**b**", "**a**\n**b**", Channel::NotionMarkdown);
+        assert!(f.is_empty(), "{f:?}");
+        // 한 줄의 강조를 잃으면 잡는다.
+        let f = check("**줄을\n넘는 굵게**", "**줄을**\n넘는 굵게", Channel::NotionMarkdown);
+        assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
     }
 }

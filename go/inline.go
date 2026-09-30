@@ -2,7 +2,6 @@ package mdwire
 
 import (
 	"bytes"
-	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -63,6 +62,8 @@ type inline struct {
 	// preview 면 미리보기 복제본이다 — 블록이 끝날 때 안 닫힌 코드 스팬을 글자로 되돌리지 않고
 	// 닫는다. 러스트 쪽 Inline::preview.
 	preview bool
+	// wrap 은 노션에서 강조를 줄마다 감쌀 때 범위를 옮겨 두는 버퍼다(wrapPerLine). 재사용한다.
+	wrap []byte
 }
 
 func newInline(d Dialect) *inline {
@@ -439,6 +440,11 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	}
 	// 내용에 백틱이 있으면 울타리를 늘린다. 내용 안의 가장 긴 런보다 하나 긴 울타리를 쓰고,
 	// 내용이 백틱으로 시작하거나 끝나면 공백을 하나 끼워 마커와 떼어 놓는다(CommonMark).
+	// 노션은 줄을 넘는 코드 스팬도 줄마다 닫는다 — 울타리는 줄마다 잡는다.
+	if o.emph == emphCode && v.lineEmphasis() && bytes.IndexByte((*out)[o.at:], '\n') >= 0 {
+		in.wrap = wrapPerLine(out, o.at, "`", "`", true, in.wrap)
+		return
+	}
 	if o.emph == emphCode && v.open(emphCode) == "`" {
 		body := (*out)[o.at:]
 		if longest := longestRun(body, '`'); longest > 0 {
@@ -468,7 +474,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		return
 	}
 	if v.lineEmphasis() && bytes.IndexByte((*out)[o.at:], '\n') >= 0 {
-		wrapPerLine(out, o.at, v.open(o.emph), v.close(o.emph))
+		in.wrap = wrapPerLine(out, o.at, v.open(o.emph), v.close(o.emph), false, in.wrap)
 		return
 	}
 	insertAt(out, o.at, v.open(o.emph))
@@ -477,29 +483,54 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 
 // wrapPerLine 은 강조 범위(at 부터 끝)를 줄마다 감싼다 — 러스트 쪽 wrap_per_line. 줄 끝에서 닫고
 // 다음 줄은 블록 층이 쓴 접두사(> ·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로
-// 빼고, 내용이 없는 줄은 감싸지 않는다. 노션이 줄을 넘는 마커의 짝을 못 맞춰서다.
-func wrapPerLine(out *[]byte, at int, open, close string) {
-	body := string((*out)[at:])
+// 빼고, 내용이 없는 줄은 감싸지 않는다. 노션이 줄을 넘는 마커의 짝을 못 맞춰서다. code 면 코드
+// 스팬이라 울타리를 줄마다 잡는다. 범위는 buf 에 옮겨 두고 다시 쓴다 — 재사용 버퍼를 돌려준다.
+func wrapPerLine(out *[]byte, at int, open, close string, code bool, buf []byte) []byte {
+	buf = append(buf[:0], (*out)[at:]...)
 	*out = (*out)[:at]
-	for i, line := range strings.Split(body, "\n") {
+	rest := buf
+	for i := 0; ; i++ {
+		line := rest
+		nl := bytes.IndexByte(rest, '\n')
+		if nl >= 0 {
+			line = rest[:nl]
+		}
 		if i > 0 {
 			*out = append(*out, '\n')
 		}
 		lead := 0
 		if i > 0 {
-			lead = len(line) - len(strings.TrimLeft(line, " \t>"))
+			lead = len(line) - len(bytes.TrimLeft(line, " \t>"))
 		}
-		prefix, rest := line[:lead], line[lead:]
-		text := strings.TrimRight(rest, " \t")
+		prefix, body := line[:lead], line[lead:]
+		text := bytes.TrimRight(body, " \t")
 		*out = append(*out, prefix...)
-		if text == "" {
-			*out = append(*out, rest...)
-			continue
+		switch {
+		case len(text) == 0:
+			*out = append(*out, body...)
+		case code:
+			fence := bytes.Repeat([]byte{'`'}, longestRun(text, '`')+1)
+			pad := text[0] == '`' || text[len(text)-1] == '`'
+			*out = append(*out, fence...)
+			if pad {
+				*out = append(*out, ' ')
+			}
+			*out = append(*out, text...)
+			if pad {
+				*out = append(*out, ' ')
+			}
+			*out = append(*out, fence...)
+			*out = append(*out, body[len(text):]...)
+		default:
+			*out = append(*out, open...)
+			*out = append(*out, text...)
+			*out = append(*out, close...)
+			*out = append(*out, body[len(text):]...)
 		}
-		*out = append(*out, open...)
-		*out = append(*out, text...)
-		*out = append(*out, close...)
-		*out = append(*out, rest[len(text):]...)
+		if nl < 0 {
+			return buf
+		}
+		rest = rest[nl+1:]
 	}
 }
 
