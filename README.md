@@ -98,6 +98,9 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 const { elements, push, finish } = useMarkdownStream();     // streaming: push(token), finish()
 ```
 
+[`examples/react-streaming`](examples/react-streaming) streams one answer into react-markdown, Streamdown,
+mdwire in front of Streamdown, and mdwire side by side. Measured numbers are in `DESIGN.md`.
+
 **Append-only contract.** What `push` returns is final — a later chunk never rewrites it —
 and `finish` only appends the tail. So the pieces concatenated equal a one-shot `render`,
 whatever the chunk size (unless the document is long enough to be split into parts).

@@ -79,3 +79,11 @@ jobs:
         run: |
           npm install -g typescript bun
           ./scripts/smoke.sh
+
+      # **예제도 빌드한다.** 예제는 바로 앞에서 만든 pkg/ 를 쓴다 — API 가 바뀌어 예제가
+      # 깨지면 여기서 걸린다. 번들러가 wasm 을 싣는 설정(vite-plugin-wasm)까지 같이 본다.
+      - name: 예제 빌드
+        working-directory: examples/react-streaming
+        run: |
+          npm install --no-audit --no-fund
+          npm run build

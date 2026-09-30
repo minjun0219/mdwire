@@ -95,6 +95,9 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 const { elements, push, finish } = useMarkdownStream();     // 스트리밍: push(토큰), finish()
 ```
 
+[`examples/react-streaming`](examples/react-streaming) 은 같은 답변을 react-markdown, Streamdown, Streamdown
+앞에 둔 mdwire, mdwire 로 나란히 흘려 본다. 잰 수치는 `DESIGN.md` 에 있다.
+
 **append-only 계약.** `push` 가 돌려준 것은 확정이다 — 뒤 조각이 그걸 고쳐 쓰지 않는다 —
 그리고 `finish` 는 꼬리만 덧붙인다. 그래서 조각을 이어 붙인 것은 조각 크기와 상관없이 한
 번에 `render` 한 결과와 같다(문서가 길어 여러 조각으로 나뉘는 경우는 빼고). 코퍼스와
