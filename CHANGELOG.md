@@ -2,6 +2,26 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.8 — 2026-09-30
+
+### 새로 할 수 있는 것
+
+- **core** — 스트리밍 미리보기를 기본으로 둔다 ([#58](https://github.com/minjun0219/mdwire/pull/58))
+- **core** — 브라우저 채널 정책을 옵션으로 연다 ([#56](https://github.com/minjun0219/mdwire/pull/56))
+- **npm** — React 컴포넌트와 구조 출력을 더한다 ([#55](https://github.com/minjun0219/mdwire/pull/55))
+- **core** — 조각 한도를 호출자가 정한다 ([#54](https://github.com/minjun0219/mdwire/pull/54))
+- **core** — 브라우저에 넣을 html 채널을 더한다 ([#53](https://github.com/minjun0219/mdwire/pull/53))
+- **core** — GitHub 코멘트 채널을 더한다 ([#52](https://github.com/minjun0219/mdwire/pull/52))
+
+### 고친 것
+
+- **core** — 미리보기에서 코드 스팬을 인라인 층이 닫는다 ([#59](https://github.com/minjun0219/mdwire/pull/59))
+
+### 문서
+
+- **examples** — React 스트리밍 비교 예제를 둔다 ([#57](https://github.com/minjun0219/mdwire/pull/57))
+- **agents** — 게이트를 CI 와 맞추고 저장소 지도를 둔다 ([#50](https://github.com/minjun0219/mdwire/pull/50))
+
 ## 0.1.7 — 2026-09-29
 
 ### 유지
