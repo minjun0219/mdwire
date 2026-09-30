@@ -54,7 +54,7 @@ type inline struct {
 	// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
 	inCell bool
 	// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
-	strippedTags int
+	strippedTags []uint8
 }
 
 func newInline(d Dialect) *inline {
@@ -65,7 +65,7 @@ func newInline(d Dialect) *inline {
 func (in *inline) reset() {
 	in.open = in.open[:0]
 	in.prev = noChar
-	in.strippedTags = 0
+	in.strippedTags = in.strippedTags[:0]
 }
 
 // safeLen 은 지금 out 에서 내보내도 안전한 길이다. 열린 마커가 있으면 그 앞까지다.
@@ -525,19 +525,27 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	// 태그는 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고, 블록
 	// 태그는 자리와 무관하게 그런다. 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이
 	// 붙들지 않도록 첫머리면 벗긴다.
-	if v.htmlEmphasis() && isInlineTag(name) {
+	//
+	// 살릴 때는 속성을 버리고 이름만 소문자로 다시 쓴다 — 조각을 나눌 때 싱크가 이 모양을 스팬으로
+	// 알아보고 끊는 자리에서 닫고 다시 연다. 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다. 벗긴 여는
+	// 태그는 이름째 기억해서 이름이 맞는 닫는 태그만 벗긴다 — `<sub>a <kbd>x</kbd></sub>` 의
+	// `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
+	if t := inlineTag(name); v.htmlEmphasis() && t >= 0 {
 		p := in.prevChar(line, i)
-		atLineStart := p == noChar || p == '\n'
+		atLineStart := !in.inCell && (p == noChar || p == '\n')
+		n := len(in.strippedTags)
 		switch {
-		case closing && in.strippedTags > 0:
-			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
-			in.strippedTags--
-		case atLineStart && !closing && !eqIgnoreCase(name, "br"):
-			in.strippedTags++
+		case closing && n > 0 && in.strippedTags[n-1] == uint8(t):
+			in.strippedTags = in.strippedTags[:n-1]
+		case atLineStart && !closing && inlineTags[t] != "br":
+			in.strippedTags = append(in.strippedTags, uint8(t))
 		case !atLineStart:
-			for _, c := range rest[:closeAt+1] {
-				*out = appendRune(*out, c)
+			*out = append(*out, '<')
+			if closing {
+				*out = append(*out, '/')
 			}
+			*out = append(*out, inlineTags[t]...)
+			*out = append(*out, '>')
 			in.prev = '>'
 			return closeAt + 1
 		}
@@ -600,16 +608,20 @@ func findLink(line []rune, at int) (t0, t1, u0, u1 int, ok bool) {
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때
 // 쓰는 것들이다. 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
-// isInlineTag 는 줄 안에서 그려지는 태그인가다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
-func isInlineTag(name []rune) bool {
-	for _, t := range [...]string{
-		"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark", "kbd",
-	} {
+// inlineTags 는 살려 두는 인라인 태그다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
+// 싱크가 분할할 때 같은 목록으로 스팬을 알아본다.
+var inlineTags = [...]string{
+	"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark", "kbd",
+}
+
+// inlineTag 는 살려 둘 인라인 태그의 번호다. 없으면 -1.
+func inlineTag(name []rune) int {
+	for i, t := range inlineTags {
 		if eqIgnoreCase(name, t) {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 func isKnownTag(name []rune) bool {

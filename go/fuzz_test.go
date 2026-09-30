@@ -218,3 +218,27 @@ func TestLongSpaceFreeSpanIsCutWithinTheLimit(t *testing.T) {
 		}
 	}
 }
+
+// 살려 둔 원문 태그도 조각 경계에서 닫고 다시 연다 — 러스트 쪽 같은 이름의 테스트.
+func TestGithubKeptTagsSurviveSplitsAndMatchByName(t *testing.T) {
+	input := "x <sub>" + strings.Repeat("가나 ", 30000) + "</sub> 끝"
+	parts := Render(input, GithubMarkdown)
+	if len(parts) < 2 {
+		t.Fatal("나뉘어야 한다")
+	}
+	for _, p := range parts {
+		if strings.Count(p, "<sub>") != strings.Count(p, "</sub>") {
+			t.Fatal("조각 안에서 짝이 안 맞는다")
+		}
+	}
+	cases := [][2]string{
+		{"<sub>foo <kbd>x</kbd></sub> 뒤", "foo <kbd>x</kbd> 뒤"},
+		{"| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |", "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |"},
+		{`앞 <SPAN style="x">가</SPAN>`, "앞 <span>가</span>"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(Render(c[0], GithubMarkdown), ""); got != c[1] {
+			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+	}
+}

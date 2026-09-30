@@ -921,3 +921,20 @@ fn resumed_hold_scans_agree_with_batch() {
         }
     }
 }
+
+/// **살려 둔 원문 태그도 조각 경계에서 닫고 다시 연다**(GitHub 65,536 분할). 안 그러면 앞
+/// 조각은 `<sub>` 가 열린 채 끝나고 뒤 조각은 `</sub>` 만 들고 시작한다(리뷰에서 나왔다).
+/// 줄 첫머리에서 벗긴 태그는 이름이 맞는 닫는 태그만 벗기고, 표 칸 첫머리는 줄 첫머리가 아니다.
+#[test]
+fn github_kept_tags_survive_splits_and_match_by_name() {
+    let input = format!("x <sub>{}</sub> 끝", "가나 ".repeat(30_000));
+    let parts = render(&input, Channel::GithubMarkdown);
+    assert!(parts.len() > 1);
+    for p in &parts {
+        assert_eq!(p.matches("<sub>").count(), p.matches("</sub>").count(), "조각 안에서 짝이 안 맞는다");
+    }
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("<sub>foo <kbd>x</kbd></sub> 뒤"), "foo <kbd>x</kbd> 뒤");
+    assert_eq!(g("| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |"), "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |");
+    assert_eq!(g("앞 <SPAN style=\"x\">가</SPAN>"), "앞 <span>가</span>");
+}
