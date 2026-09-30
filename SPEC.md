@@ -149,6 +149,14 @@ CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--limit N] [--stre
 분할 결과는 **NUL 로 구분**한다 — 셸에서 다루기 가장 쉽고, 마크다운 본문에 안 나오는
 바이트다.
 
+**React 와 구조 출력은 npm 층에 둔다**(2026-09-30). `@minjun0219/mdwire/events` 가 `html` 채널
+출력을 `open`/`text`/`close`/`void` 이벤트로 풀고, `@minjun0219/mdwire/react` 의 `Markdown`·
+`toElements` 가 그걸 `createElement` 로 세운다(`innerHTML` 없음). 코어를 건드리지 않은 이유는
+**안전 판단을 한 곳에 두기 위해서다** — escape·태그 집합·링크 스킴은 코어의 `html` 채널만
+정하고, 이벤트 층은 그 좁은 문법을 읽기만 한다(링크 스킴은 컴포넌트를 갈아 끼워도 안전하게
+한 번 더 본다). 스트리밍은 누적본을 통째로 다시 그린다 — append-only 계약 덕에 스트리머를
+쓴 것과 같은 답이다. Go·Rust 소비자는 이벤트를 받지 않는다.
+
 ### 5.1 입력 방언과 고친 것
 
 **입력 방언**(`Options::from`)은 출력 채널과 따로 정한다. 기본은 표준 마크다운이고,

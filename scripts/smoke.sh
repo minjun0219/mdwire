@@ -20,6 +20,8 @@ npm init -y >/dev/null
 # 첫 소비자와 같게 ESM 프로젝트로 둔다. 이게 없으면 `.ts` 자체가 CommonJS 로 읽힌다.
 npm pkg set type=module >/dev/null
 npm install --no-audit --no-fund "$TGZ" >/dev/null
+# React 는 선택 peer 의존이다 — `./react` 를 쓰는 소비자처럼 같이 깐다.
+npm install --no-audit --no-fund react react-dom @types/react >/dev/null
 cp "$ROOT/scripts/smoke.mjs" "$ROOT/scripts/smoke.ts" .
 
 # 1. Node 에서 ESM 으로 import — `node` 조건이 CommonJS 빌드로 이어져야 한다.

@@ -54,3 +54,36 @@ assert.equal(rs.repairs().closedEmphasis, 1);
 
 assert.throws(() => render("x", "없는채널"), /모르는 채널/);
 console.log("npm 스모크 통과");
+
+// ── 구조 출력(이벤트)과 React ────────────────────────────────────────────
+// html 출력을 이벤트로 푼다. 코어가 낸 태그만 태그로 읽고, 속성은 코어가 내는 것만 담긴다.
+import { toEvents } from "@minjun0219/mdwire/events";
+const ev = toEvents(render("**굵게** 와 [링크](https://a.com) 1 < 2", "html").join(""));
+assert.deepEqual(ev, [
+  { type: "open", tag: "p", attrs: {} },
+  { type: "open", tag: "strong", attrs: {} },
+  { type: "text", text: "굵게" },
+  { type: "close", tag: "strong" },
+  { type: "text", text: " 와 " },
+  { type: "open", tag: "a", attrs: { href: "https://a.com" } },
+  { type: "text", text: "링크" },
+  { type: "close", tag: "a" },
+  { type: "text", text: " 1 < 2" },
+  { type: "close", tag: "p" },
+]);
+
+// React — createElement 로만 세운다. 정적 렌더로 모양을 본다.
+const { createElement } = await import("react");
+const { renderToStaticMarkup } = await import("react-dom/server");
+const { Markdown, toElements } = await import("@minjun0219/mdwire/react");
+const md = (text, props = {}) => renderToStaticMarkup(createElement(Markdown, { text, ...props }));
+assert.equal(md("## 제목\n\n- **하나**\n- 둘"), "<h2>제목</h2>\n\n<ul><li><strong>하나</strong>\n</li><li>둘</li></ul>");
+// 스크립트가 도는 길은 없다 — 원문 태그의 속성은 버려지고, javascript: 는 링크가 아니다.
+assert.equal(md('H<sub onclick="x()">2</sub>O [x](javascript:alert(1))'), "<p>H<sub>2</sub>O x (javascript:alert(1))</p>");
+// 태그별로 컴포넌트를 갈아 끼운다 — 링크를 앱의 라우터 링크로.
+const Link = ({ href, children }) => createElement("span", { "data-href": href }, children);
+assert.equal(md("[문서](https://a.com/d)", { components: { a: Link } }), '<p><span data-href="https://a.com/d">문서</span></p>');
+// 스트리밍 — 누적본 + closeOpen 을 그대로 요소로.
+const hs = new Streamer("html");
+const hacc = hs.push("> 인용이 **굵게 이어");
+assert.equal(renderToStaticMarkup(createElement("div", null, ...toElements(hacc + hs.closeOpen()))), "<div><blockquote>인용이 </blockquote></div>");

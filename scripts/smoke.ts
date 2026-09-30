@@ -14,3 +14,12 @@ const report = renderWithReport("**열림", "telegram-html", opts);
 const closed: number = report.repairs.closedEmphasis + s.repairs().closedFence;
 const reportParts: string[] = report.parts;
 void [parts, n, out, withOpts, closed, reportParts];
+
+// 구조 출력과 React — 서브패스 타입이 선다.
+import { toEvents } from "@minjun0219/mdwire/events";
+import type { MdEvent } from "@minjun0219/mdwire/events";
+import { Markdown, toElements } from "@minjun0219/mdwire/react";
+import type { MarkdownProps } from "@minjun0219/mdwire/react";
+const events: MdEvent[] = toEvents("<p>x</p>");
+const props: MarkdownProps = { text: "**x**", from: "slack-mrkdwn", components: { a: "span" } };
+void [events, Markdown(props), toElements("<p>x</p>")];
