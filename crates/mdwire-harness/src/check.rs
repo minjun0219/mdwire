@@ -221,12 +221,21 @@ fn tags_as_space(text: &str) -> String {
     out
 }
 
-/// 줄 머리의 `1.` · `2)` 번호를 걷는다.
+/// 줄 머리의 `1.` · `2)` 번호를 걷는다. **코드펜스 안은 그대로 둔다** — 거기 `1.` 은 목록
+/// 번호가 아니라 내용이고, 걷으면 외부 구현이 코드 본문을 잃어도 못 잡는다.
 fn strip_list_numbers(input: &str) -> String {
+    let mut fenced = false;
     input
         .split_inclusive('\n')
         .map(|line| {
             let t = line.trim_start();
+            if t.starts_with("```") {
+                fenced = !fenced;
+                return line;
+            }
+            if fenced {
+                return line;
+            }
             let digits = t.chars().take_while(char::is_ascii_digit).count();
             let rest = &t[digits..];
             if digits > 0 && (rest.starts_with(". ") || rest.starts_with(") ") || rest.starts_with(".\t")) {
@@ -967,9 +976,13 @@ fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
                     let attrs = attr_names(&tag);
                     // 브라우저 채널만 — 링크 주소가 `innerHTML` 에서 눌리는 곳이다.
                     let browser = allowed.contains(&"table");
+                    // **속성값 자체를 본다.** 태그 전체에서 안전한 접두사를 찾으면 다른 속성에 끼운
+                    // `title='href="https://"'` 가 위험한 `href` 를 통과시킨다. 앞 공백은 코어처럼 턴다.
                     let unsafe_href = browser
-                        && attrs.iter().any(|a| a == "href")
-                        && !["href=\"http://", "href=\"https://", "href=\"mailto:"].iter().any(|p| tag.contains(p));
+                        && attr_value(&tag, "href").is_some_and(|v| {
+                            let v = v.trim_start();
+                            !["http://", "https://", "mailto:"].iter().any(|p| v.starts_with(p))
+                        });
                     if unsafe_href {
                         out.push(Finding { rule: Rule::DisallowedTag, detail: format!("안전하지 않은 링크 주소: {tag}") });
                     }
@@ -1023,6 +1036,41 @@ fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
     }
     for n in stack {
         out.push(Finding { rule: Rule::UnclosedTag, detail: format!("<{n}> 이 끝까지 안 닫혔다") });
+    }
+}
+
+/// 태그에서 속성 하나의 값을 읽는다. 따옴표 안의 같은 글자에 속지 않도록 이름·값 순서대로 훑는다.
+fn attr_value(tag: &str, want: &str) -> Option<String> {
+    let body = tag.trim_start_matches('<').trim_start_matches('/');
+    let mut rest = &body[body.find(|c: char| c.is_whitespace() || c == '/' || c == '>').unwrap_or(body.len())..];
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == '/');
+        let name_len = rest.find(|c: char| !(c.is_ascii_alphanumeric() || c == '-')).unwrap_or(rest.len());
+        if name_len == 0 {
+            return None;
+        }
+        let name = &rest[..name_len];
+        rest = rest[name_len..].trim_start();
+        let value = if let Some(after) = rest.strip_prefix('=') {
+            let after = after.trim_start();
+            match after.chars().next() {
+                Some(q @ ('"' | '\'')) => {
+                    let end = after[1..].find(q).map_or(after.len(), |e| e + 1);
+                    rest = after.get(end + 1..).unwrap_or("");
+                    after[1..end].to_string()
+                }
+                _ => {
+                    let end = after.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(after.len());
+                    rest = &after[end..];
+                    after[..end].to_string()
+                }
+            }
+        } else {
+            String::new()
+        };
+        if name == want {
+            return Some(value);
+        }
     }
 }
 
@@ -1229,6 +1277,22 @@ fn unescape_for_width(text: &str, channel: Channel) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 외부 구현의 html 출력을 잴 때 — href 는 값 자체로 보고, 다른 속성에 끼운 안전한 문자열에
+    /// 속지 않는다. 코어가 허용하는 앞 공백 주소는 거짓 경보가 아니다.
+    #[test]
+    fn browser_href_is_checked_by_its_value() {
+        let unsafe_link = check("[x](y)", "<p><a href=\"javascript:x\" title='href=\"https://\"'>x</a></p>", Channel::Html);
+        assert!(unsafe_link.iter().any(|f| f.detail.contains("안전하지 않은 링크")), "{unsafe_link:?}");
+        let spaced = check("[x](y)", "<p><a href=\" https://a.com\">x</a></p>", Channel::Html);
+        assert!(!spaced.iter().any(|f| f.detail.contains("안전하지 않은 링크")), "{spaced:?}");
+    }
+
+    /// 목록 번호를 걷을 때 코드펜스 안의 `1.` 은 내용이라 남긴다.
+    #[test]
+    fn list_numbers_inside_fences_are_content() {
+        assert_eq!(strip_list_numbers("1. 목록\n```text\n1. 첫 단계\n```\n"), "목록\n```text\n1. 첫 단계\n```\n");
+    }
 
     const INVERTED_INPUT: &str = "공개 채널**이다. 글 내용이 아니라\n**신분 공개 + 시점의 조합**이 판단 대상";
 
