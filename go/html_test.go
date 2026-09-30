@@ -25,6 +25,18 @@ func TestHTMLOutputIsSafeForInnerHTML(t *testing.T) {
 	}
 }
 
+// 빈 줄로 띄운 목록(loose list)도 한 목록이다 — 러스트 쪽 html_nests_lists_by_indent.
+func TestHTMLLooseListKeepsNesting(t *testing.T) {
+	loose := strings.Join(Render("- a\n\n  - b\n\n- c", HTML), "")
+	if !strings.HasPrefix(loose, "<ul><li>a") || !strings.Contains(loose, "<ul><li>b") ||
+		!strings.HasSuffix(loose, "</li><li>c</li></ul>") || strings.Count(loose, "<ul>") != 2 {
+		t.Fatalf("중첩이 빠졌다: %q", loose)
+	}
+	if got := strings.Join(Render("- a\n\n문단", HTML), ""); got != "<ul><li>a</li></ul>\n\n<p>문단</p>" {
+		t.Fatalf("목록 뒤 문단: %q", got)
+	}
+}
+
 // 스트리밍 누적본에 CloseOpen 을 붙이면 언제나 균형 잡힌 HTML 이다 — 러스트 쪽
 // html_streaming_snapshot_is_always_balanced. 한 글자씩 흘리며 매번 잰다.
 func TestHTMLStreamingSnapshotIsAlwaysBalanced(t *testing.T) {

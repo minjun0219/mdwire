@@ -77,6 +77,9 @@ pub(crate) struct Engine {
     /// 열린 목록들 — (항목 들여쓰기, 번호 목록인가). 바깥부터. **HTML 채널만 쓴다** — 다른
     /// 채널은 목록을 글자(`- `·`• `)로 그려서 중첩을 태그로 여닫을 일이 없다.
     lists: Vec<(usize, bool)>,
+    /// 목록 안에서 빈 줄을 만났고, 다음 줄이 항목인지 아직 모른다(HTML). 항목이면 같은 목록을
+    /// 잇고, 아니면 그때 닫는다.
+    list_gap: bool,
 }
 
 #[derive(Default)]
@@ -110,6 +113,7 @@ impl Engine {
             closed_fence: 0,
             dialect: options.from,
             lists: Vec::new(),
+            list_gap: false,
         }
     }
 
@@ -289,6 +293,17 @@ impl Engine {
     fn whole<S: Sink>(&mut self, kind: WholeKind, sink: &mut S) {
         match kind {
             WholeKind::Blank => {
+                // **빈 줄로 띄운 목록(loose list)은 한 목록이다**(HTML). 여기서 닫으면 목록 스택이
+                // 비어, 빈 줄 뒤 들여쓴 항목이 새 최상위 목록으로 열려 중첩이 사라진다 —
+                // `- a⏎⏎  - b` 의 b 가 a 밖으로 빠졌다(리뷰에서 나왔다). 항목의 인라인만 확정하고
+                // 다음 줄을 기다린다. 다른 채널은 들여쓰기가 글자로 남아 이미 중첩이 산다.
+                if self.v.is_html() && self.state == State::List {
+                    self.inline.finish_block(&mut self.out, &self.v);
+                    self.list_gap = true;
+                    self.blank = self.wrote;
+                    self.flush_all(sink);
+                    return;
+                }
                 self.close_block(sink);
                 self.blank = self.wrote;
             }
@@ -321,6 +336,10 @@ impl Engine {
 
     /// 접두사가 정해졌다. 블록을 열고 접두사를 내보낸다.
     fn open_line<S: Sink>(&mut self, kind: LineKind, prefix: usize, sink: &mut S) {
+        // 빈 줄 뒤에 항목이 아닌 것이 왔다 — 목록이 끝났다.
+        if std::mem::take(&mut self.list_gap) && !matches!(kind, LineKind::Bullet(_) | LineKind::Ordered(..)) {
+            self.close_block(sink);
+        }
         match kind {
             LineKind::Para if self.state == State::List => {
                 // **리스트 항목이 다음 줄로 이어진다.** 항목은 아직 끝나지 않았다.
@@ -578,6 +597,7 @@ impl Engine {
         }
         self.state = State::None;
         self.lists.clear();
+        self.list_gap = false;
         self.inline.reset();
         self.flush_all(sink);
         sink.boundary();

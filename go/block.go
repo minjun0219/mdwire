@@ -115,6 +115,9 @@ type engine struct {
 	// 열린 목록들 — 바깥부터. HTML 채널만 쓴다 — 다른 채널은 목록을 글자(`- `·`• `)로 그려서
 	// 중첩을 태그로 여닫을 일이 없다. 블록이 닫혀도 슬라이스는 재사용한다.
 	lists []listLevel
+	// listGap 은 목록 안에서 빈 줄을 만났고, 다음 줄이 항목인지 아직 모른다는 뜻이다(HTML).
+	// 항목이면 같은 목록을 잇고, 아니면 그때 닫는다.
+	listGap bool
 }
 
 // listLevel 은 열린 목록 하나다 — 항목 들여쓰기와 번호 목록인가.
@@ -294,6 +297,16 @@ func (e *engine) takeLine() string {
 func (e *engine) whole(k wholeKind, s sink) {
 	switch k {
 	case wholeBlank:
+		// 빈 줄로 띄운 목록(loose list)은 한 목록이다(HTML). 여기서 닫으면 목록 스택이 비어,
+		// 빈 줄 뒤 들여쓴 항목이 새 최상위 목록으로 열려 중첩이 사라진다(리뷰에서 나왔다). 항목의
+		// 인라인만 확정하고 다음 줄을 기다린다. 다른 채널은 들여쓰기가 글자로 남아 중첩이 산다.
+		if e.v.isHTML() && e.state == stateList {
+			e.inline.finishBlock(&e.out, e.v)
+			e.listGap = true
+			e.blank = e.wrote
+			e.flushAll(s)
+			return
+		}
 		e.closeBlock(s)
 		e.blank = e.wrote
 	case wholeRule:
@@ -318,6 +331,13 @@ func (e *engine) whole(k wholeKind, s sink) {
 
 // openLine: 접두사가 정해졌다. 블록을 열고 접두사를 내보낸다.
 func (e *engine) openLine(k lineKind, prefix int, s sink) {
+	// 빈 줄 뒤에 항목이 아닌 것이 왔다 — 목록이 끝났다.
+	if e.listGap {
+		e.listGap = false
+		if k.k == linePara || k.k == lineHeading || k.k == lineQuote {
+			e.closeBlock(s)
+		}
+	}
 	switch {
 	case k.k == linePara && e.state == stateList:
 		// 리스트 항목이 다음 줄로 이어진다. 항목은 아직 끝나지 않았다 — 여기서 끊으면 줄을
@@ -556,6 +576,7 @@ func (e *engine) closeBlock(s sink) {
 	}
 	e.state = stateNone
 	e.lists = e.lists[:0]
+	e.listGap = false
 	e.inline.reset()
 	e.flushAll(s)
 	s.boundary()

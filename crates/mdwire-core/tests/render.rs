@@ -957,6 +957,12 @@ fn html_nests_lists_by_indent() {
     assert_eq!(h("3. 삼\n4. 사"), "<ol start=\"3\"><li>삼\n</li><li>사</li></ol>");
     // 같은 깊이에서 종류가 바뀌면 목록을 갈아 낀다.
     assert_eq!(h("- 가\n1. 나"), "<ul><li>가\n</li></ul><ol><li>나</li></ol>");
+    // 빈 줄로 띄운 목록(loose list)도 한 목록이다 — 빈 줄 뒤 들여쓴 항목이 밖으로 빠지면 안 된다.
+    let loose = h("- a\n\n  - b\n\n- c");
+    assert!(loose.starts_with("<ul><li>a") && loose.contains("<ul><li>b") && loose.ends_with("</li><li>c</li></ul>"), "{loose}");
+    assert_eq!(loose.matches("<ul>").count(), 2, "{loose}");
+    // 목록 뒤에 빈 줄을 두고 문단이 오면 목록은 거기서 닫힌다.
+    assert_eq!(h("- a\n\n문단"), "<ul><li>a</li></ul>\n\n<p>문단</p>");
 }
 
 /// **`innerHTML` 로 들어가는 출력이다.** 글자는 escape 하고, `javascript:` 링크는 글로
