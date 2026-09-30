@@ -4,6 +4,8 @@
 // corpus/cases 를 통과해야 하고, 규칙이 갈리면 코퍼스가 판정한다. 의존은 표준 라이브러리뿐이다.
 package mdwire
 
+import "math"
+
 // Channel 은 내보낼 채널이다. 받는 문법이 채널마다 다르고, 출력이 좁은 쪽이 파싱 범위를 정한다.
 type Channel int
 
@@ -17,11 +19,17 @@ const (
 	// GithubMarkdown 은 GitHub 코멘트·PR 본문(GFM). 65,536자. 슬랙과 같은 마크다운을 내되,
 	// GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 탈출한다. 값이 밀리지 않게 끝에 둔다.
 	GithubMarkdown
+	// HTML 은 브라우저에 넣을 HTML 조각. 헤딩·목록·표·코드블록을 태그로 그린다. 한도 없음.
+	//
+	// innerHTML 로 바로 넣는 것을 전제로 한다 — 글자는 전부 escape 하고, 원문의 HTML 은
+	// 속성을 버린 인라인 태그만 살리며, 링크는 http(s)·mailto 만 <a> 로 낸다. 스트리밍
+	// 누적본에 Streamer.CloseOpen 을 붙이면 그대로 넣어도 되는 모양이 된다. 값이 밀리지 않게 끝에 둔다.
+	HTML
 )
 
 // Channels 는 내보낼 수 있는 채널 전부다. 코퍼스와 하네스가 이 목록을 돈다.
 func Channels() []Channel {
-	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, Plain}
+	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, Plain, HTML}
 }
 
 // Name 은 코퍼스 디렉토리와 CLI 인자에서 쓰는 이름이다. 채널을 문자열로 다루는 곳의 정본이다.
@@ -33,6 +41,8 @@ func (c Channel) Name() string {
 		return "slack-markdown"
 	case GithubMarkdown:
 		return "github-markdown"
+	case HTML:
+		return "html"
 	default:
 		return "plain"
 	}
@@ -56,6 +66,9 @@ func (c Channel) Limit() int {
 	case GithubMarkdown:
 		// 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
 		return 65_536
+	case HTML:
+		// 브라우저에는 메시지 한도가 없다. 나누지 않는다.
+		return math.MaxInt
 	}
 	return 12_000
 }

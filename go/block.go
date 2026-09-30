@@ -112,6 +112,15 @@ type engine struct {
 	closedFence int
 	// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
 	dialect Dialect
+	// 열린 목록들 — 바깥부터. HTML 채널만 쓴다 — 다른 채널은 목록을 글자(`- `·`• `)로 그려서
+	// 중첩을 태그로 여닫을 일이 없다. 블록이 닫혀도 슬라이스는 재사용한다.
+	lists []listLevel
+}
+
+// listLevel 은 열린 목록 하나다 — 항목 들여쓰기와 번호 목록인가.
+type listLevel struct {
+	indent  int
+	ordered bool
 }
 
 func newEngine(ch Channel, o Options) *engine {
@@ -313,7 +322,7 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 	case k.k == linePara && e.state == stateList:
 		// 리스트 항목이 다음 줄로 이어진다. 항목은 아직 끝나지 않았다 — 여기서 끊으면 줄을
 		// 넘는 강조가 항목 안에서만 안 잡힌다. 80열 wrap 은 불릿 안에서도 똑같이 일어난다.
-		e.out = append(e.out, '\n')
+		e.out = append(e.out, e.v.lineBreak()...)
 		e.inline.noteRaw("\n")
 		e.inline.endLine()
 		for i := 0; i < min(prefix, 8); i++ {
@@ -325,10 +334,13 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 			e.closeBlock(s)
 			e.state = statePara
 			e.startLine()
+			if e.v.isHTML() {
+				e.out = append(e.out, "<p>"...)
+			}
 		} else {
 			// 문단 안의 줄바꿈은 살린다. 강조는 이 줄바꿈을 넘어 이어진다 — 80열 wrap 된
 			// 산문에서 그게 일상이고, 그것이 이 라이브러리의 첫 고장이었다.
-			e.out = append(e.out, '\n')
+			e.out = append(e.out, e.v.lineBreak()...)
 			e.inline.noteRaw("\n")
 			e.inline.endLine()
 		}
@@ -344,7 +356,7 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 			e.startLine()
 			e.out = append(e.out, e.v.quoteOpen()...)
 		} else {
-			e.out = append(e.out, '\n')
+			e.out = append(e.out, e.v.lineBreak()...)
 			e.inline.noteRaw("\n")
 			e.inline.endLine()
 		}
@@ -360,14 +372,18 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 			e.inline.finishBlock(&e.out, e.v)
 		}
 		e.startLine()
-		for i := 0; i < min(k.indent, 8); i++ {
-			e.out = append(e.out, ' ')
-		}
-		if k.k == lineOrdered {
-			e.out = strconv.AppendInt(e.out, int64(k.n), 10)
-			e.out = append(e.out, ". "...)
+		if e.v.isHTML() {
+			e.openItem(k.indent, k.k == lineOrdered, k.n)
 		} else {
-			e.out = append(e.out, e.v.bullet()...)
+			for i := 0; i < min(k.indent, 8); i++ {
+				e.out = append(e.out, ' ')
+			}
+			if k.k == lineOrdered {
+				e.out = strconv.AppendInt(e.out, int64(k.n), 10)
+				e.out = append(e.out, ". "...)
+			} else {
+				e.out = append(e.out, e.v.bullet()...)
+			}
 		}
 		e.inline.setPrev(noChar)
 	}
@@ -407,12 +423,62 @@ func (e *engine) wholePara(line string, s sink) {
 	e.flushSafe(s)
 }
 
+// openItem 은 목록 항목 하나를 태그로 연다(HTML). 들여쓰기로 중첩을 가른다 — 더 깊으면 지금
+// 항목 안에 목록을 새로 열고, 얕으면 그만큼 닫고, 같으면 항목만 바꾼다. 여는 태그는 붙들지
+// 않는다 — 목록이 끝날 때까지 기다리면 스트리밍이 아니다. 닫는 것은 closeOpen.
+func (e *engine) openItem(indent int, ordered bool, n int) {
+	for len(e.lists) > 0 && e.lists[len(e.lists)-1].indent > indent {
+		e.out = append(e.out, closeList(e.lists[len(e.lists)-1].ordered)...)
+		e.lists = e.lists[:len(e.lists)-1]
+	}
+	switch last := len(e.lists) - 1; {
+	case last >= 0 && e.lists[last].indent == indent && e.lists[last].ordered == ordered:
+		// 같은 깊이, 같은 종류 — 항목만 바꾼다.
+		e.out = append(e.out, "</li>"...)
+	case last >= 0 && e.lists[last].indent == indent:
+		// 같은 깊이인데 종류가 바뀌었다 — 목록을 갈아 낀다.
+		e.out = append(e.out, closeList(e.lists[last].ordered)...)
+		e.lists = e.lists[:last]
+		e.openList(indent, ordered, n)
+	default:
+		e.openList(indent, ordered, n)
+	}
+	e.out = append(e.out, "<li>"...)
+}
+
+func (e *engine) openList(indent int, ordered bool, n int) {
+	switch {
+	case ordered && n != 1:
+		// 1 이 아닌 번호로 시작하면 번호를 이어 간다 — 빈 줄로 끊긴 번호 목록이 그렇다.
+		e.out = append(e.out, `<ol start="`...)
+		e.out = strconv.AppendInt(e.out, int64(n), 10)
+		e.out = append(e.out, `">`...)
+	case ordered:
+		e.out = append(e.out, "<ol>"...)
+	default:
+		e.out = append(e.out, "<ul>"...)
+	}
+	e.lists = append(e.lists, listLevel{indent: indent, ordered: ordered})
+}
+
+// closeList 는 목록 하나를 항목째 닫는 마크업이다.
+func closeList(ordered bool) string {
+	if ordered {
+		return "</li></ol>"
+	}
+	return "</li></ul>"
+}
+
 func (e *engine) openHeading(level int) {
 	if e.heading != 0 {
 		level = min(level, e.heading+1)
 	}
 	e.heading = level
-	if max := e.v.maxHeading(); max > 0 {
+	if e.v.isHTML() {
+		e.out = append(e.out, "<h"...)
+		e.out = strconv.AppendInt(e.out, int64(min(level, e.v.maxHeading())), 10)
+		e.out = append(e.out, '>')
+	} else if max := e.v.maxHeading(); max > 0 {
 		for i := 0; i < min(level, max); i++ {
 			e.out = append(e.out, '#')
 		}
@@ -452,8 +518,20 @@ func (e *engine) closeOpen(out *[]byte) { e.blockCloseMarkup(out) }
 func (e *engine) blockCloseMarkup(out *[]byte) {
 	switch e.state {
 	case stateHeading:
-		if e.v.maxHeading() == 0 && !e.v.isPlain() {
+		if e.v.isHTML() {
+			*out = append(*out, "</h"...)
+			*out = strconv.AppendInt(*out, int64(min(e.heading, e.v.maxHeading())), 10)
+			*out = append(*out, '>')
+		} else if e.v.maxHeading() == 0 && !e.v.isPlain() {
 			*out = append(*out, e.v.close(emphBold)...)
+		}
+	case statePara:
+		if e.v.isHTML() {
+			*out = append(*out, "</p>"...)
+		}
+	case stateList:
+		for i := len(e.lists) - 1; i >= 0; i-- {
+			*out = append(*out, closeList(e.lists[i].ordered)...)
 		}
 	case stateQuote:
 		*out = append(*out, e.v.quoteClose()...)
@@ -477,6 +555,7 @@ func (e *engine) closeBlock(s sink) {
 		e.table.clear()
 	}
 	e.state = stateNone
+	e.lists = e.lists[:0]
 	e.inline.reset()
 	e.flushAll(s)
 	s.boundary()
@@ -975,6 +1054,10 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	}
 	repairs.add(in.repairs)
 
+	if v.isHTML() {
+		writeHTMLTable(out, cells, t.align)
+		return
+	}
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)
 		return
@@ -1014,6 +1097,47 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	}
 	v.escape(string(body), out)
 	v.verbatimClose("", out)
+}
+
+// writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.
+func writeHTMLTable(out *[]byte, cells [][]string, al []align) {
+	*out = append(*out, "<table>"...)
+	for r, row := range cells {
+		tag := "td"
+		if r == 0 {
+			tag = "th"
+			*out = append(*out, "\n<thead>"...)
+		} else if r == 1 {
+			*out = append(*out, "\n<tbody>"...)
+		}
+		*out = append(*out, "<tr>"...)
+		for c, cell := range row {
+			*out = append(*out, '<')
+			*out = append(*out, tag...)
+			// 왼쪽은 기본값과 구분되지 않아(`---` 도 `:--` 도 왼쪽) 적지 않는다.
+			if c < len(al) {
+				switch al[c] {
+				case alignRight:
+					*out = append(*out, ` style="text-align:right"`...)
+				case alignCenter:
+					*out = append(*out, ` style="text-align:center"`...)
+				}
+			}
+			*out = append(*out, '>')
+			*out = append(*out, cell...)
+			*out = append(*out, "</"...)
+			*out = append(*out, tag...)
+			*out = append(*out, '>')
+		}
+		*out = append(*out, "</tr>"...)
+		if r == 0 {
+			*out = append(*out, "</thead>"...)
+		}
+	}
+	if len(cells) > 1 {
+		*out = append(*out, "</tbody>"...)
+	}
+	*out = append(*out, "\n</table>"...)
 }
 
 // writeGFMTable 은 표를 GFM 그대로 낸다. 셀 안의 `|` 는 다시 `\|` 로 돌린다.

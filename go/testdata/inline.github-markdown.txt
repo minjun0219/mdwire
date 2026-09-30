@@ -62,9 +62,9 @@ snake_case 와 plain_text_name 은 그대로다
 ----
 \<https://a.com/x y>
 ----
-H<sub>2</sub>O 와 <B>굵</B> Vec\<T> 1 \< 2  끝
+H<sub>2</sub>O 와 <b>굵</b> Vec\<T> 1 \< 2  끝
 ----
-첫째<br>둘째<br/>셋째
+첫째<br>둘째<br>셋째
 ----
 \<a href="u">t\</a>
 ----

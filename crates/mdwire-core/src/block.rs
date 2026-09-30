@@ -74,6 +74,9 @@ pub(crate) struct Engine {
     closed_fence: usize,
     /// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
     dialect: Dialect,
+    /// 열린 목록들 — (항목 들여쓰기, 번호 목록인가). 바깥부터. **HTML 채널만 쓴다** — 다른
+    /// 채널은 목록을 글자(`- `·`• `)로 그려서 중첩을 태그로 여닫을 일이 없다.
+    lists: Vec<(usize, bool)>,
 }
 
 #[derive(Default)]
@@ -106,6 +109,7 @@ impl Engine {
             cr: false,
             closed_fence: 0,
             dialect: options.from,
+            lists: Vec::new(),
         }
     }
 
@@ -322,7 +326,7 @@ impl Engine {
                 // **리스트 항목이 다음 줄로 이어진다.** 항목은 아직 끝나지 않았다.
                 // 여기서 항목을 끊으면 줄을 넘는 강조가 항목 안에서만 안 잡힌다 —
                 // 80열 wrap 은 불릿 안에서도 똑같이 일어나므로 그건 고장이다.
-                self.out.push('\n');
+                self.out.push_str(self.v.line_break());
                 self.inline.note_raw("\n");
                 self.inline.end_line();
                 for _ in 0..prefix.min(8) {
@@ -335,10 +339,13 @@ impl Engine {
                     self.close_block(sink);
                     self.state = State::Para;
                     self.start_line();
+                    if self.v.is_html() {
+                        self.out.push_str("<p>");
+                    }
                 } else {
                     // 문단 안의 줄바꿈은 살린다. **강조는 이 줄바꿈을 넘어 이어진다** —
                     // 80열 wrap 된 산문에서 그게 일상이고, 그것이 이 라이브러리의 첫 고장이었다.
-                    self.out.push('\n');
+                    self.out.push_str(self.v.line_break());
                     self.inline.note_raw("\n");
                     self.inline.end_line();
                 }
@@ -356,7 +363,7 @@ impl Engine {
                     self.start_line();
                     self.out.push_str(self.v.quote_open());
                 } else {
-                    self.out.push('\n');
+                    self.out.push_str(self.v.line_break());
                     self.inline.note_raw("\n");
                     self.inline.end_line();
                 }
@@ -374,15 +381,23 @@ impl Engine {
                     self.inline.finish_block(&mut self.out, &self.v);
                 }
                 self.start_line();
-                for _ in 0..indent.min(8) {
-                    self.out.push(' ');
-                }
-                match kind {
-                    LineKind::Ordered(_, n) => {
-                        push_usize(&mut self.out, n);
-                        self.out.push_str(". ");
+                if self.v.is_html() {
+                    let n = match kind {
+                        LineKind::Ordered(_, n) => Some(n),
+                        _ => None,
+                    };
+                    self.open_item(indent, n);
+                } else {
+                    for _ in 0..indent.min(8) {
+                        self.out.push(' ');
                     }
-                    _ => self.out.push_str(self.v.bullet()),
+                    match kind {
+                        LineKind::Ordered(_, n) => {
+                            push_usize(&mut self.out, n);
+                            self.out.push_str(". ");
+                        }
+                        _ => self.out.push_str(self.v.bullet()),
+                    }
                 }
                 self.inline.set_prev(None);
             }
@@ -426,11 +441,52 @@ impl Engine {
         self.flush_safe(sink);
     }
 
+    /// 목록 항목 하나를 태그로 연다(HTML). 들여쓰기로 중첩을 가른다 — 더 깊으면 지금 항목
+    /// 안에 목록을 새로 열고, 얕으면 그만큼 닫고, 같으면 항목만 바꾼다. **여는 태그는 붙들지
+    /// 않는다** — 목록이 끝날 때까지 기다리면 스트리밍이 아니다. 닫는 것은 `close_open`.
+    fn open_item(&mut self, indent: usize, number: Option<usize>) {
+        let ordered = number.is_some();
+        while self.lists.last().is_some_and(|&(i, _)| i > indent) {
+            let (_, o) = self.lists.pop().expect("방금 봤다");
+            self.out.push_str(if o { "</li></ol>" } else { "</li></ul>" });
+        }
+        match self.lists.last().copied() {
+            // 같은 깊이, 같은 종류 — 항목만 바꾼다.
+            Some((i, o)) if i == indent && o == ordered => self.out.push_str("</li>"),
+            // 같은 깊이인데 종류가 바뀌었다 — 목록을 갈아 낀다.
+            Some((i, o)) if i == indent => {
+                self.lists.pop();
+                self.out.push_str(if o { "</li></ol>" } else { "</li></ul>" });
+                self.open_list(indent, number);
+            }
+            _ => self.open_list(indent, number),
+        }
+        self.out.push_str("<li>");
+    }
+
+    fn open_list(&mut self, indent: usize, number: Option<usize>) {
+        match number {
+            // 1 이 아닌 번호로 시작하면 번호를 이어 간다 — 빈 줄로 끊긴 번호 목록이 그렇다.
+            Some(n) if n != 1 => {
+                self.out.push_str("<ol start=\"");
+                push_usize(&mut self.out, n);
+                self.out.push_str("\">");
+            }
+            Some(_) => self.out.push_str("<ol>"),
+            None => self.out.push_str("<ul>"),
+        }
+        self.lists.push((indent, number.is_some()));
+    }
+
     fn open_heading(&mut self, level: usize) {
         let level = if self.heading == 0 { level } else { level.min(self.heading + 1) };
         self.heading = level;
         let max = self.v.max_heading();
-        if max > 0 {
+        if self.v.is_html() {
+            self.out.push_str("<h");
+            push_usize(&mut self.out, level.min(max));
+            self.out.push('>');
+        } else if max > 0 {
             for _ in 0..level.min(max) {
                 self.out.push('#');
             }
@@ -475,14 +531,25 @@ impl Engine {
     /// 블록의 닫는 마크업. 인라인 정리는 하지 않는다.
     fn block_close_markup(&self, out: &mut String) {
         match self.state {
+            State::Heading if self.v.is_html() => {
+                out.push_str("</h");
+                push_usize(out, self.heading.min(self.v.max_heading()));
+                out.push('>');
+            }
             State::Heading => {
                 if self.v.max_heading() == 0 && !self.v.is_plain() {
                     out.push_str(self.v.close(Emph::Bold));
                 }
             }
+            State::Para if self.v.is_html() => out.push_str("</p>"),
+            State::List => {
+                for &(_, ordered) in self.lists.iter().rev() {
+                    out.push_str(if ordered { "</li></ol>" } else { "</li></ul>" });
+                }
+            }
             State::Quote => out.push_str(self.v.quote_close()),
             State::Fence => self.v.verbatim_close(&self.fence.info, out),
-            State::None | State::Para | State::List | State::Table => {}
+            State::None | State::Para | State::Table => {}
         }
     }
 
@@ -510,6 +577,7 @@ impl Engine {
             }
         }
         self.state = State::None;
+        self.lists.clear();
         self.inline.reset();
         self.flush_all(sink);
         sink.boundary();
@@ -1003,6 +1071,10 @@ impl Table {
         self.rows = rows;
         repairs.add(inline.repairs);
 
+        if v.is_html() {
+            write_html_table(out, &cells, &self.align);
+            return;
+        }
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);
             return;
@@ -1041,6 +1113,43 @@ impl Table {
         v.escape(&body, out);
         v.verbatim_close("", out);
     }
+}
+
+/// 표를 `<table>` 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.
+fn write_html_table(out: &mut String, cells: &[Vec<String>], align: &[Align]) {
+    out.push_str("<table>");
+    for (r, row) in cells.iter().enumerate() {
+        let tag = if r == 0 { "th" } else { "td" };
+        if r == 0 {
+            out.push_str("\n<thead>");
+        } else if r == 1 {
+            out.push_str("\n<tbody>");
+        }
+        out.push_str("<tr>");
+        for (c, cell) in row.iter().enumerate() {
+            out.push('<');
+            out.push_str(tag);
+            // 왼쪽은 기본값과 구분되지 않아(`---` 도 `:--` 도 Left) 적지 않는다.
+            match align.get(c) {
+                Some(Align::Right) => out.push_str(" style=\"text-align:right\""),
+                Some(Align::Center) => out.push_str(" style=\"text-align:center\""),
+                _ => {}
+            }
+            out.push('>');
+            out.push_str(cell);
+            out.push_str("</");
+            out.push_str(tag);
+            out.push('>');
+        }
+        out.push_str("</tr>");
+        if r == 0 {
+            out.push_str("</thead>");
+        }
+    }
+    if cells.len() > 1 {
+        out.push_str("</tbody>");
+    }
+    out.push_str("\n</table>");
 }
 
 /// 표를 GFM 그대로 낸다. 채널이 직접 그리는 곳용이라 열 너비를 맞추지 않는다.

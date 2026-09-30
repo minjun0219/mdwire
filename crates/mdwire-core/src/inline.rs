@@ -18,7 +18,7 @@
 //! ([`Inline::safe_len`]). 여는 마크업은 짝이 맞는 순간 그 자리에 끼워 넣는다.
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
-use crate::vocab::{Emph, Vocab};
+use crate::vocab::{Emph, Vocab, INLINE_TAGS};
 use crate::{Dialect, Repairs};
 
 struct Open {
@@ -452,6 +452,16 @@ impl Inline {
     fn finalize(&mut self, out: &mut String, v: &Vocab, matched: bool) {
         let Some(open) = self.open.pop() else { return };
 
+        // 원문의 태그는 마커가 아니다 — 되돌릴 글자도, 저자 대신 고친 강조도 없다. 비었으면
+        // 버리고, 아니면 여닫는다.
+        if let Emph::Tag(_) = open.emph {
+            if out.len() > open.at {
+                out.insert_str(open.at, v.open(open.emph));
+                out.push_str(v.close(open.emph));
+            }
+            return;
+        }
+
         // 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
         let empty = out.len() == open.at;
         if open.guess || empty || (open.soft && !matched) {
@@ -596,15 +606,50 @@ impl Inline {
         // 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고(`<br>` 한 줄 뒤의
         // `**굵게**` 가 글자로 보였다), `div`·`details` 같은 블록 태그는 자리와 무관하게 그런다.
         // 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이 붙들지 않도록 첫머리면 벗긴다.
-        if v.html_emphasis() && is_inline_tag(name) {
+        //
+        // **브라우저 채널은 자리와 상관없이 살린다** — 마크다운으로 다시 읽히지 않는다.
+        //
+        // 살릴 때는 **속성을 버리고 이름만 다시 쓰고, 강조와 같은 스택에 올린다.** 출력이
+        // `innerHTML` 로 들어가는 채널에서 `<span onclick=…>` 을 그대로 내면 안 되고, 원문의
+        // 태그는 짝이 안 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`)
+        // 일쑤다(퍼즈가 잡았다). 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 —
+        // 짝 없는 닫는 태그는 버리고, 안 닫힌 여는 태그는 블록 끝에서 닫는다.
+        let tag = inline_tag(name);
+        let br = eq_ignore_case(name, "br");
+        if (v.is_html() || v.html_emphasis()) && (tag.is_some() || br) {
             let at_line_start = self.prev_char(line, i).is_none_or(|c| c == '\n');
-            if closing && self.stripped_tags > 0 {
+            let github_start = !v.is_html() && at_line_start;
+            if closing && self.stripped_tags > 0 && !v.is_html() {
                 // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
                 self.stripped_tags -= 1;
-            } else if at_line_start && !closing && !eq_ignore_case(name, "br") {
-                self.stripped_tags += 1;
-            } else if !at_line_start {
-                out.extend(&rest[..=close]);
+            } else if github_start {
+                if !closing && !br {
+                    self.stripped_tags += 1;
+                }
+            } else {
+                match tag {
+                    None => {
+                        if !closing {
+                            out.push_str("<br>");
+                        }
+                    }
+                    Some(t) if closing => {
+                        if let Some(at) = self.open.iter().rposition(|o| o.emph == Emph::Tag(t)) {
+                            self.after_close = None;
+                            self.close_at(at, out, v);
+                        }
+                    }
+                    Some(t) => self.open.push(Open {
+                        emph: Emph::Tag(t),
+                        at: out.len(),
+                        run: 1,
+                        ch: '<',
+                        guess: false,
+                        after_space: false,
+                        soft: false,
+                        before: self.prev_char(line, i),
+                    }),
+                }
                 self.prev = Some('>');
                 return Some(close + 1);
             }
@@ -721,11 +766,9 @@ fn is_known_tag(name: &[char]) -> bool {
     KNOWN.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "summary")
 }
 
-/// 줄 안에서 그려지는 태그. GitHub 이 받는 것만 — `font` 는 새니타이저가 지운다.
-fn is_inline_tag(name: &[char]) -> bool {
-    const INLINE: [&str; 15] =
-        ["br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark"];
-    INLINE.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "kbd")
+/// 살려 둘 인라인 태그의 번호([`INLINE_TAGS`]). `<br>` 은 짝이 없어 여기 없다.
+fn inline_tag(name: &[char]) -> Option<u8> {
+    INLINE_TAGS.iter().position(|(t, _, _)| eq_ignore_case(name, t)).map(|p| p as u8)
 }
 
 /// 같은 글자가 이어진 가장 긴 길이.

@@ -2,6 +2,7 @@ package mdwire
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strings"
@@ -200,13 +201,17 @@ func TestParityWithRustCore(t *testing.T) {
 
 // 공백 없는 긴 강조를 글자로 끊어도 조각이 한도를 지킨다 — 러스트 쪽 같은 이름의 테스트.
 func TestLongSpaceFreeSpanIsCutWithinTheLimit(t *testing.T) {
-	// 가장 큰 한도보다 길어야 모든 채널이 나눈다.
+	// 가장 큰 한도보다 길어야 모든 채널이 나눈다. 한도가 없는 채널(html)은 나누지 않으니 뺀다.
+	var splits []Channel
 	longest := 0
 	for _, ch := range Channels() {
-		longest = max(longest, ch.Limit())
+		if ch.Limit() < math.MaxInt {
+			splits = append(splits, ch)
+			longest = max(longest, ch.Limit())
+		}
 	}
 	input := "**" + strings.Repeat("a", longest+longest/2) + "**"
-	for _, ch := range Channels() {
+	for _, ch := range splits {
 		parts := Render(input, ch)
 		if len(parts) < 2 {
 			t.Errorf("%s: 나뉘어야 한다", ch.Name())

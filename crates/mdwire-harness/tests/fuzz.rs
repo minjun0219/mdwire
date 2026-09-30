@@ -121,7 +121,8 @@ fn random_long_input_splits_cleanly() {
         // **GitHub 한도(65,536)는 열 번에 한 번만 넘긴다.** 매번 채우면 퍼즈가 여덟 배
         // 느려지는데(8초 → 67초) 분할 경로는 슬랙과 같은 코드다.
         let wide = round % 10 == 0;
-        let reach = |c: &Channel| wide || c.limit() <= Channel::SlackMarkdown.limit();
+        // 한도가 없는 채널(html)은 나누지 않으니 이 시험 밖이다.
+        let reach = |c: &Channel| c.limit() < usize::MAX && (wide || c.limit() <= Channel::SlackMarkdown.limit());
         let target = Channel::all().iter().filter(|c| reach(c)).map(|c| c.limit()).max().expect("채널이 있다") * 2;
         while input.chars().count() < target {
             input.push_str(&doc(&mut rng));

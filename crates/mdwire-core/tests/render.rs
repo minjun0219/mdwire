@@ -789,10 +789,11 @@ fn slack_parts_close_and_reopen_spans() {
 /// 있으면 예산을 "열린 것 없음"으로 재서, 한도까지 채운 뒤 닫는 마커를 붙여 넘겼다.
 #[test]
 fn a_long_space_free_span_is_cut_within_the_limit() {
-    // 가장 큰 한도보다 길어야 모든 채널이 나눈다.
-    let longest = Channel::all().iter().map(|c| c.limit()).max().expect("채널이 있다");
+    // 가장 큰 한도보다 길어야 모든 채널이 나눈다. 한도가 없는 채널(html)은 나누지 않으니 뺀다.
+    let splits = |c: &Channel| c.limit() < usize::MAX;
+    let longest = Channel::all().iter().filter(|c| splits(c)).map(|c| c.limit()).max().expect("채널이 있다");
     let input = format!("**{}**", "a".repeat(longest + longest / 2));
-    for channel in Channel::all() {
+    for channel in Channel::all().into_iter().filter(splits) {
         let parts = render(&input, channel);
         assert!(parts.len() > 1, "{}: 나뉘어야 한다", channel.name());
         for p in &parts {
@@ -920,4 +921,97 @@ fn resumed_hold_scans_agree_with_batch() {
             }
         }
     }
+}
+
+// ── 브라우저 HTML ─────────────────────────────────────────────────────
+
+/// **블록까지 태그로 그린다.** 헤딩·문단·목록·인용·코드블록·표·구분선. 드로어가 줄마다
+/// 정규식으로 그리던 것에서 실측으로 깨지던 것들(줄 넘는 굵게, 헤딩·목록이 글자로 보임)이다.
+#[test]
+fn html_renders_blocks_as_tags() {
+    let h = |s| one(s, Channel::Html);
+    assert_eq!(h("## 제목"), "<h2>제목</h2>");
+    assert_eq!(h("문단 **굵게\n이어짐** 끝"), "<p>문단 <strong>굵게<br>\n이어짐</strong> 끝</p>");
+    assert_eq!(h("> 인용\n> 둘째"), "<blockquote>인용<br>\n둘째</blockquote>");
+    assert_eq!(h("```ts\na < b\n```"), "<pre><code class=\"language-ts\">a &lt; b</code></pre>");
+    assert_eq!(h("---"), "<hr>");
+    assert_eq!(
+        h("| a | b |\n|---|--:|\n| **x** | 1 |"),
+        "<table>\n<thead><tr><th>a</th><th style=\"text-align:right\">b</th></tr></thead>\n\
+         <tbody><tr><td><strong>x</strong></td><td style=\"text-align:right\">1</td></tr></tbody>\n</table>"
+    );
+}
+
+/// **목록은 들여쓰기로 중첩을 연다.** 더 깊으면 항목 안에 새 목록, 얕으면 그만큼 닫는다.
+/// 1 이 아닌 번호로 시작하는 번호 목록은 번호를 잇는다.
+#[test]
+fn html_nests_lists_by_indent() {
+    let h = |s| one(s, Channel::Html);
+    assert_eq!(
+        h("- 하나\n  - 둘\n    1. 셋\n- 넷"),
+        "<ul><li>하나\n<ul><li>둘\n<ol><li>셋\n</li></ol></li></ul></li><li>넷</li></ul>"
+    );
+    assert_eq!(h("3. 삼\n4. 사"), "<ol start=\"3\"><li>삼\n</li><li>사</li></ol>");
+    // 같은 깊이에서 종류가 바뀌면 목록을 갈아 낀다.
+    assert_eq!(h("- 가\n1. 나"), "<ul><li>가\n</li></ul><ol><li>나</li></ol>");
+}
+
+/// **`innerHTML` 로 들어가는 출력이다.** 글자는 escape 하고, `javascript:` 링크는 글로
+/// 떨어뜨리고, 원문 태그는 속성을 버린 이름만 살린다. 짝이 안 맞는 원문 태그는 강조와 같은
+/// 스택에서 맞춘다 — 퍼즈가 `<sub>` 만 열고 끝난 입력에서 잡았다.
+#[test]
+fn html_output_is_safe_for_inner_html() {
+    let h = |s| one(s, Channel::Html);
+    assert_eq!(h("1 < 2 & `a<b>`"), "<p>1 &lt; 2 &amp; <code>a&lt;b&gt;</code></p>");
+    assert_eq!(h("[나쁨](javascript:alert) [좋음](https://a.com)"), "<p>나쁨 (javascript:alert) <a href=\"https://a.com\">좋음</a></p>");
+    assert_eq!(h("[메일](MAILTO:a@b.c)"), "<p><a href=\"MAILTO:a@b.c\">메일</a></p>");
+    assert_eq!(h("H<sub onclick=\"x()\">2</sub>O"), "<p>H<sub>2</sub>O</p>");
+    assert_eq!(h("<div>블록</div> <script>x</script>"), "<p>블록 &lt;script&gt;x&lt;/script&gt;</p>");
+    assert_eq!(h("**a<sub>b**c</sub>"), "<p><strong>a<sub>b</sub></strong>c</p>");
+    assert_eq!(h("<sub>안 닫힘 뒤 </b> 끝"), "<p><sub>안 닫힘 뒤  끝</sub></p>");
+    // 코드펜스 info 는 속성값이라 `"` 까지 escape 한다 — 속성 주입을 막는다.
+    assert_eq!(
+        h("```x\" onmouseover=\"alert(1)\ncode\n```"),
+        "<pre><code class=\"language-x&quot; onmouseover=&quot;alert(1)\">code</code></pre>"
+    );
+}
+
+/// **스트리밍 누적본에 `close_open` 을 붙이면 언제나 균형 잡힌 HTML 이다.** 브라우저에
+/// 토큰이 오는 대로 `innerHTML` 을 갈아 끼우는 쓰임새의 계약이다. 한 글자씩 흘리며 매번 잰다.
+#[test]
+fn html_streaming_snapshot_is_always_balanced() {
+    let input = "## 제목\n\n문단 **굵게** 와 `코드`\n\n- 하나\n  - 둘 <sub>x</sub>\n- 셋\n\n> 인용\n\n```\nfence\n```\n| a | b |\n|---|---|\n| 1 | 2 |\n";
+    let mut s = mdwire::Streamer::new(Channel::Html);
+    let mut acc = String::new();
+    for ch in input.chars() {
+        s.push_into(ch.encode_utf8(&mut [0; 4]), &mut acc);
+        let mut snap = acc.clone();
+        s.close_open(&mut snap);
+        assert!(balanced_html(&snap), "균형이 깨진 스냅숏: {snap}");
+    }
+    s.finish_into(&mut acc);
+    assert_eq!(acc, render(input, Channel::Html).join(""));
+    assert!(balanced_html(&acc));
+}
+
+fn balanced_html(s: &str) -> bool {
+    let mut stack: Vec<String> = Vec::new();
+    let mut rest = s;
+    while let Some(at) = rest.find('<') {
+        let Some(end) = rest[at..].find('>') else { return false };
+        let tag = &rest[at + 1..at + end];
+        rest = &rest[at + end + 1..];
+        let name: String = tag.trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+        if matches!(name.as_str(), "br" | "hr") {
+            continue;
+        }
+        if tag.starts_with('/') {
+            if stack.pop().as_deref() != Some(name.as_str()) {
+                return false;
+            }
+        } else {
+            stack.push(name);
+        }
+    }
+    stack.is_empty()
 }

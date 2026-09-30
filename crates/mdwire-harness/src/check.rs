@@ -83,6 +83,21 @@ const TELEGRAM_TAGS: &[&str] = &[
 /// 텔레그램은 이것들도 안 받으므로 "허용 안 되는 태그"로는 걸린다. 다만 그걸 다시
 /// "안 닫혔다"로 세면 같은 사실을 두 번 신고하는 것이고, `<br>` 을 내보내는 구현이
 /// 실제보다 나빠 보인다.
+/// 브라우저 채널(`html`)이 내는 태그. 텔레그램 것에 블록 태그와 살려 두는 인라인 태그를
+/// 더했다. 이 밖의 태그가 나오면 원문의 HTML 이 걸러지지 않고 샌 것이다.
+const BROWSER_TAGS: &[&str] = &[
+    "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "pre", "a", "blockquote", "span",
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr",
+    "th", "td", "hr", "br", "sub", "sup", "small", "mark", "kbd",
+];
+
+/// 태그가 끝나면 낱말도 끝나는 블록 태그. 벗길 때 공백을 남긴다 — 표 칸 `<td>` 둘이
+/// 맞붙어 두 낱말이 한 낱말로 읽히지 않게.
+const BLOCK_TAGS: &[&str] = &[
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr",
+    "th", "td", "hr", "br", "blockquote", "pre",
+];
+
 const VOID_TAGS: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
     "source", "track", "wbr",
@@ -104,15 +119,26 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     let marked = tags_as_markers(output, channel);
     emphasis_range(input, &marked, channel, &mut findings);
     stray_markers(input, &marked, channel, &mut findings);
-    if matches!(channel, Channel::TelegramHtml) {
+    let allowed = match channel {
+        Channel::TelegramHtml => Some(TELEGRAM_TAGS),
+        Channel::Html => Some(BROWSER_TAGS),
+        _ => None,
+    };
+    if let Some(allowed) = allowed {
         // **조각마다 따로 본다.** 조각 하나가 곧 메시지 하나다. 이어 붙여서 보면
         // 여는 태그와 닫는 태그가 서로 다른 메시지에 있어도 균형이 맞아 보인다.
         for part in output.split(PART_SEPARATOR) {
-            html_tags(part, &mut findings);
+            html_tags(part, allowed, &mut findings);
         }
     }
     tables(input, output, channel, &mut findings);
-    text_loss(input, output, &mut findings);
+    // 번호 목록의 번호는 브라우저 채널에서 `<ol>` 이 그린다 — 글자로 안 나온다.
+    let input = if channel == Channel::Html {
+        std::borrow::Cow::Owned(strip_list_numbers(input))
+    } else {
+        std::borrow::Cow::Borrowed(input)
+    };
+    text_loss(&input, output, &mut findings);
     findings
 }
 
@@ -174,6 +200,42 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
             if missing.len() > 5 { " …" } else { "" }
         ),
     });
+}
+
+/// 태그를 공백으로 바꾼다. 화면에서 태그 자리는 글자가 아니라 경계다.
+fn tags_as_space(text: &str) -> String {
+    let ch: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < ch.len() {
+        if ch[i] == '<' {
+            if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
+                out.push(' ');
+                i = end;
+                continue;
+            }
+        }
+        out.push(ch[i]);
+        i += 1;
+    }
+    out
+}
+
+/// 줄 머리의 `1.` · `2)` 번호를 걷는다.
+fn strip_list_numbers(input: &str) -> String {
+    input
+        .split_inclusive('\n')
+        .map(|line| {
+            let t = line.trim_start();
+            let digits = t.chars().take_while(char::is_ascii_digit).count();
+            let rest = &t[digits..];
+            if digits > 0 && (rest.starts_with(". ") || rest.starts_with(") ") || rest.starts_with(".\t")) {
+                &rest[2..]
+            } else {
+                line
+            }
+        })
+        .collect()
 }
 
 /// GitHub 출력의 강조 태그를 마커로 읽는다.
@@ -283,7 +345,10 @@ fn bare(text: &str, seam: Seam) -> String {
                     continue;
                 }
             }
-            if let Some((_, _, end)) = emphasis::parse_tag(&ch, i) {
+            if let Some((tag, _, end)) = emphasis::parse_tag(&ch, i) {
+                if BLOCK_TAGS.contains(&tag.as_str()) {
+                    out.push(' ');
+                }
                 // 태그는 지우되 **속성 값은 남긴다.** `<a href="…">` 의 주소는 화면에
                 // 안 보여도 실제로 배달되는 내용이다. 지우면 링크가 사라진 것으로 잡힌다.
                 // **내용을 실은 속성만 남긴다** — `href`·`src`·`alt`·`title`. `align="center"`
@@ -632,7 +697,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
         return;
     }
     let scan = |text: &str| match channel {
-        Channel::TelegramHtml => emphasis::scan_html(text).spans,
+        Channel::TelegramHtml | Channel::Html => emphasis::scan_html(text).spans,
         _ => emphasis::scan_markdown(text, Mode::Strict).spans,
     };
     let plain = output.replace(PART_SEPARATOR, "\n");
@@ -728,6 +793,9 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
         }
         _ => {
             let text = strip_verbatim(&output.replace(PART_SEPARATOR, "\n"), channel, input);
+            // 브라우저 채널은 블록도 태그라 `<p>** 배포` 처럼 태그가 마커에 붙는다. 화면에서
+            // 태그 자리는 경계이니 공백으로 읽는다 — 안 그러면 글자로 둔 마커를 여는 마커로 본다.
+            let text = if channel == Channel::Html { tags_as_space(&text) } else { text };
             // **저자가 `\*` 로 탈출해 둔 마커는 글자다.** 코어가 탈출을 풀어 내보내므로
             // 출력에는 맨몸 `*` 로 남는데, 그건 우리가 변환 못 한 마커가 아니다.
             // 입력에 탈출된 만큼을 예산으로 두고 그만큼은 넘어간다.
@@ -820,7 +888,7 @@ fn strip_verbatim(text: &str, channel: Channel, input: &str) -> String {
         }
         return out;
     }
-    if channel != Channel::TelegramHtml {
+    if !matches!(channel, Channel::TelegramHtml | Channel::Html) {
         return text.to_string();
     }
     let mut out = String::with_capacity(text.len());
@@ -870,7 +938,7 @@ fn verbatim_chunks(input: &str) -> Vec<String> {
 }
 
 /// 연 태그를 닫았는가, 채널이 받는 태그만 썼는가, 글자로서의 `<`·`&` 를 이스케이프했는가.
-fn html_tags(output: &str, out: &mut Vec<Finding>) {
+fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
     let ch: Vec<char> = output.chars().collect();
     let mut stack: Vec<String> = Vec::new();
     let mut i = 0;
@@ -878,10 +946,19 @@ fn html_tags(output: &str, out: &mut Vec<Finding>) {
         match ch[i] {
             '<' => match emphasis::parse_tag(&ch, i) {
                 Some((name, closing, end)) => {
-                    if !TELEGRAM_TAGS.contains(&name.as_str()) {
+                    if !allowed.contains(&name.as_str()) {
                         out.push(Finding {
                             rule: Rule::DisallowedTag,
                             detail: format!("채널이 받지 않는 태그: <{name}>"),
+                        });
+                    }
+                    // **이벤트 속성은 어떤 태그에 붙어도 안 된다.** 출력이 `innerHTML` 로
+                    // 들어가는 채널에서 원문의 `onclick=` 이 새면 스크립트가 돈다.
+                    let tag: String = ch[i..end].iter().collect::<String>().to_ascii_lowercase();
+                    if tag.split(char::is_whitespace).skip(1).any(|a| a.starts_with("on") && a.contains('=')) {
+                        out.push(Finding {
+                            rule: Rule::DisallowedTag,
+                            detail: format!("이벤트 속성이 샌 태그: {tag}"),
                         });
                     }
                     if closing {
@@ -944,9 +1021,13 @@ fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 와 GitHub 은 GFM 표를
     // 그대로 받으므로 열이 글자로 맞아 있을 이유가 없다. 대신 **표가 표로 남았는가**를
     // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
-    if matches!(channel, Channel::SlackMarkdown | Channel::GithubMarkdown) {
+    if matches!(channel, Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::Html) {
         let want = gfm_table_count(input);
-        let got = output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>();
+        let got = if channel == Channel::Html {
+            output.matches("<table>").count()
+        } else {
+            output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>()
+        };
         if got < want {
             out.push(Finding {
                 rule: Rule::TableMisaligned,

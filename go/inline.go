@@ -378,6 +378,16 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	o := in.open[n-1]
 	in.open = in.open[:n-1]
 
+	// 원문의 태그는 마커가 아니다 — 되돌릴 글자도, 저자 대신 고친 강조도 없다. 비었으면
+	// 버리고, 아니면 여닫는다.
+	if o.emph >= emphTag {
+		if len(*out) > o.at {
+			insertAt(out, o.at, v.open(o.emph))
+			*out = append(*out, v.close(o.emph)...)
+		}
+		return
+	}
+
 	// 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
 	empty := len(*out) == o.at
 	if o.guess || empty || (o.soft && !matched) {
@@ -525,24 +535,53 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	// 태그는 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고, 블록
 	// 태그는 자리와 무관하게 그런다. 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이
 	// 붙들지 않도록 첫머리면 벗긴다.
-	if v.htmlEmphasis() && isInlineTag(name) {
+	//
+	// 브라우저 채널은 자리와 상관없이 살린다 — 마크다운으로 다시 읽히지 않는다.
+	//
+	// 살릴 때는 속성을 버리고 이름만 다시 쓰고, 강조와 같은 스택에 올린다. 출력이 innerHTML 로
+	// 들어가는 채널에서 `<span onclick=…>` 을 그대로 내면 안 되고, 원문의 태그는 짝이 안
+	// 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`) 일쑤다(퍼즈가 잡았다).
+	// 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 — 짝 없는 닫는 태그는 버리고,
+	// 안 닫힌 여는 태그는 블록 끝에서 닫는다.
+	tag := inlineTag(name)
+	br := eqIgnoreCase(name, "br")
+	if (v.isHTML() || v.htmlEmphasis()) && (tag >= 0 || br) {
 		p := in.prevChar(line, i)
 		atLineStart := p == noChar || p == '\n'
+		githubStart := !v.isHTML() && atLineStart
 		switch {
-		case closing && in.strippedTags > 0:
+		case closing && in.strippedTags > 0 && !v.isHTML():
 			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
 			in.strippedTags--
-		case atLineStart && !closing && !eqIgnoreCase(name, "br"):
-			in.strippedTags++
-		case !atLineStart:
-			for _, c := range rest[:closeAt+1] {
-				*out = appendRune(*out, c)
+		case githubStart:
+			if !closing && !br {
+				in.strippedTags++
+			}
+		default:
+			switch {
+			case tag < 0:
+				if !closing {
+					*out = append(*out, "<br>"...)
+				}
+			case closing:
+				if at := in.lastOpen(tagEmph(tag)); at >= 0 {
+					in.afterClose = noChar
+					in.closeAt(at, out, v)
+				}
+			default:
+				in.open = append(in.open, openMark{
+					emph:   tagEmph(tag),
+					at:     len(*out),
+					run:    1,
+					ch:     '<',
+					before: p,
+				})
 			}
 			in.prev = '>'
 			return closeAt + 1
 		}
 	}
-	if !closing && eqIgnoreCase(name, "br") {
+	if !closing && br {
 		// 표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다 — 칸 안에 `\n` 이 들어가면 GFM 은 그 뒤를
 		// 새 행으로 읽어 내용이 엉뚱한 열로 간다. 그걸 그리는 GitHub 에는 그대로 두고,
 		// 나머지는 공백으로 편다.
@@ -600,16 +639,14 @@ func findLink(line []rune, at int) (t0, t1, u0, u1 int, ok bool) {
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때
 // 쓰는 것들이다. 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
-// isInlineTag 는 줄 안에서 그려지는 태그인가다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
-func isInlineTag(name []rune) bool {
-	for _, t := range [...]string{
-		"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark", "kbd",
-	} {
-		if eqIgnoreCase(name, t) {
-			return true
+// inlineTag 는 살려 둘 인라인 태그의 번호(inlineTags)다. 없으면 -1. <br> 은 짝이 없어 여기 없다.
+func inlineTag(name []rune) int {
+	for k, t := range inlineTags {
+		if eqIgnoreCase(name, t[0]) {
+			return k
 		}
 	}
-	return false
+	return -1
 }
 
 func isKnownTag(name []rune) bool {

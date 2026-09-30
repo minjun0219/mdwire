@@ -1,6 +1,9 @@
 package mdwire
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // 채널별 출력 어휘.
 //
@@ -15,7 +18,33 @@ const (
 	emphItalic
 	emphStrike
 	emphCode
+	// emphTag 부터는 원문에 적힌 인라인 HTML 태그다 — emphTag + inlineTags 의 번호. 태그를 그리는
+	// 채널(html · GitHub)에서 강조와 같은 스택에 올려 짝과 중첩을 맞춘다.
+	emphTag
 )
+
+// tagEmph 는 inlineTags 의 t 번 태그를 강조 스택에 올릴 값이다.
+func tagEmph(t int) emph { return emphTag + emph(t) }
+
+// inlineTags 는 살려 둘 수 있는 인라인 태그다 — 이름, 여는 태그, 닫는 태그. 속성은 버리고 이
+// 모양으로 다시 쓴다. <br> 은 짝이 없어 따로 다룬다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
+var inlineTags = [15][3]string{
+	{"sub", "<sub>", "</sub>"},
+	{"sup", "<sup>", "</sup>"},
+	{"b", "<b>", "</b>"},
+	{"strong", "<strong>", "</strong>"},
+	{"i", "<i>", "</i>"},
+	{"em", "<em>", "</em>"},
+	{"u", "<u>", "</u>"},
+	{"s", "<s>", "</s>"},
+	{"strike", "<strike>", "</strike>"},
+	{"del", "<del>", "</del>"},
+	{"code", "<code>", "</code>"},
+	{"span", "<span>", "</span>"},
+	{"small", "<small>", "</small>"},
+	{"mark", "<mark>", "</mark>"},
+	{"kbd", "<kbd>", "</kbd>"},
+}
 
 // vocab 은 채널 하나의 출력 어휘와 정책이다.
 type vocab struct {
@@ -24,7 +53,22 @@ type vocab struct {
 
 // tablesNative 는 채널이 표를 직접 그리는가다. 그리면 고정폭으로 내리는 것이 손해다 —
 // 슬랙 markdown_text 는 표준 마크다운 표를 네이티브로 그린다. GitHub 은 GFM 표가 원래 문법이다.
-func (v vocab) tablesNative() bool { return v.isMarkdown() }
+func (v vocab) tablesNative() bool { return v.isMarkdown() || v.isHTML() }
+
+// isHTML 은 브라우저용 HTML 채널인가다. 블록까지 태그로 그린다(<p> <h2> <ul> <table>).
+func (v vocab) isHTML() bool { return v.channel == HTML }
+
+// htmlOut 은 출력이 HTML 이라 글자를 escape 해야 하는가다. 텔레그램과 브라우저.
+func (v vocab) htmlOut() bool { return v.channel == TelegramHTML || v.channel == HTML }
+
+// lineBreak 는 블록 안의 줄바꿈이다. 브라우저는 \n 을 공백으로 접으므로 <br> 을 앞에 둔다 —
+// 다른 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
+func (v vocab) lineBreak() string {
+	if v.isHTML() {
+		return "<br>\n"
+	}
+	return "\n"
+}
 
 // isMarkdown 은 마크다운을 그대로 내보내는 채널인가다.
 func (v vocab) isMarkdown() bool { return v.channel == SlackMarkdown || v.channel == GithubMarkdown }
@@ -33,6 +77,9 @@ func (v vocab) isMarkdown() bool { return v.channel == SlackMarkdown || v.channe
 func (v vocab) isPlain() bool { return v.channel == Plain }
 
 func (v vocab) open(e emph) string {
+	if e >= emphTag {
+		return inlineTags[e-emphTag][1]
+	}
 	switch v.channel {
 	case TelegramHTML:
 		switch e {
@@ -47,6 +94,8 @@ func (v vocab) open(e emph) string {
 		}
 	case Plain:
 		return ""
+	case HTML:
+		return v.openHTML(e)
 	default:
 		switch e {
 		case emphStrike:
@@ -68,6 +117,9 @@ func (v vocab) open(e emph) string {
 func (v vocab) htmlEmphasis() bool { return v.channel == GithubMarkdown }
 
 func (v vocab) openHTML(e emph) string {
+	if e >= emphTag {
+		return inlineTags[e-emphTag][1]
+	}
 	switch e {
 	case emphBold:
 		return "<strong>"
@@ -81,6 +133,9 @@ func (v vocab) openHTML(e emph) string {
 }
 
 func (v vocab) closeHTML(e emph) string {
+	if e >= emphTag {
+		return inlineTags[e-emphTag][2]
+	}
 	switch e {
 	case emphBold:
 		return "</strong>"
@@ -94,6 +149,12 @@ func (v vocab) closeHTML(e emph) string {
 }
 
 func (v vocab) close(e emph) string {
+	if e >= emphTag {
+		return inlineTags[e-emphTag][2]
+	}
+	if v.channel == HTML {
+		return v.closeHTML(e)
+	}
 	if v.channel == TelegramHTML {
 		switch e {
 		case emphBold:
@@ -118,7 +179,7 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 	if v.escapes(c) {
 		*out = append(*out, '\\')
 	}
-	if v.channel == TelegramHTML {
+	if v.htmlOut() {
 		switch c {
 		case '&':
 			*out = append(*out, "&amp;"...)
@@ -142,7 +203,7 @@ func (v vocab) escapes(c rune) bool {
 // codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 탈출이 글자로 보인다 —
 // 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
 func (v vocab) codeChar(c rune, out *[]byte) {
-	if v.channel == TelegramHTML {
+	if v.htmlOut() {
 		v.escapeChar(c, out)
 		return
 	}
@@ -152,7 +213,7 @@ func (v vocab) codeChar(c rune, out *[]byte) {
 // escape 는 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 escapeChar 다.
 func (v vocab) escape(s string, out *[]byte) {
 	// 대부분의 줄에는 이스케이프할 글자가 없다. 있을 때만 한 글자씩 간다.
-	if v.channel != TelegramHTML || !strings.ContainsAny(s, "&<>") {
+	if !v.htmlOut() || !strings.ContainsAny(s, "&<>") {
 		*out = append(*out, s...)
 		return
 	}
@@ -179,20 +240,25 @@ func (v vocab) link(text, url string, out *[]byte) {
 			return
 		}
 		*out = append(*out, `<a href="`...)
-		for _, c := range url {
-			switch c {
-			case '&':
-				*out = append(*out, "&amp;"...)
-			case '<':
-				*out = append(*out, "&lt;"...)
-			case '>':
-				*out = append(*out, "&gt;"...)
-			case '"':
-				*out = append(*out, "&quot;"...)
-			default:
-				*out = appendRune(*out, c)
+		appendAttr(url, out)
+		*out = append(*out, `">`...)
+		*out = append(*out, text...)
+		*out = append(*out, "</a>"...)
+	case HTML:
+		// innerHTML 로 들어가는 출력이라 스킴을 가린다. [x](javascript:…) 를 그대로 <a href> 로
+		// 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면 링크 없이 글과 주소만 낸다 —
+		// 내용은 살린다.
+		if !safeHref(url) {
+			*out = append(*out, text...)
+			if url != "" && !escapedEq(text, url) {
+				*out = append(*out, " ("...)
+				v.escape(url, out)
+				*out = append(*out, ')')
 			}
+			return
 		}
+		*out = append(*out, `<a href="`...)
+		appendAttr(url, out)
 		*out = append(*out, `">`...)
 		*out = append(*out, text...)
 		*out = append(*out, "</a>"...)
@@ -226,7 +292,7 @@ func (v vocab) link(text, url string, out *[]byte) {
 // 저자가 글자로 쓴 별표가 그 채널에서 강조로 읽힌다. HTML 로 가는 채널은 마커라는 개념이
 // 없으니 그냥 escape 한다.
 func (v vocab) literal(c rune, out *[]byte) {
-	if v.channel == TelegramHTML || v.channel == Plain {
+	if v.htmlOut() || v.channel == Plain {
 		v.escapeChar(c, out)
 		return
 	}
@@ -249,21 +315,21 @@ func (v vocab) bullet() string {
 }
 
 func (v vocab) quotePrefix() string {
-	if v.channel == TelegramHTML {
+	if v.htmlOut() {
 		return ""
 	}
 	return "> "
 }
 
 func (v vocab) quoteOpen() string {
-	if v.channel == TelegramHTML {
+	if v.htmlOut() {
 		return "<blockquote>"
 	}
 	return ""
 }
 
 func (v vocab) quoteClose() string {
-	if v.channel == TelegramHTML {
+	if v.htmlOut() {
 		return "</blockquote>"
 	}
 	return ""
@@ -274,6 +340,9 @@ func (v vocab) rule() string {
 	if v.isMarkdown() {
 		return "---"
 	}
+	if v.isHTML() {
+		return "<hr>"
+	}
 	return "──────────"
 }
 
@@ -283,7 +352,7 @@ func (v vocab) maxHeading() int {
 		// 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다. 셋에서 끊는다.
 		return 3
 	}
-	if v.channel == GithubMarkdown {
+	if v.channel == GithubMarkdown || v.channel == HTML {
 		// GitHub 은 여섯 단계를 크기를 달리해 그린다.
 		return 6
 	}
@@ -293,11 +362,12 @@ func (v vocab) maxHeading() int {
 // verbatimOpen 은 고정폭 블록을 연다. 표와 코드펜스가 같이 쓴다.
 func (v vocab) verbatimOpen(info string, out *[]byte) {
 	switch v.channel {
-	case TelegramHTML:
+	case TelegramHTML, HTML:
 		*out = append(*out, "<pre>"...)
 		if info != "" {
 			*out = append(*out, `<code class="language-`...)
-			v.escape(info, out)
+			// 속성값이다 — `"` 까지 escape 한다. 안 하면 info 가 속성을 하나 더 끼워 넣는다.
+			appendAttr(info, out)
 			*out = append(*out, `">`...)
 		}
 	case Plain:
@@ -310,12 +380,12 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 // verbatimBodyNewline 은 여는 마크업과 첫 내용 줄 사이에 줄바꿈이 필요한가다.
 // ``` 는 필요하고, <pre> 는 넣으면 빈 줄이 하나 생긴다.
 func (v vocab) verbatimBodyNewline() bool {
-	return v.channel != TelegramHTML && v.channel != Plain
+	return v.channel != TelegramHTML && v.channel != Plain && v.channel != HTML
 }
 
 func (v vocab) verbatimClose(info string, out *[]byte) {
 	switch v.channel {
-	case TelegramHTML:
+	case TelegramHTML, HTML:
 		if info != "" {
 			*out = append(*out, "</code>"...)
 		}
@@ -324,6 +394,57 @@ func (v vocab) verbatimClose(info string, out *[]byte) {
 	default:
 		*out = append(*out, "\n```"...)
 	}
+}
+
+// appendAttr 는 속성값으로 escape 해서 적는다.
+func appendAttr(s string, out *[]byte) {
+	for _, c := range s {
+		switch c {
+		case '&':
+			*out = append(*out, "&amp;"...)
+		case '<':
+			*out = append(*out, "&lt;"...)
+		case '>':
+			*out = append(*out, "&gt;"...)
+		case '"':
+			*out = append(*out, "&quot;"...)
+		default:
+			*out = appendRune(*out, c)
+		}
+	}
+}
+
+// safeHref 는 브라우저에서 눌러도 되는 주소인가다 — http(s)·mailto 만. 대소문자·앞 공백으로
+// 숨긴 JavaScript: 도 스킴이 달라 걸러진다.
+func safeHref(url string) bool {
+	u := strings.TrimLeftFunc(url, unicode.IsSpace)
+	for _, s := range [...]string{"http://", "https://", "mailto:"} {
+		if len(u) >= len(s) && eqFoldASCII(u[:len(s)], s) {
+			return true
+		}
+	}
+	return false
+}
+
+// eqFoldASCII 는 ASCII 대소문자만 무시하고 견준다. strings.EqualFold 는 유니코드 접기까지 해서
+// 러스트의 eq_ignore_ascii_case 와 뜻이 다르다.
+func eqFoldASCII(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }
 
 // escapedLen 은 escape 하고 나면 몇 글자가 되는가다. 재기만 하고 만들지는 않는다 —

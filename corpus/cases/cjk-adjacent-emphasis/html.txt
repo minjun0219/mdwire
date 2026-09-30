@@ -1,0 +1,1 @@
+<p>배포는 <strong>금요일</strong>에 하지 않는다. <code>main</code> 브랜치에 <strong>직접 커밋</strong>하지도 않는다.</p>
