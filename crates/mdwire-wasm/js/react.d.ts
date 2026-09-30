@@ -6,7 +6,7 @@ import type { RenderOptions } from "@minjun0219/mdwire";
 export type MdComponents = Partial<Record<MdTag, ElementType>>;
 
 export interface MarkdownProps {
-  /** 에이전트가 쓴 마크다운. 스트리밍이면 지금까지의 누적본. */
+  /** 에이전트가 쓴 마크다운(완성된 글). 스트리밍은 `Streamer` + `toElements` 로 — 누적본을 매번 넘기면 처음부터 다시 변환한다. */
   text: string;
   /** 입력 표기. 슬랙 레거시 mrkdwn 이면 "slack-mrkdwn". */
   from?: "markdown" | "slack-mrkdwn";
