@@ -721,6 +721,21 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
     assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)**을");
 }
 
+/// **GitHub 은 인라인 태그를 그리니 살린다.** LLM 이 `<sub>`·`<kbd>` 로 적은 뜻이 거기서는
+/// 산다. 줄 첫머리의 태그는 벗긴다 — 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 뒤 줄의
+/// 마크다운이 글자로 보인다(실측). 블록 태그(`div`)와 새니타이저가 지우는 `font` 도 벗긴다.
+#[test]
+fn github_keeps_inline_html_tags_off_the_line_start() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈"), "H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈");
+    assert_eq!(g("앞 <div>블록</div> <font color=red>빨강</font>"), "앞 블록 빨강");
+    // 줄 첫머리에서 벗긴 여는 태그는 짝인 닫는 태그도 벗긴다.
+    assert_eq!(g("<sub>첫머리</sub> 뒤 <sub>둘</sub>"), "첫머리 뒤 <sub>둘</sub>");
+    assert_eq!(g("앞\n<br>\n**굵게**"), "앞\n\n\n**굵게**");
+    // 다른 채널은 그대로 벗긴다.
+    assert_eq!(one("H<sub>2</sub>O", Channel::SlackMarkdown), "H2O");
+}
+
 /// **표 칸 안의 `<br>` 은 줄바꿈이 될 수 없다.** 칸 안에 줄바꿈이 들어가면 GFM 은 뒤를 새
 /// 행으로 읽어 내용이 엉뚱한 열로 간다. GitHub 은 칸 안 `<br>` 을 그리니 그대로 둔다.
 #[test]
@@ -728,8 +743,8 @@ fn br_inside_a_table_cell_keeps_the_row() {
     let input = "| a | 첫째<br>둘째 |\n|---|---|\n| 1 | 2 |";
     assert_eq!(one(input, Channel::GithubMarkdown), "| a | 첫째<br>둘째 |\n| --- | --- |\n| 1 | 2 |");
     assert_eq!(one(input, Channel::SlackMarkdown), "| a | 첫째 둘째 |\n| --- | --- |\n| 1 | 2 |");
-    // 칸 밖은 여전히 줄바꿈이다.
-    assert_eq!(one("줄<br>바꿈", Channel::GithubMarkdown), "줄\n바꿈");
+    // 칸 밖은 여전히 줄바꿈이다(태그를 못 그리는 채널).
+    assert_eq!(one("줄<br>바꿈", Channel::SlackMarkdown), "줄\n바꿈");
 }
 
 /// **`** 띄운 굵게 **` 는 글자다.** 열 수도 닫을 수도 없는 마커 둘이라 CommonMark 도

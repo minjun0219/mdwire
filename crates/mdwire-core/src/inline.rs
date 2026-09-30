@@ -67,6 +67,8 @@ pub(crate) struct Inline {
     after_close: Option<char>,
     /// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
     pub in_cell: bool,
+    /// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
+    stripped_tags: usize,
 }
 
 impl Inline {
@@ -80,6 +82,7 @@ impl Inline {
             repairs: Repairs::default(),
             after_close: None,
             in_cell: false,
+            stripped_tags: 0,
         }
     }
 
@@ -87,6 +90,7 @@ impl Inline {
     pub fn reset(&mut self) {
         self.open.clear();
         self.prev = None;
+        self.stripped_tags = 0;
     }
 
     /// 지금 `out` 에서 **내보내도 안전한 길이**. 열린 마커가 있으면 그 앞까지다.
@@ -587,6 +591,24 @@ impl Inline {
         if !is_known_tag(name) {
             return None;
         }
+        // **GitHub 은 인라인 태그를 그린다 — 벗기지 않고 그대로 둔다**(실측 2026-09-30). LLM 이
+        // `<sub>`·`<kbd>` 로 적은 뜻이 거기서는 산다. 둘은 예외다. 줄 첫머리의 태그는 그 줄이
+        // 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고(`<br>` 한 줄 뒤의
+        // `**굵게**` 가 글자로 보였다), `div`·`details` 같은 블록 태그는 자리와 무관하게 그런다.
+        // 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이 붙들지 않도록 첫머리면 벗긴다.
+        if v.html_emphasis() && is_inline_tag(name) {
+            let at_line_start = self.prev_char(line, i).is_none_or(|c| c == '\n');
+            if closing && self.stripped_tags > 0 {
+                // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다.
+                self.stripped_tags -= 1;
+            } else if at_line_start && !closing && !eq_ignore_case(name, "br") {
+                self.stripped_tags += 1;
+            } else if !at_line_start {
+                out.extend(&rest[..=close]);
+                self.prev = Some('>');
+                return Some(close + 1);
+            }
+        }
         if !closing && eq_ignore_case(name, "br") {
             // **표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다** — 칸 안에 `\n` 이 들어가면 GFM 은
             // 그 뒤를 새 행으로 읽어 내용이 엉뚱한 열로 간다. 칸 안 줄바꿈은 GFM 에서 흔히
@@ -690,6 +712,13 @@ fn is_known_tag(name: &[char]) -> bool {
         "div", "p", "small", "mark", "kbd", "font", "center", "details",
     ];
     KNOWN.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "summary")
+}
+
+/// 줄 안에서 그려지는 태그. GitHub 이 받는 것만 — `font` 는 새니타이저가 지운다.
+fn is_inline_tag(name: &[char]) -> bool {
+    const INLINE: [&str; 15] =
+        ["br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark"];
+    INLINE.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "kbd")
 }
 
 /// 같은 글자가 이어진 가장 긴 길이.
