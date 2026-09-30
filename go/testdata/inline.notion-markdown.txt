@@ -58,15 +58,13 @@ snake_case 와 plain_text_name 은 그대로다
 ----
 [문서 보기](https://a.com/p) 와 [**굵은** 링크](https://a.com/q?x=1&y=2)
 ----
-[https://a.com/x_y_z?q=1&r=2](https://a.com/x_y_z?q=1&r=2) 와 [문서 보기](https://a.com/p) 참고
+[https://a.com/x\_y\_z?q=1&r=2](https://a.com/x_y_z?q=1&r=2) 와 [문서 보기](https://a.com/p) 참고
 ----
 <https://a.com/x y>
 ----
 H2O 와 굵 Vec<T> 1 < 2  끝
 ----
-첫째
-둘째
-셋째
+첫째<br>둘째<br>셋째
 ----
 <a href="u">t</a>
 ----

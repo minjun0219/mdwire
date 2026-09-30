@@ -259,8 +259,14 @@ func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 		{`백슬래시 \ 하나`, `백슬래시 \\ 하나`},
 		{"약 ~40km, Vec<T>", "약 ~40km, Vec<T>"},
 		{"\\*별\\* `a*b\\c`", "\\*별\\* `a*b\\c`"},
-		{"<https://a.com/x_y>", "[https://a.com/x_y](https://a.com/x_y)"},
+		{"<https://a.com/x_y>", `[https://a.com/x\_y](https://a.com/x_y)`},
 		{"##### 다섯\n\n* 별표 목록", "#### 다섯\n\n- 별표 목록"},
+		{"> **a<br>b** 끝", "> **a<br>b** 끝"},
+		{"| a |\n|---|\n| 줄<br>바꿈 |", "| a |\n| --- |\n| 줄<br>바꿈 |"},
+		{"foo\\\nbar", "foo\nbar"},
+		{`\$x\$ 와 $5`, `\$x\$ 와 $5`},
+		{"<https://a.com/*x*>", `[https://a.com/\*x\*](https://a.com/*x*)`},
+		{"<https://a.com/x)>", "[https://a.com/x)](https://a.com/x%29)"},
 	}
 	for _, c := range cases {
 		if got := strings.Join(Render(c[0], NotionMarkdown), ""); got != c[1] {

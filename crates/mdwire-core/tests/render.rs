@@ -724,8 +724,19 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
     assert_eq!(n("약 ~40km, Vec<T>"), "약 ~40km, Vec<T>");
     // 저자가 탈출해 둔 것은 한 번만, 코드 안은 그대로.
     assert_eq!(n(r"\*별\* `a*b\c`"), r"\*별\* `a*b\c`");
-    assert_eq!(n("<https://a.com/x_y>"), "[https://a.com/x_y](https://a.com/x_y)");
+    assert_eq!(n("<https://a.com/x_y>"), r"[https://a.com/x\_y](https://a.com/x_y)");
     assert_eq!(n("##### 다섯\n\n* 별표 목록"), "#### 다섯\n\n- 별표 목록");
+    // 자체 리뷰에서 나온 것들 — 노션에 다시 올려 재 봤다.
+    // `<br>` 은 그린다(칸 안에서도) — `\n` 으로 바꾸면 인용이 갈린다.
+    assert_eq!(n("> **a<br>b** 끝"), "> **a<br>b** 끝");
+    assert_eq!(n("| a |\n|---|\n| 줄<br>바꿈 |"), "| a |\n| --- |\n| 줄<br>바꿈 |");
+    // 줄 끝 역슬래시(하드 브레이크)는 노션에 없어 뺀다 — 줄바꿈은 남는다.
+    assert_eq!(n("foo\\\nbar"), "foo\nbar");
+    // `\$` 는 지킨다 — 벗기면 `$x$` 가 수식이 된다.
+    assert_eq!(n(r"\$x\$ 와 $5"), r"\$x\$ 와 $5");
+    // 오토링크 라벨의 마커 글자는 탈출하고, 주소의 괄호는 퍼센트로.
+    assert_eq!(n("<https://a.com/*x*>"), r"[https://a.com/\*x\*](https://a.com/*x*)");
+    assert_eq!(n("<https://a.com/x)>"), "[https://a.com/x)](https://a.com/x%29)");
 }
 
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이

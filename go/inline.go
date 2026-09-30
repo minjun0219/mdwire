@@ -170,6 +170,11 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			i += 2
 			continue
 		}
+		// 줄 끝 역슬래시(하드 브레이크)는 노션에서 뺀다 — 그 문법이 없어 글자로 보인다.
+		if c == '\\' && i+1 == len(line) && v.channel == NotionMarkdown {
+			i++
+			continue
+		}
 
 		if c == '`' {
 			run := runLen(line, i, '`')
@@ -611,6 +616,10 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		// 새 행으로 읽어 내용이 엉뚱한 열로 간다. 그걸 그리는 GitHub 에는 그대로 두고,
 		// 나머지는 공백으로 편다.
 		switch {
+		case v.channel == NotionMarkdown:
+			// 노션은 칸 안이든 밖이든 <br> 을 그린다 — \n 으로 바꾸면 인용이 갈리고 강조가 줄을 넘는다.
+			*out = append(*out, "<br>"...)
+			in.prev = ' '
 		case in.inCell && v.htmlEmphasis():
 			*out = append(*out, "<br>"...)
 			in.prev = ' '

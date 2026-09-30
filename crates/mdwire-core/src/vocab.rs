@@ -289,8 +289,30 @@ impl Vocab {
             _ => {
                 // 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다.
                 // 스킴이 있어야 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
-                // 노션은 `<url>` 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다.
-                if text == url && url.contains("://") && self.channel != Channel::NotionMarkdown {
+                // 노션은 `<url>` 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다. 라벨은 날것의
+                // 주소라 노션이 마커로 읽을 글자를 탈출하고, 주소의 괄호·공백은 퍼센트로 쓴다 —
+                // 안 그러면 `a]b` 에서 라벨이, `x)` 에서 주소가 끝난다.
+                if text == url && url.contains("://") && self.channel == Channel::NotionMarkdown {
+                    out.push('[');
+                    for c in text.chars() {
+                        if matches!(c, '\\' | '*' | '_' | '~' | '`' | '[' | ']' | '$') {
+                            out.push('\\');
+                        }
+                        out.push(c);
+                    }
+                    out.push_str("](");
+                    for c in url.chars() {
+                        match c {
+                            '(' => out.push_str("%28"),
+                            ')' => out.push_str("%29"),
+                            ' ' => out.push_str("%20"),
+                            _ => out.push(c),
+                        }
+                    }
+                    out.push(')');
+                    return;
+                }
+                if text == url && url.contains("://") {
                     out.push('<');
                     out.push_str(url);
                     out.push('>');
@@ -345,11 +367,13 @@ impl Vocab {
             // **그 채널의 마크다운이 읽는 글자면 탈출을 지킨다.** 강조 마커만 지키면
             // `\# 제목` 이 제목이 되고 `\[x\](url)` 이 링크가 된다 — 저자가 글자로
             // 쓴 것을 채널이 구문으로 읽어 버린다.
+            //
+            // 노션은 `$…$` 를 수식으로 읽어서 `\$` 도 지킨다(실측 — 벗기면 `\$x\$` 가 수식이 된다).
             _ if matches!(
                 c,
                 '*' | '_' | '~' | '`' | '\\' | '[' | ']' | '(' | ')' | '#' | '>' | '|' | '-'
                     | '+' | '.' | '!'
-            ) =>
+            ) || (c == '$' && self.channel == Channel::NotionMarkdown) =>
             {
                 out.push('\\');
                 out.push(c);

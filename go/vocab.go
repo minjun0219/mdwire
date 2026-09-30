@@ -335,8 +335,33 @@ func (v vocab) link(text, url string, out *[]byte) {
 	default:
 		// 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다. 스킴이 있어야
 		// 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
-		// 노션은 <url> 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다.
-		if text == url && strings.Contains(url, "://") && v.channel != NotionMarkdown {
+		// 노션은 <url> 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다. 라벨은 노션이 마커로
+		// 읽을 글자를 탈출하고, 주소의 괄호·공백은 퍼센트로 쓴다 — 러스트 쪽과 같다.
+		if text == url && strings.Contains(url, "://") && v.channel == NotionMarkdown {
+			*out = append(*out, '[')
+			for _, c := range text {
+				if strings.ContainsRune("\\*_~`[]$", c) {
+					*out = append(*out, '\\')
+				}
+				*out = appendRune(*out, c)
+			}
+			*out = append(*out, "]("...)
+			for _, c := range url {
+				switch c {
+				case '(':
+					*out = append(*out, "%28"...)
+				case ')':
+					*out = append(*out, "%29"...)
+				case ' ':
+					*out = append(*out, "%20"...)
+				default:
+					*out = appendRune(*out, c)
+				}
+			}
+			*out = append(*out, ')')
+			return
+		}
+		if text == url && strings.Contains(url, "://") {
 			*out = append(*out, '<')
 			*out = append(*out, url...)
 			*out = append(*out, '>')
@@ -394,7 +419,8 @@ func (v vocab) literal(c rune, out *[]byte) {
 	}
 	// 그 채널의 마크다운이 읽는 글자면 탈출을 지킨다. 강조 마커만 지키면 `\# 제목` 이 제목이
 	// 되고 `\[x\](url)` 이 링크가 된다.
-	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) {
+	// 노션은 $…$ 를 수식으로 읽어서 \$ 도 지킨다.
+	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) || (c == '$' && v.channel == NotionMarkdown) {
 		*out = append(*out, '\\')
 		*out = appendRune(*out, c)
 		return

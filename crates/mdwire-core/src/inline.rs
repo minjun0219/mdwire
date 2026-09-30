@@ -19,7 +19,7 @@
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
 use crate::vocab::{Emph, Vocab, INLINE_TAGS};
-use crate::{Dialect, Repairs};
+use crate::{Channel, Dialect, Repairs};
 
 #[derive(Clone)]
 struct Open {
@@ -208,6 +208,11 @@ impl Inline {
                         i += 2;
                         continue;
                     }
+                } else if v.channel == Channel::NotionMarkdown {
+                    // **줄 끝 역슬래시(하드 브레이크)는 노션에서 뺀다.** 노션은 그 문법이 없어
+                    // 역슬래시가 글자로 보인다(실측). 줄바꿈은 뒤따르는 `\n` 이 그대로 남긴다.
+                    i += 1;
+                    continue;
                 }
             }
 
@@ -691,7 +696,13 @@ impl Inline {
             // **표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다** — 칸 안에 `\n` 이 들어가면 GFM 은
             // 그 뒤를 새 행으로 읽어 내용이 엉뚱한 열로 간다. 칸 안 줄바꿈은 GFM 에서 흔히
             // `<br>` 로 쓰므로 그걸 그리는 GitHub 에는 그대로 두고, 나머지는 공백으로 편다.
-            if self.in_cell {
+            //
+            // **노션은 칸 안이든 밖이든 `<br>` 을 그린다**(실측 2026-10-01) — 한 블록 안의 줄바꿈이라
+            // `\n` 으로 바꾸면 인용은 둘로 갈리고 강조는 줄을 넘는다. 그대로 둔다.
+            if v.channel == Channel::NotionMarkdown {
+                out.push_str("<br>");
+                self.prev = Some(' ');
+            } else if self.in_cell {
                 if v.html_emphasis() {
                     out.push_str("<br>");
                 } else {
