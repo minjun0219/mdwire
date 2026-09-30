@@ -16,7 +16,7 @@ func TestHTMLOutputIsSafeForInnerHTML(t *testing.T) {
 		{`H<sub onclick="x()">2</sub>O`, "<p>H<sub>2</sub>O</p>"},
 		{"<div>블록</div> <script>x</script>", "<p>블록 &lt;script&gt;x&lt;/script&gt;</p>"},
 		{"**a<sub>b**c</sub>", "<p><strong>a<sub>b</sub></strong>c</p>"},
-		{"```x\" onmouseover=\"alert(1)\ncode\n```", `<pre><code class="language-x&quot; onmouseover=&quot;alert(1)">code</code></pre>`},
+		{"```x\"onmouseover=\"alert(1)\ncode\n```", `<pre><code class="language-x&quot;onmouseover=&quot;alert(1)">code</code></pre>`},
 	}
 	for _, c := range cases {
 		if got := strings.Join(Render(c[0], HTML), ""); got != c[1] {
@@ -103,8 +103,8 @@ func TestCallerLimitOverridesTheChannelLimit(t *testing.T) {
 			t.Fatalf("%d자 조각 — 한도 4096", n)
 		}
 	}
-	input := "[문서](https://a.com/" + strings.Repeat("x", 200) + ")"
-	if out := strings.Join(RenderWith(input, TelegramHTML, Options{Limit: 100}).Parts, ""); strings.Contains(out, "<a href") {
-		t.Fatalf("한도 100 에 200자 주소 링크: %s", out)
+	input := "[문서](https://a.com/" + strings.Repeat("x", 300) + ")"
+	if out := strings.Join(RenderWith(input, TelegramHTML, Options{Limit: MinLimit}).Parts, ""); strings.Contains(out, "<a href") {
+		t.Fatalf("한도 256 에 300자 주소 링크: %s", out)
 	}
 }
