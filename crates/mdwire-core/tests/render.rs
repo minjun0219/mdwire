@@ -981,10 +981,11 @@ fn html_output_is_safe_for_inner_html() {
     // 줄을 넘은 코드 스팬이 안 닫혀 글자로 되돌아가도 줄바꿈 `<br>` 은 남는다.
     assert_eq!(h("앞 `a\nb 뒤"), "<p>앞 `a<br>\nb 뒤</p>");
     assert_eq!(h("- 앞 `a\n  b 뒤"), "<ul><li>앞 `a<br>\n  b 뒤</li></ul>");
-    // 코드펜스 info 는 속성값이라 `"` 까지 escape 한다 — 속성 주입을 막는다.
+    // 코드펜스 info 는 속성값이라 `"` 까지 escape 한다 — 속성 주입을 막는다. 언어는 첫
+    // 단어뿐이라 공백 없이 붙인 주입으로 잰다.
     assert_eq!(
-        h("```x\" onmouseover=\"alert(1)\ncode\n```"),
-        "<pre><code class=\"language-x&quot; onmouseover=&quot;alert(1)\">code</code></pre>"
+        h("```x\"onmouseover=\"alert(1)\ncode\n```"),
+        "<pre><code class=\"language-x&quot;onmouseover=&quot;alert(1)\">code</code></pre>"
     );
 }
 
@@ -1056,11 +1057,24 @@ fn caller_limit_overrides_the_channel_limit() {
     let parts = mdwire::render_with(&long, Channel::Plain, opts).parts;
     assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= 4096));
     // 한도보다 긴 주소는 링크로 내지 않는다 — 채널 한도가 아니라 호출자 한도 기준이다.
-    let url = format!("https://a.com/{}", "x".repeat(200));
+    let url = format!("https://a.com/{}", "x".repeat(300));
     let input = format!("[문서]({url})");
-    let opts = mdwire::Options { limit: Some(100), ..Default::default() };
+    let opts = mdwire::Options { limit: Some(mdwire::MIN_LIMIT), ..Default::default() };
     let out = mdwire::render_with(&input, Channel::TelegramHtml, opts).parts.join("");
-    assert!(!out.contains("<a href"), "한도 100 에 200자 주소 링크: {out}");
+    assert!(!out.contains("<a href"), "한도 256 에 300자 주소 링크: {out}");
+}
+
+/// **한도가 마크업보다 작아도 태그 한가운데서 가르지 않는다.** 한도 1 로 텔레그램 `**x**` 를 나누면
+/// `<` · `b` · `></b>` 가 됐다(리뷰에서 나왔다) — 최소 한도([`mdwire::MIN_LIMIT`])로 올린다. 브라우저
+/// 채널은 분할기가 블록 태그를 여닫지 않아 한도를 보지 않는다.
+#[test]
+fn tiny_limits_are_raised_and_html_never_splits() {
+    let tiny = mdwire::Options { limit: Some(1), ..Default::default() };
+    assert_eq!(mdwire::render_with("**x**", Channel::TelegramHtml, tiny.clone()).parts, vec!["<b>x</b>"]);
+    assert_eq!(mdwire::render_with("abcdefghijklmnop", Channel::Html, tiny).parts, vec!["<p>abcdefghijklmnop</p>"]);
+    let long = "가나다 ".repeat(300);
+    let parts = mdwire::render_with(&long, Channel::Plain, mdwire::Options { limit: Some(10), ..Default::default() }).parts;
+    assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= mdwire::MIN_LIMIT));
 }
 
 /// **브라우저 채널의 정책은 호출자가 정한다** — 줄바꿈, 이미지, 스킴. 기본값이 가장

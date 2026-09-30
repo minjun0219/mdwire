@@ -157,10 +157,11 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 // 닫고 다시 여는 몫이 안 들어가면 그만큼 덜 담는다.
                 let (end, probe) = loop {
                     let end = rest.char_indices().nth(take).map_or(rest.len(), |(i, _)| i);
+                    let end = if v.html_out() { entity_cut(rest, end) } else { end };
                     let mut probe = markup.clone();
                     probe.feed(&rest[..end], v);
                     let reserve = probe.reserve(v);
-                    let need = len + take + reserve;
+                    let need = len + rest[..end].chars().count() + reserve;
                     // 다시 열 수 없을 만큼 큰 마크업(`budget == 0`, 한도만 한 여는 태그)은 줄여
                     // 봐야 소용없다 — `cut` 이 버린다. 한 글자씩 조각만 쏟아지니 그대로 간다.
                     if need <= limit || take == 1 || budget == 0 || reserve >= limit {
@@ -181,6 +182,22 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
         parts.push(cur);
     }
     parts
+}
+
+/// 글자 단위로 자르는 자리가 엔티티(`&amp;` `&lt;` …) 한가운데면 `&` 앞으로 당긴다.
+/// `&am` + `p;` 로 갈린 조각은 받는 쪽에서 글자가 깨지거나 거절된다. 엔티티가 맨 앞이라
+/// 당길 데가 없으면 엔티티 끝까지 넘긴다 — 한 글자는 반드시 소비해야 한다.
+fn entity_cut(s: &str, end: usize) -> usize {
+    let Some(at) = s[..end].rfind('&') else { return end };
+    let tail = &s[at + 1..];
+    let Some(semi) = tail.find(';') else { return end };
+    let is_entity = semi > 0
+        && semi <= 8
+        && tail[..semi].bytes().all(|b| b.is_ascii_alphanumeric() || b == b'#');
+    if !is_entity || at + 1 + semi < end {
+        return end;
+    }
+    if at > 0 { at } else { at + 1 + semi + 1 }
 }
 
 /// 조각에 글을 붙이고 붙은 글자 수를 돌려준다. 방금 다시 연 마커 바로 뒤라면 앞 공백을
