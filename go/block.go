@@ -169,13 +169,11 @@ func (e *engine) feed(chunk string, s sink) {
 }
 
 // preview 는 지금 입력이 끝났다면 나올 꼬리를 s 에 쓴다 — 러스트 쪽 Engine::preview. 자기 상태는
-// 건드리지 않고 복제본에 finish 를 부른다. 코드 스팬만 닫는 백틱을 넣어 준다(안 닫힌 코드 스팬은
-// 일괄 렌더에서 글자로 되돌아가, 미리보기에서 여는 백틱이 비친다).
+// 건드리지 않고 복제본에 finish 를 부른다. 다른 점은 하나 — 안 닫힌 코드 스팬을 글자로 되돌리지
+// 않고 닫는다(inline.preview).
 func (e *engine) preview(s sink) {
 	c := e.clone()
-	if run, ok := c.inline.openCodeRun(); ok {
-		c.feed(strings.Repeat("`", run), s)
-	}
+	c.inline.preview = true
 	c.finish(s)
 }
 

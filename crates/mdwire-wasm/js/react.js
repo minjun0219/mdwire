@@ -103,38 +103,52 @@ export function Markdown({ text, from, components, options }) {
  * 일괄 변환과 같다. `eager: false` 면 확정된 것만 보인다(append-only, SPEC 8.2) — 짝이 안 맞은
  * 강조·판정 전 접두사는 확정될 때 나온다.
  *
- * 끝나면 `onSettled(html, revised)` — `revised` 는 완성본이 마지막 화면과 다른가다. 같으면 훅은
- * 다시 그리지 않는다.
+ * 끝나면 `onSettled(html, revised)` — `revised` 는 완성본이 마지막으로 **화면에 그려진** 것과
+ * 다른가다. 같으면 훅은 다시 그리지 않는다.
  * @param {import("./react.d.ts").MarkdownStreamOptions} [opts]
  */
 export function useMarkdownStream({ from, components, options, eager = true, onSettled } = {}) {
   const ref = useRef(null);
+  const init = useRef(null);
   const [, rerender] = useReducer((n) => n + 1, 0);
-  if (ref.current === null) {
+  if (init.current === null) {
     const o = { ...options, ...(from ? { from } : {}) };
-    ref.current = { streamer: new Streamer("html", o), acc: "", done: false, eager, schemes: o.html?.schemes ?? DEFAULT_SCHEMES };
+    init.current = () => ({ streamer: new Streamer("html", o), acc: "", done: false, eager, schemes: o.html?.schemes ?? DEFAULT_SCHEMES });
   }
-  // 콜백은 매번 최신 것을 본다 — 옵션처럼 처음 한 번만 읽으면 닫힌 값이 남는다.
-  ref.current.onSettled = onSettled;
+  // 해제됐으면 다시 만든다 — StrictMode 개발 모드는 이펙트를 붙였다 떼었다 다시 붙여서, 정리
+  // 함수가 스트리머를 먼저 해제한다(토큰이 오기 전이라 잃는 것은 없다).
+  const state = () => (ref.current ??= init.current());
+  state().onSettled = onSettled; // 콜백은 매번 최신 것을 본다
   // wasm 메모리를 돌려준다 — 스트리머는 JS 가비지 컬렉터가 모르는 곳에 산다.
-  useEffect(() => () => ref.current?.streamer.free(), []);
+  useEffect(
+    () => () => {
+      ref.current?.streamer.free();
+      ref.current = null;
+    },
+    [],
+  );
   const push = useCallback((chunk) => {
-    const st = ref.current;
+    const st = state();
     if (st.done) return;
     st.acc += st.streamer.push(chunk);
     rerender();
   }, []);
   const finish = useCallback(() => {
-    const st = ref.current;
+    const st = state();
     if (st.done) return;
     st.acc += st.streamer.finish();
     st.done = true;
-    // 미리보기를 안 썼으면 늘 참이다 — 마지막 화면은 확정분 + closeOpen 이었다.
-    const revised = st.streamer.revised();
+    // 스트리머의 revised() 가 아니라 커밋된 화면과 비교한다. 렌더는 버려질 수 있어서(concurrent
+    // 렌더) 마지막으로 preview() 를 부른 렌더가 화면에 올라갔다는 보장이 없다.
+    const revised = st.acc !== st.shown;
     st.onSettled?.(st.acc, revised);
     if (revised) rerender();
   }, []);
-  const st = ref.current;
+  const st = state();
   const tail = st.done ? "" : st.eager ? st.streamer.preview() : st.streamer.closeOpen();
-  return { elements: createElement(Fragment, null, ...toElements(st.acc + tail, components, st.schemes)), push, finish };
+  const html = st.acc + tail;
+  useEffect(() => {
+    if (ref.current) ref.current.shown = html;
+  });
+  return { elements: createElement(Fragment, null, ...toElements(html, components, st.schemes)), push, finish };
 }

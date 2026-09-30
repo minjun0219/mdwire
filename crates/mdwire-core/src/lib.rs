@@ -238,9 +238,7 @@ pub struct Streamer {
     started: bool,
     /// 마지막 [`Streamer::preview`] 의 꼬리. 재사용 버퍼 — 열린 블록만큼이지 문서 전체가 아니다.
     tail: String,
-    /// 미리보기를 한 번이라도 했는가.
-    previewed: bool,
-    /// 마지막 미리보기 뒤에 조각이 더 들어왔는가.
+    /// `tail` 이 지금 상태를 반영하지 않는다 — 미리보기를 안 했거나 그 뒤에 조각이 더 왔다.
     dirty: bool,
     /// [`Streamer::revised`] 의 답. `finish` 가 정한다.
     revised: bool,
@@ -258,8 +256,7 @@ impl Streamer {
             buf: String::new(),
             started: false,
             tail: String::new(),
-            previewed: false,
-            dirty: false,
+            dirty: true,
             revised: true,
         }
     }
@@ -320,7 +317,11 @@ impl Streamer {
         let mut sink = StringSink(out);
         self.engine.finish(&mut sink);
         self.trim_leading(out, from);
-        self.revised = !self.previewed || self.dirty || self.tail != out[from..];
+        self.revised = self.dirty || self.tail != out[from..];
+        // 끝난 엔진에 더 그릴 꼬리는 없다. 비워 두지 않으면 뒤이은 `preview` 가 끝난 엔진을
+        // 복제해 finish 꼬리를 한 번 더 낸다.
+        self.tail.clear();
+        self.dirty = false;
     }
 
     /// **지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리.** 누적본에 이걸 붙이면 그 자리에서 보낼 수
@@ -353,6 +354,10 @@ impl Streamer {
     /// assert!(!s.revised());                          // 마지막 화면이 곧 완성본
     /// ```
     pub fn preview(&mut self) -> &str {
+        // 그 뒤로 조각이 안 왔으면 같은 답이다 — 다시 그리는 쪽은 조각과 무관하게도 자주 부른다.
+        if !self.dirty {
+            return &self.tail;
+        }
         let mut tail = std::mem::take(&mut self.tail);
         tail.clear();
         self.engine.preview(&mut StringSink(&mut tail));
@@ -361,7 +366,6 @@ impl Streamer {
             tail.drain(..keep);
         }
         self.tail = tail;
-        self.previewed = true;
         self.dirty = false;
         &self.tail
     }
@@ -374,7 +378,9 @@ impl Streamer {
     /// **완성본이 마지막 미리보기와 다른가** — `finish` 뒤에 본다. 거짓이면 마지막으로 그린
     /// 화면(`누적본 + preview`)이 곧 완성본이라 다시 그릴 필요가 없다. 텔레그램은 같은 내용으로
     /// 편집하면 400("message is not modified")을 주므로 이걸 보고 마지막 편집을 건너뛴다.
-    /// 미리보기를 안 했거나 그 뒤에 조각이 더 왔으면 참이다.
+    /// 미리보기를 안 했거나 그 뒤에 조각이 더 왔으면 참이다 — **참은 "다를 수 있다"** 는 뜻이다.
+    /// 편집을 솎아 보내 마지막 미리보기가 마지막 조각보다 앞서면 완성본이 같아도 참이니, 그런
+    /// 쪽은 마지막으로 보낸 문자열과 직접 비교한다.
     pub fn revised(&self) -> bool {
         self.revised
     }

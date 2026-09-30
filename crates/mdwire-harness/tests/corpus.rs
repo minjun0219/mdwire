@@ -69,6 +69,7 @@ fn streaming_agrees_with_batch() {
 fn preview_snapshots_are_sendable() {
     let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
     let mut eager = 0;
+    let mut compared = 0;
     for case in &cases {
         for channel in Channel::all() {
             let options = Options { from: case.from, ..Default::default() };
@@ -92,6 +93,20 @@ fn preview_snapshots_are_sendable() {
                     if last.len() > acc.len() {
                         eager += 1;
                     }
+                    // **미리보기는 지금까지 받은 입력의 일괄 렌더다.** 다른 점은 안 닫힌 코드 스팬을
+                    // 글자로 되돌리지 않는 것뿐 — 그런 스냅숏과 한도로 나뉜 것만 뺀다. 태그 규칙은
+                    // 통과해도 모양이 틀린 미리보기(닫는 백틱이 비치고, 빈 `<pre>` 가 끼는 것)를 잡는다.
+                    let prefix = mdwire::render_with(&case.input[..fed], channel, options.clone());
+                    if prefix.parts.len() == 1 && prefix.repairs.reverted_code_span == 0 {
+                        compared += 1;
+                        assert_eq!(
+                            last,
+                            prefix.parts[0],
+                            "{} · {} · 조각 {size}자 · {fed}바이트에서 미리보기가 일괄 렌더와 다르다",
+                            case.name,
+                            channel.name()
+                        );
+                    }
                     let bad: Vec<_> = check(&case.input[..fed], &last, channel)
                         .into_iter()
                         .filter(|f| matches!(f.rule, Rule::UnclosedTag | Rule::DisallowedTag | Rule::RawHtmlChar))
@@ -110,6 +125,7 @@ fn preview_snapshots_are_sendable() {
         }
     }
     assert!(eager > 0, "미리보기가 붙든 것을 한 번도 안 그렸다면 이 시험은 아무것도 안 본다");
+    assert!(compared > 1000, "일괄 렌더와 대조한 스냅숏이 너무 적다: {compared}");
 }
 
 /// `push` 와 `push_into` 는 같은 코드를 부른다. 서명만 다르다(`SPEC.md` 5절).

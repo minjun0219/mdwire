@@ -178,17 +178,10 @@ impl Engine {
     /// 복제본에 `finish` 를 부른다. 그래서 꼬리는 일괄 렌더와 같은 경로를 타고, 붙들고 있던
     /// 것(열린 강조, 표 행, 펜스, 판정 전 접두사)이 일괄 렌더가 지키는 모양 그대로 나온다.
     ///
-    /// 코드 스팬만 닫는 백틱을 넣어 준다. 블록 끝까지 안 닫힌 코드 스팬은 일괄 렌더에서
-    /// 글자로 되돌아가는데, 미리보기에서 그러면 여는 백틱이 글자로 비친다.
+    /// 다른 점은 하나 — 안 닫힌 코드 스팬을 글자로 되돌리지 않고 닫는다([`Inline::preview`]).
     pub fn preview<S: Sink>(&self, sink: &mut S) {
         let mut e = self.clone();
-        if let Some(run) = e.inline.open_code_run() {
-            const TICKS: &str = "````````````````";
-            match TICKS.get(..run) {
-                Some(t) => e.feed(t, sink),
-                None => e.feed(&"`".repeat(run), sink),
-            }
-        }
+        e.inline.preview = true;
         e.finish(sink);
     }
 

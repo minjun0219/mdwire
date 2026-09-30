@@ -74,6 +74,10 @@ pub(crate) struct Inline {
     pub in_cell: bool,
     /// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
     stripped_tags: Vec<u8>,
+    /// 미리보기 복제본이다 — 블록이 끝날 때 안 닫힌 코드 스팬을 글자로 되돌리지 않고 닫는다.
+    /// 되돌리면 여는 백틱이 비친다. 닫는 백틱을 입력으로 흘려 넣으면 붙들린 꼬리(`` ` ``)와
+    /// 합쳐지거나 새 줄 첫머리로 읽혀서, 인라인 층에서 직접 닫는다.
+    pub preview: bool,
 }
 
 impl Inline {
@@ -88,6 +92,7 @@ impl Inline {
             after_close: None,
             in_cell: false,
             stripped_tags: Vec::new(),
+            preview: false,
         }
     }
 
@@ -101,11 +106,6 @@ impl Inline {
     /// 지금 `out` 에서 **내보내도 안전한 길이**. 열린 마커가 있으면 그 앞까지다.
     pub fn safe_len(&self, out_len: usize) -> usize {
         self.open.first().map_or(out_len, |o| o.at)
-    }
-
-    /// 열려 있는 코드 스팬의 백틱 런 길이. 코드 스팬 안에서는 다른 것이 안 열려 늘 맨 위다.
-    pub fn open_code_run(&self) -> Option<usize> {
-        self.open.last().filter(|o| o.emph == Emph::Code).map(|o| o.run)
     }
 
     /// 앞쪽 `n` 바이트를 내보냈다. 기억하고 있던 자리를 당긴다.
@@ -392,7 +392,7 @@ impl Inline {
     /// 블록이 끝났다. 열린 것을 전부 정리한다.
     pub fn finish_block(&mut self, out: &mut String, v: &Vocab) {
         while let Some(top) = self.open.last() {
-            if top.emph == Emph::Code {
+            if top.emph == Emph::Code && !self.preview {
                 self.revert_code_span(out, v);
                 continue;
             }
