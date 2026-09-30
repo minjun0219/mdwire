@@ -25,3 +25,7 @@ const props: MarkdownProps = { text: "**x**", from: "slack-mrkdwn", components: 
 void [events, Markdown(props), toElements("<p>x</p>")];
 const htmlOpts: RenderOptions = { html: { lineBreaks: "space", images: "load", schemes: ["https"] } };
 void render("x", "html", htmlOpts);
+import { useMarkdownStream } from "@minjun0219/mdwire/react";
+import type { MarkdownStreamOptions } from "@minjun0219/mdwire/react";
+const streamOpts: MarkdownStreamOptions = { options: { html: { images: "load" } } };
+void [useMarkdownStream, streamOpts];

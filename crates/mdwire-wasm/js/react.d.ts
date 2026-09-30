@@ -18,6 +18,22 @@ export interface MarkdownProps {
 /** 마크다운을 React 요소로 그린다. innerHTML 을 쓰지 않는다. */
 export function Markdown(props: MarkdownProps): ReactElement;
 
+export interface MarkdownStreamOptions {
+  from?: "markdown" | "slack-mrkdwn";
+  components?: MdComponents;
+  options?: RenderOptions;
+}
+
+/**
+ * 스트리밍용 훅 — 토큰마다 `push`, 끝나면 `finish`. 이미 보인 것은 뒤 토큰이 고치지 않는다.
+ * 옵션은 처음 한 번만 읽는다.
+ */
+export function useMarkdownStream(opts?: MarkdownStreamOptions): {
+  elements: ReactElement;
+  push(chunk: string): void;
+  finish(): void;
+};
+
 /** html 채널 출력(스트리밍이면 누적본 + `closeOpen()`)을 React 노드로 바꾼다. */
 /** `schemes` 는 코어에 준 `options.html.schemes` 와 같게 준다. 기본 `["http", "https", "mailto"]`. */
 export function toElements(html: string, components?: MdComponents, schemes?: string[]): ReactNode[];

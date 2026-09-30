@@ -89,10 +89,10 @@ React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 세
 출력을 `open` / `text` / `close` 이벤트 열로 받는다.
 
 ```jsx
-import { Markdown } from "@minjun0219/mdwire/react";
+import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 
-// 스트리밍: 누적본을 그대로 넘긴다. 스트리머를 쓴 것과 같은 결과다.
-<Markdown text={answerSoFar} components={{ a: RouterLink }} />
+<Markdown text={answer} components={{ a: RouterLink }} />  // 완성된 답
+const { elements, push, finish } = useMarkdownStream();     // 스트리밍: push(토큰), finish()
 ```
 
 **append-only 계약.** `push` 가 돌려준 것은 확정이다 — 뒤 조각이 그걸 고쳐 쓰지 않는다 —

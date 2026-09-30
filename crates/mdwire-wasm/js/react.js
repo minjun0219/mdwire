@@ -4,8 +4,8 @@
 // 이벤트로 풀어 요소로 세울 뿐이다 — 글자는 React 가 글자로 넣으니 다시 escape 할 것도 없다.
 // 링크·이미지 스킴만 한 번 더 본다: 소비자가 `a` 를 자기 컴포넌트로 갈아 끼워도 주소가 안전하도록.
 // 목록은 코어에 준 것(`options.html.schemes`)과 같다 — 다르면 코어가 허용한 링크를 여기서 막는다.
-import { createElement, Fragment } from "react";
-import { render } from "@minjun0219/mdwire";
+import { createElement, Fragment, useCallback, useEffect, useReducer, useRef } from "react";
+import { render, Streamer } from "@minjun0219/mdwire";
 import { toEvents } from "./events.js";
 
 const DEFAULT_SCHEMES = ["http", "https", "mailto"];
@@ -84,12 +84,46 @@ export function toElements(html, components = {}, schemes = DEFAULT_SCHEMES) {
 }
 
 /**
- * 에이전트 마크다운을 그린다. 스트리밍이면 누적본을 그대로 `text` 로 준다 — 매번 다시
- * 그리지만 결과는 스트리머를 쓴 것과 같다(append-only 계약, SPEC 8.2).
+ * 에이전트 마크다운을 그린다 — 완성된 글용. 스트리밍 중인 누적본을 넘겨도 그려지지만, 반쪽
+ * 마커(`**굵`, 여는 백틱, `##`)가 잠깐 글자로 보였다가 사라진다. 스트리밍은 [`useMarkdownStream`].
  * @param {import("./react.d.ts").MarkdownProps} props
  */
 export function Markdown({ text, from, components, options }) {
   const opts = { ...options, ...(from ? { from } : {}) };
   const html = render(text, "html", opts).join("");
   return createElement(Fragment, null, ...toElements(html, components, opts.html?.schemes ?? DEFAULT_SCHEMES));
+}
+
+/**
+ * 스트리밍용 훅. 토큰이 오는 대로 `push(chunk)`, 끝나면 `finish()`. **이미 보인 것은 뒤 토큰이
+ * 고치지 않는다** — 짝이 안 맞은 강조·안 닫힌 백틱·판정 전 접두사는 스트리머 안에 붙들려
+ * 있다가 확정될 때 나온다(append-only 계약, SPEC 8.2). 누적본을 `<Markdown>` 에 통째로 넘기면
+ * 그 반쪽들이 잠깐 글자로 보인다.
+ * @param {import("./react.d.ts").MarkdownStreamOptions} [opts]
+ */
+export function useMarkdownStream({ from, components, options } = {}) {
+  const ref = useRef(null);
+  const [, rerender] = useReducer((n) => n + 1, 0);
+  if (ref.current === null) {
+    const o = { ...options, ...(from ? { from } : {}) };
+    ref.current = { streamer: new Streamer("html", o), acc: "", done: false, schemes: o.html?.schemes ?? DEFAULT_SCHEMES };
+  }
+  // wasm 메모리를 돌려준다 — 스트리머는 JS 가비지 컬렉터가 모르는 곳에 산다.
+  useEffect(() => () => ref.current?.streamer.free(), []);
+  const push = useCallback((chunk) => {
+    const st = ref.current;
+    if (st.done) return;
+    st.acc += st.streamer.push(chunk);
+    rerender();
+  }, []);
+  const finish = useCallback(() => {
+    const st = ref.current;
+    if (st.done) return;
+    st.acc += st.streamer.finish();
+    st.done = true;
+    rerender();
+  }, []);
+  const st = ref.current;
+  const html = st.done ? st.acc : st.acc + st.streamer.closeOpen();
+  return { elements: createElement(Fragment, null, ...toElements(html, components, st.schemes)), push, finish };
 }
