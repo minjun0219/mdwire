@@ -32,16 +32,21 @@ echo '{ "type": "commonjs" }' > "$OUT/node/package.json"
 rm -f "$OUT"/*/.gitignore
 # 레지스트리 페이지는 패키지 안의 README 를 보여 준다. 없으면 빈 페이지다.
 cp README.md LICENSE "$OUT/"
+# **wasm 을 거치지 않는 JS 는 손으로 쓴 것을 그대로 싣는다** — html 출력을 이벤트로 푸는
+# `events` 와 React 컴포넌트 `react`. 코어를 부르는 쪽은 패키지 이름으로 자기 자신을 import
+# 해서, 환경마다 `exports` 가 고른 빌드(node · bundler)를 그대로 탄다.
+mkdir -p "$OUT/js"
+cp crates/mdwire-wasm/js/*.js crates/mdwire-wasm/js/*.d.ts "$OUT/js/"
 
 cat > "$OUT/package.json" <<JSON
 {
   "name": "@minjun0219/mdwire",
   "version": "$VERSION",
-  "description": "Streaming Markdown renderer for chat channels. Telegram HTML, Slack markdown_text, plain text.",
+  "description": "Streaming Markdown renderer for chat channels and the browser. Telegram HTML, Slack markdown_text, GitHub, HTML, React.",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/minjun0219/mdwire" },
   "homepage": "https://github.com/minjun0219/mdwire",
-  "keywords": ["markdown", "telegram", "slack", "streaming", "llm", "wasm"],
+  "keywords": ["markdown", "telegram", "slack", "github", "react", "streaming", "llm", "wasm"],
   "type": "module",
   "main": "./node/mdwire.js",
   "types": "./bundler/mdwire.d.ts",
@@ -50,10 +55,14 @@ cat > "$OUT/package.json" <<JSON
       "types": "./bundler/mdwire.d.ts",
       "node": "./node/mdwire.js",
       "default": "./bundler/mdwire.js"
-    }
+    },
+    "./events": { "types": "./js/events.d.ts", "default": "./js/events.js" },
+    "./react": { "types": "./js/react.d.ts", "default": "./js/react.js" }
   },
+  "peerDependencies": { "react": ">=18" },
+  "peerDependenciesMeta": { "react": { "optional": true } },
   "sideEffects": ["./bundler/mdwire.js"],
-  "files": ["bundler", "node"],
+  "files": ["bundler", "node", "js"],
   "publishConfig": { "access": "public" }
 }
 JSON

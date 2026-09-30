@@ -82,6 +82,18 @@ for await (const chunk of tokens) {
 await append(t.finish());
 ```
 
+React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 세운다 — `innerHTML`
+이 없다. escape·태그 집합·링크 스킴은 코어의 `html` 채널 한 곳이 정하고, 태그마다 어떤
+컴포넌트로 그릴지는 쓰는 쪽이 정한다. 다른 프레임워크는 `@minjun0219/mdwire/events` 로 같은
+출력을 `open` / `text` / `close` 이벤트 열로 받는다.
+
+```jsx
+import { Markdown, toElements } from "@minjun0219/mdwire/react";
+
+<Markdown text={answer} components={{ a: RouterLink }} />  // 완성된 답
+acc += streamer.push(token); toElements(acc + streamer.closeOpen()); // 스트리밍: 새 토큰만 변환한다
+```
+
 **append-only 계약.** `push` 가 돌려준 것은 확정이다 — 뒤 조각이 그걸 고쳐 쓰지 않는다 —
 그리고 `finish` 는 꼬리만 덧붙인다. 그래서 조각을 이어 붙인 것은 조각 크기와 상관없이 한
 번에 `render` 한 결과와 같다(문서가 길어 여러 조각으로 나뉘는 경우는 빼고). 코퍼스와

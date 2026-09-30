@@ -85,6 +85,18 @@ for await (const chunk of tokens) {
 await append(t.finish());
 ```
 
+In React, `@minjun0219/mdwire/react` builds elements with `createElement` — no
+`innerHTML`. Escaping, the tag set and link schemes are decided once, in the core's `html`
+channel; you choose which component draws each tag. `@minjun0219/mdwire/events` gives the
+same output as an `open` / `text` / `close` event list for other frameworks.
+
+```jsx
+import { Markdown, toElements } from "@minjun0219/mdwire/react";
+
+<Markdown text={answer} components={{ a: RouterLink }} />  // a finished answer
+acc += streamer.push(token); toElements(acc + streamer.closeOpen()); // streaming: only the new token is converted
+```
+
 **Append-only contract.** What `push` returns is final — a later chunk never rewrites it —
 and `finish` only appends the tail. So the pieces concatenated equal a one-shot `render`,
 whatever the chunk size (unless the document is long enough to be split into parts).
