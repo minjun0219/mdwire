@@ -22,11 +22,15 @@ export interface MarkdownStreamOptions {
   from?: "markdown" | "slack-mrkdwn";
   components?: MdComponents;
   options?: RenderOptions;
+  /** 붙든 것(열린 강조·표 행·코드 스팬)도 먼저 그린다. 기본 `true`. `false` 면 확정된 것만. */
+  eager?: boolean;
+  /** 끝났을 때. `revised` 는 완성본이 마지막 화면과 다른가 — 거짓이면 훅은 다시 그리지 않는다. */
+  onSettled?: (html: string, revised: boolean) => void;
 }
 
 /**
- * 스트리밍용 훅 — 토큰마다 `push`, 끝나면 `finish`. 이미 보인 것은 뒤 토큰이 고치지 않는다.
- * 옵션은 처음 한 번만 읽는다.
+ * 스트리밍용 훅 — 토큰마다 `push`, 끝나면 `finish`. 기본은 붙든 것도 먼저 그린다(`eager`).
+ * `onSettled` 말고는 처음 한 번만 읽는다.
  */
 export function useMarkdownStream(opts?: MarkdownStreamOptions): {
   elements: ReactElement;
@@ -34,6 +38,6 @@ export function useMarkdownStream(opts?: MarkdownStreamOptions): {
   finish(): void;
 };
 
-/** html 채널 출력(스트리밍이면 누적본 + `closeOpen()`)을 React 노드로 바꾼다. */
+/** html 채널 출력(스트리밍이면 누적본 + `preview()` 또는 `closeOpen()`)을 React 노드로 바꾼다. */
 /** `schemes` 는 코어에 준 `options.html.schemes` 와 같게 준다. 기본 `["http", "https", "mailto"]`. */
 export function toElements(html: string, components?: MdComponents, schemes?: string[]): ReactNode[];

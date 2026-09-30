@@ -200,6 +200,25 @@ impl Streamer {
         out
     }
 
+    /// **지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리.** `closeOpen` 과 같은 자리에 들어가지만
+    /// 붙들고 있던 것(열린 강조, 표 행, 코드 스팬)까지 그린다. 누적본을 통째로 다시 그리는 쪽의
+    /// 기본값이다. 추측이라 뒤 조각이 모양을 바꿀 수 있다 — 끝난 뒤 `revised()` 로 본다.
+    ///
+    /// ```js
+    /// acc += s.push(chunk);
+    /// await edit(acc + s.preview());      // 화면을 그릴 때만 부른다(열린 블록만큼 든다)
+    /// acc += s.finish();
+    /// if (s.revised()) await edit(acc);   // 마지막 화면이 곧 완성본이면 건너뛴다
+    /// ```
+    pub fn preview(&mut self) -> String {
+        self.inner.preview().to_string()
+    }
+
+    /// 완성본이 마지막 `preview()` 와 다른가 — `finish` 뒤에 본다.
+    pub fn revised(&self) -> bool {
+        self.inner.revised()
+    }
+
     /// 입력이 끝났다. 남은 것을 내보내고 열린 마크업을 닫는다.
     pub fn finish(&mut self) -> String {
         self.buf.clear();

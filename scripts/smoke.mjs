@@ -15,6 +15,16 @@ for (const chunk of ["**굵", "게** 이어", "서 `코드`"]) {
 acc += s.finish();
 assert.equal(acc, "<b>굵게</b> 이어서 <code>코드</code>");
 
+// 미리보기 — 붙든 강조를 닫아서 먼저 그린다. 끝나고 마지막 화면과 같으면 revised 는 거짓.
+const p = new Streamer("telegram-html");
+let pacc = p.push("앞 **굵");
+assert.equal(pacc + p.preview(), "앞 <b>굵</b>");
+pacc += p.push("게** 끝");
+const shown = pacc + p.preview();
+pacc += p.finish();
+assert.equal(pacc, shown);
+assert.equal(p.revised(), false);
+
 // **append-only 계약.** `push` 가 돌려준 글은 확정분이다 — 뒤 조각이 앞 글을 고치지 않는다.
 // 그래서 받은 대로 이어 붙이기만 하면(Slack `appendStream` 처럼 앞 글을 못 고치는 채널)
 // 한 번에 렌더한 것과 같다. 깨진 입력(안 닫힌 강조·펜스)을 한 글자씩 흘려서 본다.

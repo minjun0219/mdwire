@@ -1111,3 +1111,57 @@ fn html_policy_options() {
     s.finish_into(&mut acc);
     assert_eq!(acc, render("사진 ![고양이](https://a.com/c.png) 끝!", Channel::Html).join(""));
 }
+
+/// **미리보기는 붙든 것을 먼저 그린다.** 확정분은 여는 `**` 앞에서 멈추지만, 미리보기는 닫아서
+/// 보여 준다. 표는 지금까지 온 행으로, 코드 스팬은 닫는 백틱을 넣어서.
+#[test]
+fn preview_draws_what_push_holds() {
+    fn snap(channel: Channel, input: &str) -> (String, String) {
+        let mut s = Streamer::new(channel);
+        let mut acc = String::new();
+        s.push_into(input, &mut acc);
+        let tail = s.preview().to_string();
+        (acc, tail)
+    }
+    assert_eq!(snap(Channel::TelegramHtml, "앞말 **굵"), ("앞말 ".into(), "<b>굵</b>".into()));
+    assert_eq!(snap(Channel::TelegramHtml, "앞 `코드"), ("앞 ".into(), "<code>코드</code>".into()));
+    let (acc, tail) = snap(Channel::Html, "| a | b |\n|---|---|\n| 1 | 2 |\n| 3");
+    assert!(acc.is_empty() && tail.starts_with("<table>") && tail.contains("<td>1</td>"), "{tail}");
+    // 미리보기는 상태를 바꾸지 않는다 — 이어서 흘린 결과가 일괄 렌더와 같다.
+    let mut s = Streamer::new(Channel::TelegramHtml);
+    let mut acc = String::new();
+    for c in ["앞 **굵", "게** `코", "드` 끝"] {
+        s.push_into(c, &mut acc);
+        let _ = s.preview();
+    }
+    s.finish_into(&mut acc);
+    assert_eq!(acc, render("앞 **굵게** `코드` 끝", Channel::TelegramHtml).concat());
+}
+
+/// **`revised` — 마지막 화면을 다시 그려야 하는가.** 소비자(텔레그램 편집)가 정할 수 있게
+/// 마지막 미리보기와 완성본이 다른지만 알려 준다.
+#[test]
+fn revised_tells_whether_the_last_preview_was_final() {
+    let run = |chunks: &[&str], preview_last: bool| {
+        let mut s = Streamer::new(Channel::TelegramHtml);
+        let mut acc = String::new();
+        for c in chunks {
+            s.push_into(c, &mut acc);
+        }
+        if preview_last {
+            let _ = s.preview();
+        }
+        s.finish_into(&mut acc);
+        s.revised()
+    };
+    assert!(!run(&["앞 **굵게** 끝"], true), "마지막 미리보기가 곧 완성본");
+    assert!(run(&["앞 `안 닫힌 코드"], true), "미리보기는 코드로, 완성본은 글자로");
+    assert!(run(&["앞 **굵게** 끝"], false), "미리보기를 안 했으면 다시 그린다");
+    let mut s = Streamer::new(Channel::TelegramHtml);
+    let mut acc = String::new();
+    s.push_into("앞", &mut acc);
+    let _ = s.preview();
+    s.push_into(" 뒤", &mut acc);
+    s.finish_into(&mut acc);
+    assert!(s.revised(), "미리보기 뒤에 조각이 더 왔다");
+}

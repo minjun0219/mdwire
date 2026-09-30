@@ -96,19 +96,26 @@ export function Markdown({ text, from, components, options }) {
 }
 
 /**
- * 스트리밍용 훅. 토큰이 오는 대로 `push(chunk)`, 끝나면 `finish()`. **이미 보인 것은 뒤 토큰이
- * 고치지 않는다** — 짝이 안 맞은 강조·안 닫힌 백틱·판정 전 접두사는 스트리머 안에 붙들려
- * 있다가 확정될 때 나온다(append-only 계약, SPEC 8.2). 누적본을 `<Markdown>` 에 통째로 넘기면
- * 그 반쪽들이 잠깐 글자로 보인다.
+ * 스트리밍용 훅. 토큰이 오는 대로 `push(chunk)`, 끝나면 `finish()`.
+ *
+ * 기본(`eager: true`)은 **붙든 것도 먼저 그린다** — 열린 강조는 닫아서, 표는 지금까지 온 행으로,
+ * 코드 스팬은 닫아서(`Streamer.preview()`). 추측이라 뒤 토큰이 모양을 바꿀 수 있지만 완성본은
+ * 일괄 변환과 같다. `eager: false` 면 확정된 것만 보인다(append-only, SPEC 8.2) — 짝이 안 맞은
+ * 강조·판정 전 접두사는 확정될 때 나온다.
+ *
+ * 끝나면 `onSettled(html, revised)` — `revised` 는 완성본이 마지막 화면과 다른가다. 같으면 훅은
+ * 다시 그리지 않는다.
  * @param {import("./react.d.ts").MarkdownStreamOptions} [opts]
  */
-export function useMarkdownStream({ from, components, options } = {}) {
+export function useMarkdownStream({ from, components, options, eager = true, onSettled } = {}) {
   const ref = useRef(null);
   const [, rerender] = useReducer((n) => n + 1, 0);
   if (ref.current === null) {
     const o = { ...options, ...(from ? { from } : {}) };
-    ref.current = { streamer: new Streamer("html", o), acc: "", done: false, schemes: o.html?.schemes ?? DEFAULT_SCHEMES };
+    ref.current = { streamer: new Streamer("html", o), acc: "", done: false, eager, schemes: o.html?.schemes ?? DEFAULT_SCHEMES };
   }
+  // 콜백은 매번 최신 것을 본다 — 옵션처럼 처음 한 번만 읽으면 닫힌 값이 남는다.
+  ref.current.onSettled = onSettled;
   // wasm 메모리를 돌려준다 — 스트리머는 JS 가비지 컬렉터가 모르는 곳에 산다.
   useEffect(() => () => ref.current?.streamer.free(), []);
   const push = useCallback((chunk) => {
@@ -122,9 +129,12 @@ export function useMarkdownStream({ from, components, options } = {}) {
     if (st.done) return;
     st.acc += st.streamer.finish();
     st.done = true;
-    rerender();
+    // 미리보기를 안 썼으면 늘 참이다 — 마지막 화면은 확정분 + closeOpen 이었다.
+    const revised = st.streamer.revised();
+    st.onSettled?.(st.acc, revised);
+    if (revised) rerender();
   }, []);
   const st = ref.current;
-  const html = st.done ? st.acc : st.acc + st.streamer.closeOpen();
-  return { elements: createElement(Fragment, null, ...toElements(html, components, st.schemes)), push, finish };
+  const tail = st.done ? "" : st.eager ? st.streamer.preview() : st.streamer.closeOpen();
+  return { elements: createElement(Fragment, null, ...toElements(st.acc + tail, components, st.schemes)), push, finish };
 }

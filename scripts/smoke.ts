@@ -5,7 +5,8 @@ import type { RenderOptions } from "@minjun0219/mdwire";
 const parts: string[] = render("**굵게**", "slack-markdown");
 const n: number = limit("slack-markdown");
 const s = new Streamer("slack-markdown");
-const out: string = s.push("조각") + s.closeOpen() + s.finish();
+const out: string = s.push("조각") + s.closeOpen() + s.preview() + s.finish();
+const revised: boolean = s.revised();
 
 // 옵션은 좁은 타입이다 — 방언 이름을 틀리면 컴파일에서 걸린다.
 const opts: RenderOptions = { from: "slack-mrkdwn" };
@@ -27,5 +28,9 @@ const htmlOpts: RenderOptions = { html: { lineBreaks: "space", images: "load", s
 void render("x", "html", htmlOpts);
 import { useMarkdownStream } from "@minjun0219/mdwire/react";
 import type { MarkdownStreamOptions } from "@minjun0219/mdwire/react";
-const streamOpts: MarkdownStreamOptions = { options: { html: { images: "load" } } };
-void [useMarkdownStream, streamOpts];
+const streamOpts: MarkdownStreamOptions = {
+  options: { html: { images: "load" } },
+  eager: false,
+  onSettled: (html: string, changed: boolean) => void [html, changed],
+};
+void [useMarkdownStream, streamOpts, revised];

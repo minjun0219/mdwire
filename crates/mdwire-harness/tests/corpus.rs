@@ -2,6 +2,7 @@
 
 use mdwire::{Channel, Options, Streamer};
 use mdwire_harness::adapter::Mdwire;
+use mdwire_harness::check::{check, Rule};
 use mdwire_harness::corpus;
 use std::path::PathBuf;
 
@@ -57,6 +58,58 @@ fn streaming_agrees_with_batch() {
             }
         }
     }
+}
+
+/// **미리보기 스냅숏은 언제 보내도 채널이 받는 모양이다.** 누적본 + `preview` 를 조각마다
+/// 채점한다 — 태그가 짝이 맞고, 허용 태그만 있고, escape 안 된 `<`·`&` 가 없어야 한다. 모양은
+/// 뒤에서 바뀌어도 되지만(추측), 텔레그램은 문법이 틀리면 편집을 400 으로 거절해 갱신이 멈춘다.
+///
+/// 끝에서는 완성본이 일괄 렌더와 같고, 마지막 미리보기와 같을 때만 `revised` 가 거짓이다.
+#[test]
+fn preview_snapshots_are_sendable() {
+    let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
+    let mut eager = 0;
+    for case in &cases {
+        for channel in Channel::all() {
+            let options = Options { from: case.from, ..Default::default() };
+            let parts = mdwire::render_with(&case.input, channel, options.clone()).parts;
+            if parts.len() > 1 {
+                continue;
+            }
+            // 스냅숏마다 채점이 문서 길이만큼 들어서, 긴 케이스는 조각을 키워 스냅숏 수를 묶는다.
+            let base = (case.input.chars().count() / 150).max(1);
+            for size in [base, base * 3 + 2] {
+                let mut s = Streamer::with_options(channel, options.clone());
+                let mut acc = String::new();
+                let mut fed = 0;
+                let mut last = String::new();
+                for chunk in chunks(&case.input, size) {
+                    s.push_into(chunk, &mut acc);
+                    fed += chunk.len();
+                    last.clear();
+                    last.push_str(&acc);
+                    s.preview_into(&mut last);
+                    if last.len() > acc.len() {
+                        eager += 1;
+                    }
+                    let bad: Vec<_> = check(&case.input[..fed], &last, channel)
+                        .into_iter()
+                        .filter(|f| matches!(f.rule, Rule::UnclosedTag | Rule::DisallowedTag | Rule::RawHtmlChar))
+                        .collect();
+                    assert!(
+                        bad.is_empty(),
+                        "{} · {} · 조각 {size}자 · {fed}바이트에서 못 보낼 미리보기: {bad:?}\n{last}",
+                        case.name,
+                        channel.name()
+                    );
+                }
+                s.finish_into(&mut acc);
+                assert_eq!(acc, parts.concat(), "{} · {} · 조각 {size}자", case.name, channel.name());
+                assert_eq!(s.revised(), acc != last, "{} · {} · revised", case.name, channel.name());
+            }
+        }
+    }
+    assert!(eager > 0, "미리보기가 붙든 것을 한 번도 안 그렸다면 이 시험은 아무것도 안 본다");
 }
 
 /// `push` 와 `push_into` 는 같은 코드를 부른다. 서명만 다르다(`SPEC.md` 5절).

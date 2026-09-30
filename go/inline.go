@@ -65,6 +65,14 @@ func newInline(d Dialect) *inline {
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
+// openCodeRun 은 열려 있는 코드 스팬의 백틱 런 길이다. 코드 스팬 안에서는 다른 것이 안 열려 늘 맨 위다.
+func (in *inline) openCodeRun() (int, bool) {
+	if n := len(in.open); n > 0 && in.open[n-1].emph == emphCode {
+		return in.open[n-1].run, true
+	}
+	return 0, false
+}
+
 func (in *inline) reset() {
 	in.open = in.open[:0]
 	in.prev = noChar

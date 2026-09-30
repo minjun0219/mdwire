@@ -21,6 +21,7 @@
 use crate::vocab::{Emph, Vocab, INLINE_TAGS};
 use crate::{Dialect, Repairs};
 
+#[derive(Clone)]
 struct Open {
     emph: Emph,
     /// `out` 안에서 여는 마크업이 들어갈 자리.
@@ -46,6 +47,7 @@ struct Open {
     split: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct Inline {
     open: Vec<Open>,
     /// 줄을 넘어온 직전 글자. 블록 안에서 줄이 바뀌면 `'\n'` 이다.
@@ -99,6 +101,11 @@ impl Inline {
     /// 지금 `out` 에서 **내보내도 안전한 길이**. 열린 마커가 있으면 그 앞까지다.
     pub fn safe_len(&self, out_len: usize) -> usize {
         self.open.first().map_or(out_len, |o| o.at)
+    }
+
+    /// 열려 있는 코드 스팬의 백틱 런 길이. 코드 스팬 안에서는 다른 것이 안 열려 늘 맨 위다.
+    pub fn open_code_run(&self) -> Option<usize> {
+        self.open.last().filter(|o| o.emph == Emph::Code).map(|o| o.run)
     }
 
     /// 앞쪽 `n` 바이트를 내보냈다. 기억하고 있던 자리를 당긴다.
