@@ -649,7 +649,14 @@ impl Inline {
 ///
 /// 여는 마커는 좌측 flanking, 닫는 마커는 우측 flanking 이어야 한다. 구두점은 CommonMark
 /// 0.31 처럼 기호까지 친다 — 글자·숫자·공백이 아니면 구두점이다(`🔥` 도).
+///
+/// **이웃이 태그 경계면 읽는다고 보지 않는다.** `before`·`after` 는 원문 글자인데, 마커에
+/// 붙은 태그나 주석이 벗겨지면(`**x.**<font>y`) 출력의 이웃은 그 너머 글자가 된다. 태그
+/// 너머를 보려면 조각을 더 붙들어야 해서, 그 자리는 판정 없이 태그로 낸다.
 fn gfm_pairs(before: Option<char>, body: &str, after: Option<char>) -> bool {
+    if before == Some('>') || after == Some('<') {
+        return false;
+    }
     let punct = |c: char| !c.is_alphanumeric() && !c.is_whitespace();
     let (Some(first), Some(last)) = (body.chars().next(), body.chars().next_back()) else {
         return true;

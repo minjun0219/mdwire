@@ -719,6 +719,9 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
     assert_eq!(g("**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤"), "**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤");
     // 슬랙은 재 본 적이 없어 그대로 둔다.
     assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)**을");
+    // 마커에 붙은 태그·주석이 벗겨지면 출력의 이웃이 바뀐다 — 그 자리는 태그로 낸다.
+    assert_eq!(g("**x.**<font color=red>y</font> 끝"), "<strong>x.</strong>y 끝");
+    assert_eq!(g("a<!-- c -->**(x** 끝"), "a<strong>(x</strong> 끝");
 }
 
 /// **GitHub 은 인라인 태그를 그리니 살린다.** LLM 이 `<sub>`·`<kbd>` 로 적은 뜻이 거기서는
