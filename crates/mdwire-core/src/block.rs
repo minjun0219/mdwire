@@ -92,9 +92,9 @@ struct FenceState {
 }
 
 impl Engine {
-    pub fn new(channel: Channel, options: Options) -> Self {
+    pub fn new(channel: Channel, options: &Options) -> Self {
         Self {
-            v: Vocab::with_limit(channel, options.limit),
+            v: Vocab::from_options(channel, options),
             inline: Inline::new(options.from),
             pending: Vec::new(),
             line_open: false,
@@ -860,7 +860,8 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
     // `<` 를 붙들고 나면 그 앞의 마커가 다시 끝에 서기 때문이다 — `***[텍스트](…)` 의
     // `***` 가 `[` 를 못 본 채 나가면 스트리밍이 완성본과 갈린다(퍼즈에서 나왔다).
     // 역슬래시도 붙든다. 다음 글자를 봐야 **탈출인지 글자인지**가 갈린다.
-    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | '\\' | ' ' | '\t') {
+    // `!` 도 붙든다 — 다음 글자가 `[` 면 이미지다(`![alt](url)`). 먼저 나가면 완성본과 갈린다.
+    while k > 0 && matches!(p[k - 1], '*' | '_' | '~' | '`' | '\\' | ' ' | '\t' | '!') {
         k -= 1;
     }
     // **역슬래시와 그 다음 글자 사이에서는 끊지 않는다.** `[` 규칙이 `\[` 한가운데를

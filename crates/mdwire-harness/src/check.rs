@@ -88,7 +88,7 @@ const TELEGRAM_TAGS: &[&str] = &[
 const BROWSER_TAGS: &[&str] = &[
     "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "pre", "a", "blockquote", "span",
     "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr",
-    "th", "td", "hr", "br", "sub", "sup", "small", "mark", "kbd",
+    "th", "td", "hr", "br", "sub", "sup", "small", "mark", "kbd", "img",
 ];
 
 /// 태그가 끝나면 낱말도 끝나는 블록 태그. 벗길 때 공백을 남긴다 — 표 칸 `<td>` 둘이
@@ -978,8 +978,10 @@ fn html_tags(output: &str, allowed: &[&str], out: &mut Vec<Finding>) {
                     let browser = allowed.contains(&"table");
                     // **속성값 자체를 본다.** 태그 전체에서 안전한 접두사를 찾으면 다른 속성에 끼운
                     // `title='href="https://"'` 가 위험한 `href` 를 통과시킨다. 앞 공백은 코어처럼 턴다.
+                    // 이미지 `src` 도 같다 — 불러오는 주소다. 호출자가 스킴 목록을 넓혔으면 그 채점은
+                    // 이 기본 목록보다 엄격하게 잡힌다(코어 출력만 잴 때는 기본값이다).
                     let unsafe_href = browser
-                        && attr_value(&tag, "href").is_some_and(|v| {
+                        && ["href", "src"].iter().filter_map(|a| attr_value(&tag, a)).any(|v| {
                             let v = v.trim_start();
                             !["http://", "https://", "mailto:"].iter().any(|p| v.starts_with(p))
                         });

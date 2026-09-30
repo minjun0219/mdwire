@@ -10,7 +10,7 @@ import (
 // 경로다 — 블록 접두사가 없는 문단은 완성본 파이프라인과 같은 답을 낸다. html 은 문단을
 // 태그로 감싸고 줄바꿈 앞에 <br> 을 두므로 블록 층이 하는 그 둘만 여기서 흉내 낸다.
 func renderLine(input string, ch Channel) string {
-	v := newVocab(ch, 0)
+	v := newVocab(ch, Options{})
 	in := newInline(Markdown)
 	var out []byte
 	if v.isHTML() {

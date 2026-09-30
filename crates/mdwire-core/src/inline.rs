@@ -166,6 +166,15 @@ impl Inline {
 
             let c = line[i];
 
+            // 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
+            if c == '!' && line.get(i + 1) == Some(&'[') {
+                if let Some((text, url_from, url_to)) = find_link(line, i + 1) {
+                    self.render_image(&line[text.0..text.1], &line[url_from..url_to], out, v);
+                    i = url_to + 1;
+                    continue;
+                }
+            }
+
             if c == '[' {
                 if let Some((text, url_from, url_to)) = find_link(line, i) {
                     self.render_link(&line[text.0..text.1], &line[url_from..url_to], out, v);
@@ -691,6 +700,14 @@ impl Inline {
     }
 
     fn render_link(&mut self, text: &[char], url: &[char], out: &mut String, v: &Vocab) {
+        self.render_target(text, url, out, v, false);
+    }
+
+    fn render_image(&mut self, alt: &[char], url: &[char], out: &mut String, v: &Vocab) {
+        self.render_target(alt, url, out, v, true);
+    }
+
+    fn render_target(&mut self, text: &[char], url: &[char], out: &mut String, v: &Vocab, image: bool) {
         let mut scratch = std::mem::take(&mut self.scratch);
         scratch.clear();
         // 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
@@ -701,7 +718,11 @@ impl Inline {
 
         let mut href = String::with_capacity(url.len());
         href.extend(url.iter());
-        v.link(&scratch, &href, out);
+        if image {
+            v.image(&scratch, &href, out);
+        } else {
+            v.link(&scratch, &href, out);
+        }
 
         self.scratch = scratch;
     }

@@ -87,3 +87,15 @@ assert.equal(md("[문서](https://a.com/d)", { components: { a: Link } }), '<p><
 const hs = new Streamer("html");
 const hacc = hs.push("> 인용이 **굵게 이어");
 assert.equal(renderToStaticMarkup(createElement("div", null, ...toElements(hacc + hs.closeOpen()))), "<div><blockquote>인용이 </blockquote></div>");
+
+// html 정책 — 이미지 불러오기와 스킴 목록. React 도 같은 목록으로 한 번 더 본다.
+assert.equal(
+  render("![c](https://a.com/c.png) [t](tel:1)", "html", { html: { images: "load", schemes: ["https", "tel"] } }).join(""),
+  '<p><img src="https://a.com/c.png" alt="c"> <a href="tel:1">t</a></p>',
+);
+// React 19 의 정적 렌더는 이미지 앞에 `<link rel="preload">` 를 붙인다 — 본문만 본다.
+assert.ok(
+  md("![c](https://a.com/c.png) [t](tel:1)", { options: { html: { images: "load", schemes: ["https", "tel"] } } })
+    .endsWith('<p><img src="https://a.com/c.png" alt="c"/> <a href="tel:1">t</a></p>'),
+);
+assert.throws(() => render("x", "html", { html: { images: "eager" } }), /images/);

@@ -38,6 +38,15 @@ export interface RenderOptions {
   from?: "markdown" | "slack-mrkdwn";
   /** 조각 한도(글자 수). 생략하면 채널의 한도다 — plain 을 텔레그램에 보내면 4096. 스트리밍은 나누지 않는다. */
   limit?: number;
+  /** 브라우저 채널("html")의 정책. 기본값이 가장 보수적이다. */
+  html?: {
+    /** 블록 안 줄바꿈. "br"(기본) 은 `<br>`, "space" 는 브라우저가 공백으로 접게 둔다. */
+    lineBreaks?: "br" | "space";
+    /** 이미지. "link"(기본) 는 누르기 전에 아무것도 안 불러온다, "load" 는 `<img>`. */
+    images?: "link" | "load";
+    /** 링크·이미지 주소로 받는 스킴(콜론 없이). 주면 그것만 받는다. 기본 ["http","https","mailto"]. */
+    schemes?: string[];
+  };
 }
 "#;
 
@@ -52,6 +61,21 @@ extern "C" {
 
     #[wasm_bindgen(method, getter)]
     fn limit(this: &RenderOptions) -> Option<f64>;
+
+    #[wasm_bindgen(method, getter)]
+    fn html(this: &RenderOptions) -> Option<HtmlOptionsJs>;
+
+    /// `RenderOptions.html` 객체.
+    pub type HtmlOptionsJs;
+
+    #[wasm_bindgen(method, getter, js_name = lineBreaks)]
+    fn line_breaks(this: &HtmlOptionsJs) -> Option<String>;
+
+    #[wasm_bindgen(method, getter)]
+    fn images(this: &HtmlOptionsJs) -> Option<String>;
+
+    #[wasm_bindgen(method, getter)]
+    fn schemes(this: &HtmlOptionsJs) -> Option<Vec<String>>;
 }
 
 /// 완성된 문서를 변환한다. 한도를 넘으면 조각 배열로 돌아온다.
@@ -207,6 +231,19 @@ fn parse_options(options: Option<RenderOptions>) -> Result<Options, JsError> {
     }
     if let Some(n) = options.limit() {
         out.limit = Some(limit_of(n).map_err(|e| JsError::new(&e))?);
+    }
+    if let Some(html) = options.html() {
+        out.html.line_breaks = match html.line_breaks().as_deref() {
+            None | Some("br") => mdwire::LineBreaks::Br,
+            Some("space") => mdwire::LineBreaks::Space,
+            Some(v) => return Err(JsError::new(&format!("html.lineBreaks 는 br · space 다: {v}"))),
+        };
+        out.html.images = match html.images().as_deref() {
+            None | Some("link") => mdwire::Images::Link,
+            Some("load") => mdwire::Images::Load,
+            Some(v) => return Err(JsError::new(&format!("html.images 는 link · load 다: {v}"))),
+        };
+        out.html.schemes = html.schemes();
     }
     Ok(out)
 }

@@ -108,3 +108,63 @@ func TestCallerLimitOverridesTheChannelLimit(t *testing.T) {
 		t.Fatalf("한도 256 에 300자 주소 링크: %s", out)
 	}
 }
+
+// 브라우저 채널의 옵션 — 러스트 쪽 HtmlOptions 와 같은 답. 영값이 기본값이다.
+func TestHTMLOptions(t *testing.T) {
+	input := "첫 줄\n둘째 줄 ![고양이](https://a.com/c.png) [전화](tel:010) ![나쁨](javascript:x)"
+	cases := []struct {
+		name string
+		o    HTMLOptions
+		want string
+	}{
+		{"기본", HTMLOptions{},
+			`<p>첫 줄<br>` + "\n" + `둘째 줄 <a href="https://a.com/c.png">고양이</a> 전화 (tel:010) 나쁨 (javascript:x)</p>`},
+		{"공백 줄바꿈", HTMLOptions{LineBreaks: LineBreaksSpace},
+			"<p>첫 줄\n" + `둘째 줄 <a href="https://a.com/c.png">고양이</a> 전화 (tel:010) 나쁨 (javascript:x)</p>`},
+		{"이미지 불러오기", HTMLOptions{Images: ImagesLoad},
+			`<p>첫 줄<br>` + "\n" + `둘째 줄 <img src="https://a.com/c.png" alt="고양이"> 전화 (tel:010) 나쁨 (javascript:x)</p>`},
+		{"스킴 목록", HTMLOptions{Schemes: []string{"HTTPS", "tel"}},
+			`<p>첫 줄<br>` + "\n" + `둘째 줄 <a href="https://a.com/c.png">고양이</a> <a href="tel:010">전화</a> 나쁨 (javascript:x)</p>`},
+		// nil 이 아닌 빈 목록은 아무것도 받지 않는다.
+		{"빈 목록", HTMLOptions{Schemes: []string{}},
+			`<p>첫 줄<br>` + "\n" + `둘째 줄 고양이 (https://a.com/c.png) 전화 (tel:010) 나쁨 (javascript:x)</p>`},
+	}
+	for _, c := range cases {
+		got := strings.Join(RenderWith(input, HTML, Options{HTML: c.o}).Parts, "")
+		if got != c.want {
+			t.Errorf("%s\n  got  %q\n  want %q", c.name, got, c.want)
+		}
+		// 스트리밍도 같은 답이다 — `!` 를 붙들어 `[` 를 기다린다.
+		s := NewStreamerWith(HTML, Options{HTML: c.o})
+		var acc []byte
+		for _, r := range input {
+			s.PushTo(string(r), &acc)
+		}
+		s.FinishTo(&acc)
+		if string(acc) != c.want {
+			t.Errorf("%s 스트리밍\n  got  %q\n  want %q", c.name, acc, c.want)
+		}
+	}
+	// 대체 글의 `"` 는 속성을 깨지 않는다.
+	o := Options{HTML: HTMLOptions{Images: ImagesLoad}}
+	if got := strings.Join(RenderWith(`![a"b](https://x.y/z.png)`, HTML, o).Parts, ""); got != `<p><img src="https://x.y/z.png" alt="a&quot;b"></p>` {
+		t.Errorf("대체 글 escape: %q", got)
+	}
+}
+
+// 스킴 판정은 링크마다 불린다 — 목록을 순회만 하고 할당하지 않는다.
+func TestAllowedSchemeDoesNotAllocate(t *testing.T) {
+	def := newVocab(HTML, Options{})
+	custom := newVocab(HTML, Options{HTML: HTMLOptions{Schemes: []string{"https", "tel"}}})
+	if !def.allowed("  HTTPS://a") || def.allowed("tel:1") || def.allowed("no-colon") ||
+		!custom.allowed("Tel:1") || custom.allowed("http://a") {
+		t.Fatal("스킴 판정이 틀렸다")
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		def.allowed(" JavaScript:x")
+		custom.allowed("mailto:a@b.c")
+	})
+	if allocs != 0 {
+		t.Fatalf("스킴 판정이 할당한다: 회당 %.1f 회", allocs)
+	}
+}

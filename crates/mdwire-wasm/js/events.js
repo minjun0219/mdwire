@@ -8,11 +8,11 @@
 const TAGS = new Set([
   "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "pre", "code",
   "strong", "em", "del", "a", "table", "thead", "tbody", "tr", "th", "td", "hr", "br",
-  "sub", "sup", "b", "i", "u", "s", "strike", "span", "small", "mark", "kbd",
+  "sub", "sup", "b", "i", "u", "s", "strike", "span", "small", "mark", "kbd", "img",
 ]);
-const VOID = new Set(["br", "hr"]);
+const VOID = new Set(["br", "hr", "img"]);
 /** 태그마다 읽는 속성. 코어가 내는 것만 — 나머지는 버린다. */
-const ATTRS = { a: ["href"], code: ["class"], th: ["style"], td: ["style"], ol: ["start"] };
+const ATTRS = { a: ["href"], code: ["class"], th: ["style"], td: ["style"], ol: ["start"], img: ["src", "alt"] };
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"' };
 const decode = (s) => s.replace(/&(amp|lt|gt|quot);/g, (_, n) => ENTITIES[n]);
@@ -51,7 +51,11 @@ export function toEvents(html) {
     if (closing) {
       events.push({ type: "close", tag });
     } else if (VOID.has(tag)) {
-      events.push({ type: "void", tag });
+      const attrs = {};
+      for (const [, name, value] of rawAttrs.matchAll(/([a-z-]+)="([^"]*)"/g)) {
+        if (ATTRS[tag]?.includes(name)) attrs[name] = decode(value);
+      }
+      events.push(tag === "img" ? { type: "void", tag, attrs } : { type: "void", tag });
     } else {
       const attrs = {};
       for (const [, name, value] of rawAttrs.matchAll(/([a-z-]+)="([^"]*)"/g)) {

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	mdwire "github.com/minjun0219/mdwire/go"
@@ -63,6 +64,45 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 				return fmt.Errorf("--limit 은 1 이상의 정수다: %s", args[i])
 			}
 			opts.Limit = n
+		case "--html-line-breaks":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--html-line-breaks 에 값이 없다")
+			}
+			i++
+			switch args[i] {
+			case "br":
+				opts.HTML.LineBreaks = mdwire.LineBreaksBR
+			case "space":
+				opts.HTML.LineBreaks = mdwire.LineBreaksSpace
+			default:
+				return fmt.Errorf("--html-line-breaks 는 br · space 다: %s", args[i])
+			}
+		case "--html-images":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--html-images 에 값이 없다")
+			}
+			i++
+			switch args[i] {
+			case "link":
+				opts.HTML.Images = mdwire.ImagesLink
+			case "load":
+				opts.HTML.Images = mdwire.ImagesLoad
+			default:
+				return fmt.Errorf("--html-images 는 link · load 다: %s", args[i])
+			}
+		case "--html-schemes":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--html-schemes 에 값이 없다")
+			}
+			i++
+			// 빈 목록도 nil 이 아니게 둔다 — nil 은 기본 목록이라는 뜻이다.
+			schemes := []string{}
+			for _, s := range strings.Split(args[i], ",") {
+				if s = strings.TrimSpace(s); s != "" {
+					schemes = append(schemes, s)
+				}
+			}
+			opts.HTML.Schemes = schemes
 		case "--from":
 			if i+1 >= len(args) {
 				return fmt.Errorf("--from 에 값이 없다")
@@ -74,7 +114,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			}
 			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|plain|html [--from markdown|slack-mrkdwn] [--limit N] [--stream] [--report] [--batch jsonl] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|plain|html [--from markdown|slack-mrkdwn] [--limit N] [--html-line-breaks br|space] [--html-images link|load] [--html-schemes http,https,mailto] [--stream] [--report] [--batch jsonl] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])

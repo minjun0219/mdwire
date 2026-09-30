@@ -127,7 +127,7 @@ type listLevel struct {
 }
 
 func newEngine(ch Channel, o Options) *engine {
-	return &engine{v: newVocab(ch, o.Limit), inline: newInline(o.From), dialect: o.From}
+	return &engine{v: newVocab(ch, o), inline: newInline(o.From), dialect: o.From}
 }
 
 // repairs 는 지금까지 정규화가 고친 것이다.
@@ -831,9 +831,10 @@ func safeCut(p []rune, memo *holdMemo) int {
 	}
 	// 마커는 맨 마지막에 붙든다 — 위에서 `[` 나 `<` 를 붙들고 나면 그 앞의 마커가 다시 끝에
 	// 서기 때문이다. 역슬래시도 붙든다. 다음 글자를 봐야 탈출인지 글자인지가 갈린다.
+	// `!` 도 붙든다 — 다음 글자가 `[` 면 이미지다(`![alt](url)`). 먼저 나가면 완성본과 갈린다.
 	for k > 0 {
 		switch p[k-1] {
-		case '*', '_', '~', '`', '\\', ' ', '\t':
+		case '*', '_', '~', '`', '\\', ' ', '\t', '!':
 			k--
 			continue
 		}
@@ -1040,7 +1041,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
-	cellVocab := newVocab(Plain, 0)
+	cellVocab := newVocab(Plain, Options{})
 	if v.tablesNative() {
 		cellVocab = v
 	}

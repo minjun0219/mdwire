@@ -92,3 +92,5 @@ b</strong></p>
 <p><code>　전각 공백 </code></p>
 ----
 <p>का_x 와 अ_ब 그리고 Ⅻ_x 는 글자다, 하지만 <em>강조</em>는 산다</p>
+----
+<p>이미지 <a href="https://a.com/c.png">고양이 <strong>굵게</strong></a> 와 나쁨 (javascript:x) 그리고 느낌표! 와 ![닫히지 않은</p>

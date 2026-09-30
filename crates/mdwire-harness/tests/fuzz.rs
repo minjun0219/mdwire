@@ -70,7 +70,7 @@ fn random_input_never_breaks_the_invariants() {
         let input = doc(&mut rng);
         for (channel, from) in Channel::all().into_iter().flat_map(|c| [(c, Dialect::Markdown), (c, Dialect::SlackMrkdwn)]) {
             let options = Options { from, ..Default::default() };
-            let parts = mdwire::render_with(&input, channel, options).parts;
+            let parts = mdwire::render_with(&input, channel, options.clone()).parts;
             let joined = parts.join("\0");
             // 한도 · 태그 · 이스케이프. 강조 범위와 낱말 손실은 여기서 보지 않는다 — 무작위
             // 마커 더미에는 "원문의 강조"라는 것이 없다.
@@ -86,7 +86,7 @@ fn random_input_never_breaks_the_invariants() {
             // 스트리밍은 완성본과 같다 — 한도를 넘겨 나뉜 것은 건너뛴다(코퍼스 테스트와 같은 이유).
             if parts.len() == 1 {
                 for size in [1usize, 3, 11] {
-                    let mut s = Streamer::with_options(channel, options);
+                    let mut s = Streamer::with_options(channel, options.clone());
                     let mut got = String::new();
                     for c in chunks(&input, size) {
                         s.push_into(c, &mut got);

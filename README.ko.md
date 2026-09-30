@@ -26,7 +26,8 @@ LLM 마크다운  →  정규화  →  채널용 렌더  →  안전한 분할  
    취소선으로, `<T>` 를 HTML 태그로 읽는다 — 글자로 쓴 `~`·`<` 는 탈출해 내고(`\~`, `\<`),
    GFM 이 못 닫는 강조(`**(a)**` 바로 뒤에 조사)는 `<strong>` 으로 낸다. 브라우저용 `html` 은
    블록까지 태그로 그리고 `innerHTML` 로 바로 넣어도 된다 — 글자는 escape 하고, 원문 태그는
-   속성을 버린 이름만 살리고, `http(s)`·`mailto` 링크만 `<a>` 로 낸다. 스트리밍 중에는 누적본에
+   속성을 버린 이름만 살리고, `http(s)`·`mailto` 링크만 `<a>` 로 낸다 — 줄바꿈·이미지·허용
+   스킴은 옵션이다. 스트리밍 중에는 누적본에
    `closeOpen()` 을 붙이면 언제나 균형 잡힌 HTML 이다.
 3. **분할.** 채널 한도를 지키되 마크업 한가운데를 자르지 않는다. 스트리밍도 같다 —
    조각 경계가 `**굵게**` 안에 떨어지면 안 된다.
@@ -88,10 +89,10 @@ React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 세
 출력을 `open` / `text` / `close` 이벤트 열로 받는다.
 
 ```jsx
-import { Markdown, toElements } from "@minjun0219/mdwire/react";
+import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 
 <Markdown text={answer} components={{ a: RouterLink }} />  // 완성된 답
-acc += streamer.push(token); toElements(acc + streamer.closeOpen()); // 스트리밍: 새 토큰만 변환한다
+const { elements, push, finish } = useMarkdownStream();     // 스트리밍: push(토큰), finish()
 ```
 
 **append-only 계약.** `push` 가 돌려준 것은 확정이다 — 뒤 조각이 그걸 고쳐 쓰지 않는다 —

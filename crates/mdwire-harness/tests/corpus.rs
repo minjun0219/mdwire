@@ -31,7 +31,7 @@ fn streaming_agrees_with_batch() {
     for case in &cases {
         for channel in Channel::all() {
             let options = Options { from: case.from, ..Default::default() };
-            let parts = mdwire::render_with(&case.input, channel, options).parts;
+            let parts = mdwire::render_with(&case.input, channel, options.clone()).parts;
             // **한도를 넘겨 나뉜 케이스는 건너뛴다.** 조각은 저마다 메시지 하나라 앞머리
             // 줄바꿈을 털어 내고 시작한다 — 도로 이어 붙이면 스트리밍과 달라지는 것이
             // 정상이다. 스트리밍은 한도를 모른다(`SPEC.md` 5절).
@@ -40,7 +40,7 @@ fn streaming_agrees_with_batch() {
             }
             let batch = parts.join("");
             for size in [1usize, 2, 3, 7, 64] {
-                let mut s = Streamer::with_options(channel, options);
+                let mut s = Streamer::with_options(channel, options.clone());
                 let mut got = String::new();
                 for chunk in chunks(&case.input, size) {
                     s.push_into(chunk, &mut got);
@@ -65,8 +65,8 @@ fn borrowed_and_owned_signatures_agree() {
     let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
     for case in &cases {
         let options = Options { from: case.from, ..Default::default() };
-        let mut a = Streamer::with_options(Channel::TelegramHtml, options);
-        let mut b = Streamer::with_options(Channel::TelegramHtml, options);
+        let mut a = Streamer::with_options(Channel::TelegramHtml, options.clone());
+        let mut b = Streamer::with_options(Channel::TelegramHtml, options.clone());
         let (mut got_a, mut got_b) = (String::new(), String::new());
         for chunk in chunks(&case.input, 11) {
             got_a.push_str(a.push(chunk));

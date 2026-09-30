@@ -52,10 +52,15 @@ type vocab struct {
 	channel Channel
 	// limit 은 한 조각의 한도다. 채널 기본값이거나 Options.Limit 이다.
 	limit int
+	// 브라우저 채널의 정책. 스킴 목록은 슬라이스라 표 칸마다 어휘를 복사해도 목록은 한 벌이다.
+	br         bool
+	loadImages bool
+	schemes    []string
 }
 
-// newVocab 은 한도를 정해 만든다. limit 이 0 이면 채널 기본값, 음수는 1 로 올린다.
-func newVocab(ch Channel, limit int) vocab {
+// newVocab 은 옵션으로 만든다. 한도가 0 이면 채널 기본값, 음수는 1 로 올린다.
+func newVocab(ch Channel, o Options) vocab {
+	limit := o.Limit
 	switch {
 	// 브라우저 채널은 나누지 않는다 — 분할기가 <p>·<ul> 을 여닫지 않는다.
 	case limit == 0 || ch == HTML:
@@ -63,7 +68,41 @@ func newVocab(ch Channel, limit int) vocab {
 	case limit < MinLimit:
 		limit = MinLimit
 	}
-	return vocab{channel: ch, limit: limit}
+	return vocab{
+		channel:    ch,
+		limit:      limit,
+		br:         o.HTML.LineBreaks == LineBreaksBR,
+		loadImages: o.HTML.Images == ImagesLoad,
+		schemes:    o.HTML.Schemes,
+	}
+}
+
+// defaultSchemes 는 목록을 안 줬을 때 받는 스킴이다.
+var defaultSchemes = [...]string{"http", "https", "mailto"}
+
+// allowed 는 브라우저에서 눌러도(불러와도) 되는 주소인가다 — 허용 스킴만. 대소문자·앞 공백으로
+// 숨긴 JavaScript: 도 스킴이 달라 걸러진다. 목록을 순회만 한다 — 링크마다 불리니 할당하지 않는다.
+func (v vocab) allowed(url string) bool {
+	u := strings.TrimLeftFunc(url, unicode.IsSpace)
+	colon := strings.IndexByte(u, ':')
+	if colon < 0 {
+		return false
+	}
+	scheme := u[:colon]
+	if v.schemes == nil {
+		for _, s := range defaultSchemes {
+			if eqFoldASCII(scheme, s) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, s := range v.schemes {
+		if eqFoldASCII(scheme, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // tablesNative 는 채널이 표를 직접 그리는가다. 그리면 고정폭으로 내리는 것이 손해다 —
@@ -79,7 +118,7 @@ func (v vocab) htmlOut() bool { return v.channel == TelegramHTML || v.channel ==
 // lineBreak 는 블록 안의 줄바꿈이다. 브라우저는 \n 을 공백으로 접으므로 <br> 을 앞에 둔다 —
 // 다른 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
 func (v vocab) lineBreak() string {
-	if v.isHTML() {
+	if v.isHTML() && v.br {
 		return "<br>\n"
 	}
 	return "\n"
@@ -263,7 +302,7 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// innerHTML 로 들어가는 출력이라 스킴을 가린다. [x](javascript:…) 를 그대로 <a href> 로
 		// 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면 링크 없이 글과 주소만 낸다 —
 		// 내용은 살린다.
-		if !safeHref(url) {
+		if !v.allowed(url) {
 			*out = append(*out, text...)
 			if url != "" && !escapedEq(text, url) {
 				*out = append(*out, " ("...)
@@ -298,6 +337,38 @@ func (v vocab) link(text, url string, out *[]byte) {
 		*out = append(*out, "]("...)
 		*out = append(*out, url...)
 		*out = append(*out, ')')
+	}
+}
+
+// image 는 이미지 `![alt](url)` 을 적는다. 텍스트는 이미 렌더된 대체 글이다.
+//
+// 브라우저는 옵션이 ImagesLoad 이고 주소가 허용 스킴일 때만 <img> 로 불러온다 — 기본은
+// 링크다(누르기 전에는 아무것도 안 불러온다). 텔레그램·plain 은 이미지 구문이 없어 링크로,
+// 마크다운 채널은 `![alt](url)` 그대로 둔다(GitHub 은 그린다).
+func (v vocab) image(alt, url string, out *[]byte) {
+	switch v.channel {
+	case HTML:
+		if !v.loadImages || !v.allowed(url) {
+			v.link(alt, url, out)
+			return
+		}
+		*out = append(*out, `<img src="`...)
+		appendAttr(url, out)
+		*out = append(*out, `" alt="`...)
+		// 대체 글은 이미 escape 된 본문이다. 속성값이라 `"` 만 더 막는다.
+		for i := 0; i < len(alt); i++ {
+			if alt[i] == '"' {
+				*out = append(*out, "&quot;"...)
+			} else {
+				*out = append(*out, alt[i])
+			}
+		}
+		*out = append(*out, `">`...)
+	case TelegramHTML, Plain:
+		v.link(alt, url, out)
+	default:
+		*out = append(*out, '!')
+		v.link(alt, url, out)
 	}
 }
 
@@ -437,18 +508,6 @@ func appendAttr(s string, out *[]byte) {
 			*out = appendRune(*out, c)
 		}
 	}
-}
-
-// safeHref 는 브라우저에서 눌러도 되는 주소인가다 — http(s)·mailto 만. 대소문자·앞 공백으로
-// 숨긴 JavaScript: 도 스킴이 달라 걸러진다.
-func safeHref(url string) bool {
-	u := strings.TrimLeftFunc(url, unicode.IsSpace)
-	for _, s := range [...]string{"http://", "https://", "mailto:"} {
-		if len(u) >= len(s) && eqFoldASCII(u[:len(s)], s) {
-			return true
-		}
-	}
-	return false
 }
 
 // eqFoldASCII 는 ASCII 대소문자만 무시하고 견준다. strings.EqualFold 는 유니코드 접기까지 해서
