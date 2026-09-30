@@ -36,6 +36,9 @@ pub enum Channel {
     /// Slack `markdown_text`. 표준 마크다운을 슬랙이 직접 변환한다. 12,000자.
     /// 변환이 거의 필요 없고, 남는 일은 정규화와 분할뿐이다.
     SlackMarkdown,
+    /// GitHub 코멘트·PR 본문(GFM). 표·헤딩·취소선을 다 그린다. 65,536자.
+    /// 슬랙과 같은 마크다운을 내되, GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 탈출한다.
+    GithubMarkdown,
     /// 모든 마크업 제거. 폴백 경로.
     Plain,
 }
@@ -46,13 +49,14 @@ impl Channel {
         match self {
             Channel::TelegramHtml => "telegram-html",
             Channel::SlackMarkdown => "slack-markdown",
+            Channel::GithubMarkdown => "github-markdown",
             Channel::Plain => "plain",
         }
     }
 
     /// 내보낼 수 있는 채널 전부. 코퍼스와 하네스가 이 목록을 돈다.
-    pub fn all() -> [Channel; 3] {
-        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::Plain]
+    pub fn all() -> [Channel; 4] {
+        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain]
     }
 
     /// 이름으로 채널을 찾는다.
@@ -65,6 +69,8 @@ impl Channel {
         match self {
             Channel::TelegramHtml => 4096,
             Channel::SlackMarkdown | Channel::Plain => 12_000,
+            // 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
+            Channel::GithubMarkdown => 65_536,
         }
     }
 }
@@ -310,6 +316,7 @@ mod tests {
     fn channel_limits_are_channel_specific() {
         assert_eq!(Channel::TelegramHtml.limit(), 4096);
         assert_eq!(Channel::SlackMarkdown.limit(), 12_000);
+        assert_eq!(Channel::GithubMarkdown.limit(), 65_536);
     }
 
     /// **조각 하나가 곧 메시지 하나다.** 태그 한가운데서 끊으면 조각이 `… <a ` 로

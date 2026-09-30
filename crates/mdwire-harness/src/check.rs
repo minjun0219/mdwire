@@ -101,8 +101,9 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     }
 
     over_limit(output, channel, &mut findings);
-    emphasis_range(input, output, channel, &mut findings);
-    stray_markers(input, output, channel, &mut findings);
+    let marked = tags_as_markers(output, channel);
+    emphasis_range(input, &marked, channel, &mut findings);
+    stray_markers(input, &marked, channel, &mut findings);
     if matches!(channel, Channel::TelegramHtml) {
         // **조각마다 따로 본다.** 조각 하나가 곧 메시지 하나다. 이어 붙여서 보면
         // 여는 태그와 닫는 태그가 서로 다른 메시지에 있어도 균형이 맞아 보인다.
@@ -173,6 +174,21 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
             if missing.len() > 5 { " …" } else { "" }
         ),
     });
+}
+
+/// GitHub 출력의 강조 태그를 마커로 읽는다.
+///
+/// 코어는 GFM 이 마커를 못 읽는 자리(`**설정(config)**을`)에서 `<strong>` 따위로 낸다.
+/// 범위와 짝을 재는 쪽은 마크다운 마커로 읽으므로, 같은 뜻의 마커로 바꿔 놓고 잰다.
+fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> {
+    if channel != Channel::GithubMarkdown || !output.contains('<') {
+        return std::borrow::Cow::Borrowed(output);
+    }
+    let mut s = output.to_string();
+    for (tag, marker) in [("strong", "**"), ("em", "*"), ("del", "~~")] {
+        s = s.replace(&format!("<{tag}>"), marker).replace(&format!("</{tag}>"), marker);
+    }
+    std::borrow::Cow::Owned(s)
 }
 
 /// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.
@@ -682,7 +698,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
 /// 그래서 이 불변식을 테스트에 박아 둔다.
 fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
-        Channel::SlackMarkdown => {
+        Channel::SlackMarkdown | Channel::GithubMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
             // 대신 **짝이 맞아야** 한다 — **조각마다.** 조각은 각각 메시지 하나라, 이어
             // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
@@ -925,10 +941,10 @@ fn context(ch: &[char], at: usize) -> String {
 ///
 /// 문자 수로 맞춘 구현은 한글이 든 표에서 반드시 어긋난다. 이 규칙이 그것을 잡는다.
 fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
-    // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 는 GFM 표를
+    // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 와 GitHub 은 GFM 표를
     // 그대로 받으므로 열이 글자로 맞아 있을 이유가 없다. 대신 **표가 표로 남았는가**를
     // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
-    if channel == Channel::SlackMarkdown {
+    if matches!(channel, Channel::SlackMarkdown | Channel::GithubMarkdown) {
         let want = gfm_table_count(input);
         let got = output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>();
         if got < want {

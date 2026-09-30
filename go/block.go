@@ -947,6 +947,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	// 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
 	// 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
 	in := newInline(d)
+	in.inCell = true
 	cells := make([][]string, 0, len(t.rows))
 	for _, row := range t.rows {
 		line := make([]string, 0, cols)

@@ -1,0 +1,3 @@
+- Candidate: left_set = data[7] & 0x7F ``` 다음 발견 - **매트는 단일 연결 지원** - **bleak timeout=30s** 설정
+
+짝이 맞는 `코드 스팬` 과 **굵게** 는 그대로다.

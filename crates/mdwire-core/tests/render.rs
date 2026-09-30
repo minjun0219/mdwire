@@ -684,6 +684,72 @@ fn known_html_tags_are_stripped_and_unknown_angles_kept() {
     assert_eq!(one("<a href=\"u\">t</a>", Channel::SlackMarkdown), "<a href=\"u\">t</a>");
 }
 
+/// **GitHub 은 홑 `~` 를 취소선으로, `<T>` 를 태그로 읽는다**(실측 2026-09-30, `POST /markdown`).
+/// 글자로 남은 둘은 탈출해 낸다 — `약 ~40km, 5~6월` 이 그어지고 `Vec<T>` 의 `T` 가 지워지던
+/// 것이다. 코드 안은 탈출이 글자로 보이니 그대로 두고, 진짜 취소선 `~~` 도 그대로다.
+#[test]
+fn github_escapes_tilde_and_angle_outside_code() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("약 ~40km, 5~6월 이동"), r"약 \~40km, 5\~6월 이동");
+    assert_eq!(g("Vec<T> 와 1 < 2"), r"Vec\<T> 와 1 \< 2");
+    assert_eq!(g("~~취소~~가 `a~b <T>`"), "~~취소~~가 `a~b <T>`");
+    assert_eq!(g("```\nx ~ <y>\n```"), "```\nx ~ <y>\n```");
+    // 저자가 탈출해 둔 것은 한 번만 탈출한다.
+    assert_eq!(g(r"5\~6월 \<T>"), r"5\~6월 \<T>");
+    // 표 칸도 본문이다.
+    assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
+    // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 탈출한다.
+    let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn });
+    assert_eq!(out.parts.join(""), r"\~40km 전");
+    // 오토링크·링크 주소는 건드리지 않는다.
+    assert_eq!(g("<https://a.com/~me>"), "<https://a.com/~me>");
+    // 헤딩은 여섯 단계를 다 그린다.
+    assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
+}
+
+/// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
+/// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
+#[test]
+fn github_uses_tags_where_gfm_cannot_pair_markers() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("**설정(config)**을 바꾼다"), "<strong>설정(config)</strong>을 바꾼다");
+    assert_eq!(g("*\"인용\"*은 · ~~(취소)~~가"), "<em>\"인용\"</em>은 · <del>(취소)</del>가");
+    assert_eq!(g("**`코드`**였다"), "<strong>`코드`</strong>였다");
+    // GFM 이 읽는 자리는 마커 그대로다 — 원문을 되도록 그대로 둔다.
+    assert_eq!(g("**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤"), "**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤");
+    // 슬랙은 재 본 적이 없어 그대로 둔다.
+    assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)**을");
+    // 마커에 붙은 태그·주석이 벗겨지면 출력의 이웃이 바뀐다 — 그 자리는 태그로 낸다.
+    assert_eq!(g("**x.**<font color=red>y</font> 끝"), "<strong>x.</strong>y 끝");
+    assert_eq!(g("a<!-- c -->**(x** 끝"), "a<strong>(x</strong> 끝");
+}
+
+/// **GitHub 은 인라인 태그를 그리니 살린다.** LLM 이 `<sub>`·`<kbd>` 로 적은 뜻이 거기서는
+/// 산다. 줄 첫머리의 태그는 벗긴다 — 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 뒤 줄의
+/// 마크다운이 글자로 보인다(실측). 블록 태그(`div`)와 새니타이저가 지우는 `font` 도 벗긴다.
+#[test]
+fn github_keeps_inline_html_tags_off_the_line_start() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈"), "H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈");
+    assert_eq!(g("앞 <div>블록</div> <font color=red>빨강</font>"), "앞 블록 빨강");
+    // 줄 첫머리에서 벗긴 여는 태그는 짝인 닫는 태그도 벗긴다.
+    assert_eq!(g("<sub>첫머리</sub> 뒤 <sub>둘</sub>"), "첫머리 뒤 <sub>둘</sub>");
+    assert_eq!(g("앞\n<br>\n**굵게**"), "앞\n\n\n**굵게**");
+    // 다른 채널은 그대로 벗긴다.
+    assert_eq!(one("H<sub>2</sub>O", Channel::SlackMarkdown), "H2O");
+}
+
+/// **표 칸 안의 `<br>` 은 줄바꿈이 될 수 없다.** 칸 안에 줄바꿈이 들어가면 GFM 은 뒤를 새
+/// 행으로 읽어 내용이 엉뚱한 열로 간다. GitHub 은 칸 안 `<br>` 을 그리니 그대로 둔다.
+#[test]
+fn br_inside_a_table_cell_keeps_the_row() {
+    let input = "| a | 첫째<br>둘째 |\n|---|---|\n| 1 | 2 |";
+    assert_eq!(one(input, Channel::GithubMarkdown), "| a | 첫째<br>둘째 |\n| --- | --- |\n| 1 | 2 |");
+    assert_eq!(one(input, Channel::SlackMarkdown), "| a | 첫째 둘째 |\n| --- | --- |\n| 1 | 2 |");
+    // 칸 밖은 여전히 줄바꿈이다(태그를 못 그리는 채널).
+    assert_eq!(one("줄<br>바꿈", Channel::SlackMarkdown), "줄\n바꿈");
+}
+
 /// **`** 띄운 굵게 **` 는 글자다.** 열 수도 닫을 수도 없는 마커 둘이라 CommonMark 도
 /// 슬랙도 글자로 둔다. 전에는 닫는 쪽만 삼켜 `** 띄운 굵게  는` 이 됐다 — 내용 손실이다.
 #[test]
@@ -723,7 +789,9 @@ fn slack_parts_close_and_reopen_spans() {
 /// 있으면 예산을 "열린 것 없음"으로 재서, 한도까지 채운 뒤 닫는 마커를 붙여 넘겼다.
 #[test]
 fn a_long_space_free_span_is_cut_within_the_limit() {
-    let input = format!("**{}**", "a".repeat(20_000));
+    // 가장 큰 한도보다 길어야 모든 채널이 나눈다.
+    let longest = Channel::all().iter().map(|c| c.limit()).max().expect("채널이 있다");
+    let input = format!("**{}**", "a".repeat(longest + longest / 2));
     for channel in Channel::all() {
         let parts = render(&input, channel);
         assert!(parts.len() > 1, "{}: 나뉘어야 한다", channel.name());
@@ -852,4 +920,21 @@ fn resumed_hold_scans_agree_with_batch() {
             }
         }
     }
+}
+
+/// **살려 둔 원문 태그도 조각 경계에서 닫고 다시 연다**(GitHub 65,536 분할). 안 그러면 앞
+/// 조각은 `<sub>` 가 열린 채 끝나고 뒤 조각은 `</sub>` 만 들고 시작한다(리뷰에서 나왔다).
+/// 줄 첫머리에서 벗긴 태그는 이름이 맞는 닫는 태그만 벗기고, 표 칸 첫머리는 줄 첫머리가 아니다.
+#[test]
+fn github_kept_tags_survive_splits_and_match_by_name() {
+    let input = format!("x <sub>{}</sub> 끝", "가나 ".repeat(30_000));
+    let parts = render(&input, Channel::GithubMarkdown);
+    assert!(parts.len() > 1);
+    for p in &parts {
+        assert_eq!(p.matches("<sub>").count(), p.matches("</sub>").count(), "조각 안에서 짝이 안 맞는다");
+    }
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("<sub>foo <kbd>x</kbd></sub> 뒤"), "foo <kbd>x</kbd> 뒤");
+    assert_eq!(g("| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |"), "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |");
+    assert_eq!(g("앞 <SPAN style=\"x\">가</SPAN>"), "앞 <span>가</span>");
 }

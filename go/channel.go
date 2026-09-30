@@ -14,11 +14,14 @@ const (
 	SlackMarkdown
 	// Plain 은 모든 마크업 제거. 폴백 경로.
 	Plain
+	// GithubMarkdown 은 GitHub 코멘트·PR 본문(GFM). 65,536자. 슬랙과 같은 마크다운을 내되,
+	// GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 탈출한다. 값이 밀리지 않게 끝에 둔다.
+	GithubMarkdown
 )
 
 // Channels 는 내보낼 수 있는 채널 전부다. 코퍼스와 하네스가 이 목록을 돈다.
 func Channels() []Channel {
-	return []Channel{TelegramHTML, SlackMarkdown, Plain}
+	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, Plain}
 }
 
 // Name 은 코퍼스 디렉토리와 CLI 인자에서 쓰는 이름이다. 채널을 문자열로 다루는 곳의 정본이다.
@@ -28,6 +31,8 @@ func (c Channel) Name() string {
 		return "telegram-html"
 	case SlackMarkdown:
 		return "slack-markdown"
+	case GithubMarkdown:
+		return "github-markdown"
 	default:
 		return "plain"
 	}
@@ -45,8 +50,12 @@ func ParseChannel(name string) (Channel, bool) {
 
 // Limit 은 이 채널의 메시지 길이 한도(문자 수)다. 분할의 기준이다.
 func (c Channel) Limit() int {
-	if c == TelegramHTML {
+	switch c {
+	case TelegramHTML:
 		return 4096
+	case GithubMarkdown:
+		// 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
+		return 65_536
 	}
 	return 12_000
 }

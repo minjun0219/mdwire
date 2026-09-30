@@ -436,4 +436,30 @@ mod gate {
         });
         assert_eq!(counts.allocs, 0, "산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
+
+    /// **GitHub 만 도는 경로도 할당하지 않는다** — `~`·`<` 탈출, 글자로 되돌린 `~~`, 마커
+    /// 대신 내는 `<strong>`. 위 게이트의 산문에는 이 셋이 없다.
+    #[test]
+    fn github_prose_streaming_is_allocation_free_once_warm() {
+        let unit = "주행 거리는 약 ~40km 남았고 5~6월에 충전한다. `Vec<T>` 가 아니라 Vec<T> 다.\n\
+                    값은 2 ~~ 3 사이이고, 마감 전에 **설정(config)**을 바꾼다.\n\n";
+        let doc = unit.repeat(12);
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::GithubMarkdown);
+        let mut out = String::new();
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        assert!(out.contains("\\~40km") && out.contains("<strong>"), "재는 경로를 실제로 탔다: {out}");
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "GitHub 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
 }

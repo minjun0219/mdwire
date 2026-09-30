@@ -292,15 +292,24 @@ struct Span {
     end: usize,
 }
 
-/// 여는 마커. 코드 스팬은 백틱 런 길이, 강조는 마커 글자다.
+/// 여는 마커. 코드 스팬은 백틱 런 길이, 강조는 마커 글자, 태그는 이름이다.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SpanKind {
     Code(usize),
     Emph(&'static str),
+    /// GitHub 에서 마커 대신 낸 `<strong>` `<em>` `<del>`. 마커가 flanking 에 걸리는
+    /// 자리에만 나온다(`inline::gfm_pairs`).
+    Tag(&'static str),
+}
+
+/// 렌더러가 내는 짝 있는 태그 이름 — 마커 대신 내는 `strong`·`em`·`del` 과 살려 둔 원문 인라인
+/// 태그(GitHub). 둘 다 속성 없이 이름만으로 다시 쓴 것이라 이 목록으로 알아본다. `br` 은 짝이 없다.
+fn emph_tags() -> impl Iterator<Item = &'static str> {
+    ["strong", "em", "del"].into_iter().chain(crate::inline::INLINE_TAGS.into_iter().filter(|t| *t != "br"))
 }
 
 impl SpanKind {
-    fn write(self, out: &mut String) {
+    fn write_open(self, out: &mut String) {
         match self {
             SpanKind::Code(run) => {
                 for _ in 0..run {
@@ -308,15 +317,47 @@ impl SpanKind {
                 }
             }
             SpanKind::Emph(m) => out.push_str(m),
+            SpanKind::Tag(name) => {
+                out.push('<');
+                out.push_str(name);
+                out.push('>');
+            }
         }
     }
 
-    fn len(self) -> usize {
+    fn write_close(self, out: &mut String) {
         match self {
-            SpanKind::Code(run) => run,
-            SpanKind::Emph(m) => m.len(),
+            SpanKind::Tag(name) => {
+                out.push_str("</");
+                out.push_str(name);
+                out.push('>');
+            }
+            _ => self.write_open(out),
         }
     }
+
+    /// 닫고 다시 여는 데 드는 글자 수.
+    fn reopen_len(self) -> usize {
+        match self {
+            SpanKind::Code(run) => run * 2,
+            SpanKind::Emph(m) => m.len() * 2,
+            SpanKind::Tag(name) => name.len() * 2 + 5,
+        }
+    }
+}
+
+/// `at` 에서 렌더러가 낸 강조 태그가 시작하면 (이름, 닫는 태그인가, 길이).
+fn emph_tag_at(ch: &[char], at: usize) -> Option<(&'static str, bool, usize)> {
+    let rest = &ch[at..];
+    let closing = rest.get(1) == Some(&'/');
+    let from = if closing { 2 } else { 1 };
+    emph_tags().find_map(|name| {
+        let end = from + name.len();
+        let hit = rest.len() > end
+            && rest[from..end].iter().copied().eq(name.chars())
+            && rest[end] == '>';
+        hit.then_some((name, closing, end + 1))
+    })
 }
 
 /// 마크다운 출력 한 블록의 인라인 스팬을 찾는다.
@@ -420,6 +461,23 @@ fn scan_spans(text: &str) -> Vec<Span> {
                     i = at + run;
                 }
                 None => i += run,
+            }
+            continue;
+        }
+        if c == '<' {
+            match emph_tag_at(&ch, i) {
+                Some((name, false, len)) => {
+                    open.push((SpanKind::Tag(name), i));
+                    i += len;
+                }
+                Some((name, true, len)) => {
+                    if open.last().map(|o| o.0) == Some(SpanKind::Tag(name)) {
+                        let (kind, start) = open.pop().expect("방금 확인했다");
+                        spans.push(Span { kind, start, end: i + len });
+                    }
+                    i += len;
+                }
+                None => i += 1,
             }
             continue;
         }
@@ -573,7 +631,7 @@ impl Markup {
             n += 4 + 4 + info.chars().count();
         }
         // 스팬은 닫는 마커와 다시 여는 마커, 두 번.
-        n += self.open_spans().map(|sp| sp.kind.len() * 2).sum::<usize>();
+        n += self.open_spans().map(|sp| sp.kind.reopen_len()).sum::<usize>();
         let _ = v;
         n
     }
@@ -582,7 +640,7 @@ impl Markup {
         // 안쪽부터 — 늦게 열린 것이 안쪽이다.
         let open: Vec<&Span> = self.open_spans().collect();
         for sp in open.iter().rev() {
-            sp.kind.write(out);
+            sp.kind.write_close(out);
         }
         for (name, _) in self.tags.iter().rev() {
             out.push_str("</");
@@ -612,7 +670,7 @@ impl Markup {
             out.push_str(full);
         }
         for sp in self.open_spans() {
-            sp.kind.write(out);
+            sp.kind.write_open(out);
         }
     }
 }

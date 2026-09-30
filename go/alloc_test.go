@@ -60,6 +60,34 @@ func TestProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
+// GitHub 만 도는 경로도 할당하지 않는다 — `~`·`<` 탈출, 글자로 되돌린 `~~`, 마커 대신 내는
+// `<strong>`. 위 게이트의 산문에는 이 셋이 없다. 러스트 쪽 같은 이름의 테스트.
+func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
+	unit := "주행 거리는 약 ~40km 남았고 5~6월에 충전한다. `Vec<T>` 가 아니라 Vec<T> 다.\n" +
+		"값은 2 ~~ 3 사이이고, 마감 전에 **설정(config)**을 바꾼다.\n\n"
+	pieces := splitChunks(strings.Repeat(unit, 12), 64)
+	s := NewStreamer(GithubMarkdown)
+	var out []byte
+	for _, p := range pieces {
+		s.PushTo(p, &out)
+	}
+	s.FinishTo(&out)
+	if !strings.Contains(string(out), `\~40km`) || !strings.Contains(string(out), "<strong>") {
+		t.Fatalf("재는 경로를 타지 않았다: %s", out)
+	}
+
+	allocs := testing.AllocsPerRun(3, func() {
+		out = out[:0]
+		for _, p := range pieces {
+			s.PushTo(p, &out)
+		}
+		s.FinishTo(&out)
+	})
+	if allocs != 0 {
+		t.Fatalf("GitHub 산문 스트리밍이 할당한다 — 회귀다: 회당 %.1f 회", allocs)
+	}
+}
+
 // 회귀 감시용 벤치. 절대값보다 이전 회차와의 비교에 뜻이 있다 — 러스트와 나란한 순위표는
 // 만들지 않는다(SPEC 9절).
 func BenchmarkProseStreaming(b *testing.B) {

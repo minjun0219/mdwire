@@ -18,7 +18,7 @@ assert.equal(acc, "<b>굵게</b> 이어서 <code>코드</code>");
 // **append-only 계약.** `push` 가 돌려준 글은 확정분이다 — 뒤 조각이 앞 글을 고치지 않는다.
 // 그래서 받은 대로 이어 붙이기만 하면(Slack `appendStream` 처럼 앞 글을 못 고치는 채널)
 // 한 번에 렌더한 것과 같다. 깨진 입력(안 닫힌 강조·펜스)을 한 글자씩 흘려서 본다.
-for (const channel of ["telegram-html", "slack-markdown", "plain"]) {
+for (const channel of ["telegram-html", "slack-markdown", "github-markdown", "plain"]) {
   const input = "**굵게**는 먼저\n**안 닫힌 강조가\n다음 줄까지\n\n```ts\nconst a = 1;";
   const st = new Streamer(channel);
   let appended = "";

@@ -1,6 +1,9 @@
 package mdwire
 
-import "unicode"
+import (
+	"unicode"
+	"unicode/utf8"
+)
 
 // 인라인 파서 — 강조의 짝을 맞춘다. 이 파일이 이 라이브러리의 이유다.
 //
@@ -29,6 +32,8 @@ type openMark struct {
 	afterSpace bool
 	// 짝이 오면 닫지만, 안 오면 닫아 주지 않고 글자로 되돌린다. mrkdwn 의 홑 `~` 다.
 	soft bool
+	// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
+	before rune
 }
 
 type inline struct {
@@ -44,16 +49,23 @@ type inline struct {
 	dialect Dialect
 	// 정규화가 고친 것.
 	repairs Repairs
+	// 지금 닫는 마커 바로 뒤의 원문 글자. 짝이 맞아 닫을 때만 뜻이 있다.
+	afterClose rune
+	// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
+	inCell bool
+	// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
+	strippedTags []uint8
 }
 
 func newInline(d Dialect) *inline {
-	return &inline{prev: noChar, dialect: d}
+	return &inline{prev: noChar, dialect: d, afterClose: noChar}
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
 func (in *inline) reset() {
 	in.open = in.open[:0]
 	in.prev = noChar
+	in.strippedTags = in.strippedTags[:0]
 }
 
 // safeLen 은 지금 out 에서 내보내도 안전한 길이다. 열린 마커가 있으면 그 앞까지다.
@@ -111,7 +123,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 					step = 1
 				}
 				for k := 0; k < step; k++ {
-					v.escapeChar(line[i+k], out)
+					v.codeChar(line[i+k], out)
 					in.codeSrc = append(in.codeSrc, line[i+k])
 				}
 				i += step
@@ -148,7 +160,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			run := runLen(line, i, '`')
 			prev := in.prevChar(line, i)
 			in.codeSrc = in.codeSrc[:0]
-			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev)})
+			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev), before: prev})
 			i += run
 			continue
 		}
@@ -219,7 +231,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		softBlockedOpen := soft && ((prev != noChar && isWordChar(prev)) || (next >= '0' && next <= '9'))
 		softBlockedClose := soft && next != noChar && next < 0x80 && isASCIIAlnum(next)
 		left := canOpen(prev, next) && !intraword && !softBlockedOpen
-		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft}
+		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev}
 
 		switch {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
@@ -237,6 +249,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			v.escapeChar(c, out)
 		// 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
 		case same >= 0 && !afterSpace:
+			in.afterClose = next
 			in.closeAt(same, out, v)
 		// 앞이 공백인데 뒤로는 열 수 있다 — 여는 마커가 또 왔다. 먼저 열린 쪽이 진다. 규칙 2.
 		case same >= 0 && left && same+1 == len(in.open):
@@ -244,6 +257,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
 		case same >= 0 && left:
 		case same >= 0:
+			in.afterClose = next
 			in.closeAt(same, out, v)
 		case left:
 			fresh.at = len(*out)
@@ -310,7 +324,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
 	if old.run == 1 || (old.guess && old.afterSpace) {
-		insertRun(out, old.at, old.ch, old.run)
+		insertMarker(out, old.at, old.ch, old.run, v)
 	} else {
 		in.repairs.DroppedMarker++
 	}
@@ -370,7 +384,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		if o.afterSpace || o.run == 1 {
-			insertRun(out, o.at, o.ch, o.run)
+			insertMarker(out, o.at, o.ch, o.run, v)
 		} else {
 			in.repairs.DroppedMarker++
 		}
@@ -407,8 +421,43 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 			return
 		}
 	}
+	// GitHub 이 이 짝을 강조로 읽지 않으면 태그로 낸다. GFM 은 CommonMark 의 flanking 규칙을
+	// 따라서, 닫는 `**` 앞이 구두점이고 뒤에 글자가 오면 닫지 못한다 — `**설정(config)**을` 이
+	// 별표째 글자로 남고, 짝이 뒤의 `**` 와 엇갈려 범위가 뒤집힌다(실측 2026-09-30).
+	after := noChar
+	if matched {
+		after = in.afterClose
+	}
+	if v.htmlEmphasis() && o.emph != emphCode && !gfmPairs(o.before, (*out)[o.at:], after) {
+		insertAt(out, o.at, v.openHTML(o.emph))
+		*out = append(*out, v.closeHTML(o.emph)...)
+		return
+	}
 	insertAt(out, o.at, v.open(o.emph))
 	*out = append(*out, v.close(o.emph)...)
+}
+
+// gfmPairs 는 GFM(CommonMark)이 before + 마커 + body + 마커 + after 를 강조로 읽는가다.
+// 여는 마커는 좌측 flanking, 닫는 마커는 우측 flanking 이어야 한다. 구두점은 CommonMark 0.31
+// 처럼 기호까지 친다 — 글자·숫자·공백이 아니면 구두점이다.
+//
+// 이웃이 태그 경계면 읽는다고 보지 않는다. before·after 는 원문 글자인데, 마커에 붙은 태그나
+// 주석이 벗겨지면(`**x.**<font>y`) 출력의 이웃은 그 너머 글자가 된다. 태그 너머를 보려면 조각을
+// 더 붙들어야 해서, 그 자리는 판정 없이 태그로 낸다.
+func gfmPairs(before rune, body []byte, after rune) bool {
+	if before == '>' || after == '<' {
+		return false
+	}
+	if len(body) == 0 {
+		return true
+	}
+	first, _ := utf8.DecodeRune(body)
+	last, _ := utf8.DecodeLastRune(body)
+	punct := func(c rune) bool { return !isAlphanumeric(c) && !unicode.IsSpace(c) }
+	edge := func(c rune) bool { return c == noChar || unicode.IsSpace(c) || punct(c) }
+	left := !unicode.IsSpace(first) && (!punct(first) || edge(before))
+	right := !unicode.IsSpace(last) && (!punct(last) || edge(after))
+	return left && right
 }
 
 // angle 은 `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
@@ -430,9 +479,9 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	if startsWith(rest[1:], "http://") || startsWith(rest[1:], "https://") {
 		body := rest[1:closeAt]
 		// `<url|텍스트>` 는 슬랙 레거시 링크다. 주소와 텍스트를 가른다.
-		url, label := body, body
+		url, label, bare := body, body, true
 		if bar := indexRune(body, '|'); bar >= 0 {
-			url, label = body[:bar], body[bar+1:]
+			url, label, bare = body[:bar], body[bar+1:], false
 		}
 		for _, c := range url {
 			if unicode.IsSpace(c) {
@@ -440,9 +489,15 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			}
 		}
 		// 오토링크의 텍스트는 인라인으로 다시 읽지 않는다 — 주소 안의 `_` 가 기울임이 되면 안 된다.
+		// 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 탈출(GitHub 의 `\~`)을 하면 주소와
+		// 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
 		text := in.scratch[:0]
 		for _, c := range label {
-			v.escapeChar(c, &text)
+			if bare {
+				v.codeChar(c, &text)
+			} else {
+				v.escapeChar(c, &text)
+			}
 		}
 		v.link(string(text), string(url), out)
 		in.scratch = text
@@ -466,9 +521,50 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	if !isKnownTag(name) {
 		return 0
 	}
+	// GitHub 은 인라인 태그를 그린다 — 벗기지 않고 그대로 둔다(실측 2026-09-30). 줄 첫머리의
+	// 태그는 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고, 블록
+	// 태그는 자리와 무관하게 그런다. 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이
+	// 붙들지 않도록 첫머리면 벗긴다.
+	//
+	// 살릴 때는 속성을 버리고 이름만 소문자로 다시 쓴다 — 조각을 나눌 때 싱크가 이 모양을 스팬으로
+	// 알아보고 끊는 자리에서 닫고 다시 연다. 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다. 벗긴 여는
+	// 태그는 이름째 기억해서 이름이 맞는 닫는 태그만 벗긴다 — `<sub>a <kbd>x</kbd></sub>` 의
+	// `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
+	if t := inlineTag(name); v.htmlEmphasis() && t >= 0 {
+		p := in.prevChar(line, i)
+		atLineStart := !in.inCell && (p == noChar || p == '\n')
+		n := len(in.strippedTags)
+		switch {
+		case closing && n > 0 && in.strippedTags[n-1] == uint8(t):
+			in.strippedTags = in.strippedTags[:n-1]
+		case atLineStart && !closing && inlineTags[t] != "br":
+			in.strippedTags = append(in.strippedTags, uint8(t))
+		case !atLineStart:
+			*out = append(*out, '<')
+			if closing {
+				*out = append(*out, '/')
+			}
+			*out = append(*out, inlineTags[t]...)
+			*out = append(*out, '>')
+			in.prev = '>'
+			return closeAt + 1
+		}
+	}
 	if !closing && eqIgnoreCase(name, "br") {
-		*out = append(*out, '\n')
-		in.prev = '\n'
+		// 표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다 — 칸 안에 `\n` 이 들어가면 GFM 은 그 뒤를
+		// 새 행으로 읽어 내용이 엉뚱한 열로 간다. 그걸 그리는 GitHub 에는 그대로 두고,
+		// 나머지는 공백으로 편다.
+		switch {
+		case in.inCell && v.htmlEmphasis():
+			*out = append(*out, "<br>"...)
+			in.prev = ' '
+		case in.inCell:
+			*out = append(*out, ' ')
+			in.prev = ' '
+		default:
+			*out = append(*out, '\n')
+			in.prev = '\n'
+		}
 	}
 	return closeAt + 1
 }
@@ -512,6 +608,22 @@ func findLink(line []rune, at int) (t0, t1, u0, u1 int, ok bool) {
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때
 // 쓰는 것들이다. 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
+// inlineTags 는 살려 두는 인라인 태그다. GitHub 이 받는 것만 — font 는 새니타이저가 지운다.
+// 싱크가 분할할 때 같은 목록으로 스팬을 알아본다.
+var inlineTags = [...]string{
+	"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span", "small", "mark", "kbd",
+}
+
+// inlineTag 는 살려 둘 인라인 태그의 번호다. 없으면 -1.
+func inlineTag(name []rune) int {
+	for i, t := range inlineTags {
+		if eqIgnoreCase(name, t) {
+			return i
+		}
+	}
+	return -1
+}
+
 func isKnownTag(name []rune) bool {
 	for _, t := range [...]string{
 		"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span",
@@ -591,4 +703,18 @@ func repeatRune(c rune, n int) []rune {
 		r[i] = c
 	}
 	return r
+}
+
+// insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 탈출을
+// 따른다 — GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
+func insertMarker(out *[]byte, at int, c rune, n int, v vocab) {
+	if !v.escapes(c) {
+		insertRun(out, at, c, n)
+		return
+	}
+	// 문자열을 만들지 않고 자리를 늘려 `\` 와 마커를 번갈아 채운다 — 조각마다 불리는 경로다.
+	insertRun(out, at, c, 2*n)
+	for k := 0; k < n; k++ {
+		(*out)[at+2*k] = '\\'
+	}
 }

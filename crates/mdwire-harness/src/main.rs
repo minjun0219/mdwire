@@ -24,7 +24,7 @@ mdwire-check — 코퍼스 대조 + 구현 중립 불변식 채점
   --scan <디렉토리>     .md 를 훑어 불변식만 잰다. 기대 출력은 보지 않는다
   --cmd \"<명령>\"        외부 구현을 채점한다. {channel} 은 채널 이름, {from} 은 입력
                         방언으로 치환된다. {from} 이 없으면 방언 케이스는 건너뛴다
-  --channel <목록>      쉼표로 구분 (기본: telegram-html,slack-markdown,plain)
+  --channel <목록>      쉼표로 구분 (기본: telegram-html,slack-markdown,github-markdown,plain)
   -v, --verbose         통과한 것도 전부 찍는다
   -h, --help            이 도움말
 ";
