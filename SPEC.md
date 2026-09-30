@@ -154,8 +154,9 @@ CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--limit N] [--stre
 `toElements` 가 그걸 `createElement` 로 세운다(`innerHTML` 없음). 코어를 건드리지 않은 이유는
 **안전 판단을 한 곳에 두기 위해서다** — escape·태그 집합·링크 스킴은 코어의 `html` 채널만
 정하고, 이벤트 층은 그 좁은 문법을 읽기만 한다(링크 스킴은 컴포넌트를 갈아 끼워도 안전하게
-한 번 더 본다). 스트리밍은 누적본을 통째로 다시 그린다 — append-only 계약 덕에 스트리머를
-쓴 것과 같은 답이다. Go·Rust 소비자는 이벤트를 받지 않는다.
+한 번 더 본다). **스트리밍은 `Streamer` 로 새 토큰만 변환하고** `toElements(acc + closeOpen())` 으로
+세운다 — 누적본을 `Markdown` 에 매번 넘기면 토큰마다 처음부터 다시 변환해 전체 비용이 제곱으로 는다.
+Go·Rust 소비자는 이벤트를 받지 않는다.
 
 ### 5.1 입력 방언과 고친 것
 

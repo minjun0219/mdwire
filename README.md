@@ -91,10 +91,10 @@ channel; you choose which component draws each tag. `@minjun0219/mdwire/events` 
 same output as an `open` / `text` / `close` event list for other frameworks.
 
 ```jsx
-import { Markdown } from "@minjun0219/mdwire/react";
+import { Markdown, toElements } from "@minjun0219/mdwire/react";
 
-// Streaming: pass the accumulated text; it renders the same as the streamer would.
-<Markdown text={answerSoFar} components={{ a: RouterLink }} />
+<Markdown text={answer} components={{ a: RouterLink }} />  // a finished answer
+acc += streamer.push(token); toElements(acc + streamer.closeOpen()); // streaming: only the new token is converted
 ```
 
 **Append-only contract.** What `push` returns is final — a later chunk never rewrites it —

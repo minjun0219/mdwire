@@ -68,8 +68,9 @@ export function toElements(html, components = {}) {
 }
 
 /**
- * 에이전트 마크다운을 그린다. 스트리밍이면 누적본을 그대로 `text` 로 준다 — 매번 다시
- * 그리지만 결과는 스트리머를 쓴 것과 같다(append-only 계약, SPEC 8.2).
+ * 에이전트 마크다운을 그린다 — 완성된 글용. **스트리밍 중인 누적본을 토큰마다 넘기지 않는다** — 매번
+ * 처음부터 다시 변환해 전체 비용이 제곱으로 는다. 스트리밍은 `Streamer` 로 새 토큰만 변환하고
+ * `toElements(acc + streamer.closeOpen())` 으로 세운다(append-only 계약, SPEC 8.2).
  * @param {import("./react.d.ts").MarkdownProps} props
  */
 export function Markdown({ text, from, components }) {
