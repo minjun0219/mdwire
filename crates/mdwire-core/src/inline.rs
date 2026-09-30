@@ -565,6 +565,10 @@ impl Inline {
             out.push_str(v.close_html(open.emph));
             return;
         }
+        if v.line_emphasis() && out[open.at..].contains('\n') {
+            wrap_per_line(out, open.at, v.open(open.emph), v.close(open.emph));
+            return;
+        }
         out.insert_str(open.at, v.open(open.emph));
         out.push_str(v.close(open.emph));
     }
@@ -764,6 +768,33 @@ fn gfm_pairs(before: Option<char>, body: &str, after: Option<char>) -> bool {
 
 /// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
 /// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
+/// 강조 범위를 **줄마다** 감싼다 — `at` 부터 끝까지가 범위다. 줄 끝에서 닫고, 다음 줄은 블록 층이
+/// 쓴 접두사(`> `·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로 뺀다 — 공백 뒤의
+/// 닫는 마커는 닫기가 아니다. 내용이 없는 줄은 감싸지 않는다(`****` 가 된다).
+///
+/// 노션이 줄을 넘는 `**…**` 의 짝을 못 맞춰서다(실측 2026-10-01): `**줄을\n넘는 굵게**` 는 굵게가
+/// 사라지고 `**` 가 비쳤고, 인용·목록 안에서는 굵게가 통째로 사라졌다. 줄마다 감싸면 다 그렸다.
+fn wrap_per_line(out: &mut String, at: usize, open: &str, close: &str) {
+    let body = out.split_off(at);
+    for (i, line) in body.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let lead = if i == 0 { 0 } else { line.len() - line.trim_start_matches([' ', '\t', '>']).len() };
+        let (prefix, rest) = line.split_at(lead);
+        let text = rest.trim_end_matches([' ', '\t']);
+        out.push_str(prefix);
+        if text.is_empty() {
+            out.push_str(rest);
+            continue;
+        }
+        out.push_str(open);
+        out.push_str(text);
+        out.push_str(close);
+        out.push_str(&rest[text.len()..]);
+    }
+}
+
 fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab) {
     let escaped = v.escapes(c);
     for _ in 0..run {

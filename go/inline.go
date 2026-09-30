@@ -1,6 +1,8 @@
 package mdwire
 
 import (
+	"bytes"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -465,8 +467,40 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		*out = append(*out, v.closeHTML(o.emph)...)
 		return
 	}
+	if v.lineEmphasis() && bytes.IndexByte((*out)[o.at:], '\n') >= 0 {
+		wrapPerLine(out, o.at, v.open(o.emph), v.close(o.emph))
+		return
+	}
 	insertAt(out, o.at, v.open(o.emph))
 	*out = append(*out, v.close(o.emph)...)
+}
+
+// wrapPerLine 은 강조 범위(at 부터 끝)를 줄마다 감싼다 — 러스트 쪽 wrap_per_line. 줄 끝에서 닫고
+// 다음 줄은 블록 층이 쓴 접두사(> ·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로
+// 빼고, 내용이 없는 줄은 감싸지 않는다. 노션이 줄을 넘는 마커의 짝을 못 맞춰서다.
+func wrapPerLine(out *[]byte, at int, open, close string) {
+	body := string((*out)[at:])
+	*out = (*out)[:at]
+	for i, line := range strings.Split(body, "\n") {
+		if i > 0 {
+			*out = append(*out, '\n')
+		}
+		lead := 0
+		if i > 0 {
+			lead = len(line) - len(strings.TrimLeft(line, " \t>"))
+		}
+		prefix, rest := line[:lead], line[lead:]
+		text := strings.TrimRight(rest, " \t")
+		*out = append(*out, prefix...)
+		if text == "" {
+			*out = append(*out, rest...)
+			continue
+		}
+		*out = append(*out, open...)
+		*out = append(*out, text...)
+		*out = append(*out, close...)
+		*out = append(*out, rest[len(text):]...)
+	}
 }
 
 // gfmPairs 는 GFM(CommonMark)이 before + 마커 + body + 마커 + after 를 강조로 읽는가다.
