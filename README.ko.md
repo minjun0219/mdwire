@@ -42,6 +42,7 @@ LLM 마크다운  →  정규화  →  채널용 렌더  →  안전한 분할  
 ```sh
 cat agent-output.md | mdwire --channel telegram-html          # 조각은 NUL 로 구분
 cat agent-output.md | mdwire --channel slack-markdown --stream # 들어오는 대로 내보낸다
+cat agent-output.md | mdwire --channel plain --limit 4096      # 텔레그램으로 보내는 평문 폴백
 
 # 에이전트가 슬랙 레거시 mrkdwn(*굵게*, ~취소~)으로 썼다면 그렇다고 알려 준다. --report 는
 # 정규화가 고친 것(안 닫힌 강조, 안 닫힌 펜스, …)을 stderr 에 JSON 한 줄로 낸다.

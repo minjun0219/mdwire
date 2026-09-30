@@ -49,6 +49,19 @@ var inlineTags = [15][3]string{
 // vocab 은 채널 하나의 출력 어휘와 정책이다.
 type vocab struct {
 	channel Channel
+	// limit 은 한 조각의 한도다. 채널 기본값이거나 Options.Limit 이다.
+	limit int
+}
+
+// newVocab 은 한도를 정해 만든다. limit 이 0 이면 채널 기본값, 음수는 1 로 올린다.
+func newVocab(ch Channel, limit int) vocab {
+	switch {
+	case limit == 0:
+		limit = ch.Limit()
+	case limit < 1:
+		limit = 1
+	}
+	return vocab{channel: ch, limit: limit}
 }
 
 // tablesNative 는 채널이 표를 직접 그리는가다. 그리면 고정폭으로 내리는 것이 손해다 —
@@ -230,7 +243,7 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다. 주소는 괄호에 넣어 글로
 		// 내보낸다 — 링크는 죽어도 내용은 산다.
 		markup := escapedLen(url) + len(`<a href=""></a>`)
-		if markup >= v.channel.Limit() {
+		if markup >= v.limit {
 			*out = append(*out, text...)
 			if url != "" && !escapedEq(text, url) {
 				*out = append(*out, " ("...)

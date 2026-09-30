@@ -702,7 +702,7 @@ fn github_escapes_tilde_and_angle_outside_code() {
     // 표 칸도 본문이다.
     assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
     // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 탈출한다.
-    let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn });
+    let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
     assert_eq!(out.parts.join(""), r"\~40km 전");
     // 오토링크·링크 주소는 건드리지 않는다.
     assert_eq!(g("<https://a.com/~me>"), "<https://a.com/~me>");
@@ -809,7 +809,7 @@ fn a_long_space_free_span_is_cut_within_the_limit() {
 // ── 입력 방언 · 고친 것 ─────────────────────────────────────────────────
 
 fn mrkdwn(input: &str, channel: Channel) -> String {
-    let out = mdwire::render_with(input, channel, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn });
+    let out = mdwire::render_with(input, channel, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
     out.parts.join("")
 }
 
@@ -849,7 +849,7 @@ fn slack_mrkdwn_bold_spans_lines_but_not_paragraphs() {
     let out = mdwire::render_with(
         "*굵게 시작\n\n다른 문단*",
         Channel::SlackMarkdown,
-        mdwire::Options { from: mdwire::Dialect::SlackMrkdwn },
+        mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() },
     );
     assert_eq!(out.parts.join(""), "**굵게 시작**\n\n다른 문단*");
     assert_eq!(out.repairs.closed_emphasis, 1, "{:?}", out.repairs);
@@ -1043,4 +1043,22 @@ fn github_kept_tags_survive_splits_and_match_by_name() {
     assert_eq!(g("<sub>foo <kbd>x</kbd></sub> 뒤"), "foo <kbd>x</kbd> 뒤");
     assert_eq!(g("| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |"), "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |");
     assert_eq!(g("앞 <SPAN style=\"x\">가</SPAN>"), "앞 <span>가</span>");
+}
+
+/// **한도는 호출자가 정한다.** plain 을 텔레그램 폴백으로 보내면 12,000 이 아니라 4096 이어야
+/// 한다 — 12,000 으로 나눈 7,153자 조각이 400 을 받았다(실측). 텔레그램 링크를 글로 내리는
+/// 판정도 그 한도를 따른다.
+#[test]
+fn caller_limit_overrides_the_channel_limit() {
+    let long = "가나다 ".repeat(3000);
+    assert_eq!(render(&long, Channel::Plain).len(), 1);
+    let opts = mdwire::Options { limit: Some(4096), ..Default::default() };
+    let parts = mdwire::render_with(&long, Channel::Plain, opts).parts;
+    assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= 4096));
+    // 한도보다 긴 주소는 링크로 내지 않는다 — 채널 한도가 아니라 호출자 한도 기준이다.
+    let url = format!("https://a.com/{}", "x".repeat(200));
+    let input = format!("[문서]({url})");
+    let opts = mdwire::Options { limit: Some(100), ..Default::default() };
+    let out = mdwire::render_with(&input, Channel::TelegramHtml, opts).parts.join("");
+    assert!(!out.contains("<a href"), "한도 100 에 200자 주소 링크: {out}");
 }

@@ -53,6 +53,16 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 				return fmt.Errorf("모르는 --batch 형식: %s (jsonl 만 받는다)", args[i])
 			}
 			batch = true
+		case "--limit":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--limit 에 값이 없다")
+			}
+			i++
+			n, err := strconv.Atoi(args[i])
+			if err != nil || n < 1 {
+				return fmt.Errorf("--limit 은 1 이상의 정수다: %s", args[i])
+			}
+			opts.Limit = n
 		case "--from":
 			if i+1 >= len(args) {
 				return fmt.Errorf("--from 에 값이 없다")
@@ -64,7 +74,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			}
 			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|plain|html [--from markdown|slack-mrkdwn] [--stream] [--report] [--batch jsonl] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|plain|html [--from markdown|slack-mrkdwn] [--limit N] [--stream] [--report] [--batch jsonl] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])

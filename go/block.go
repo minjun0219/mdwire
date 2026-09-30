@@ -127,7 +127,7 @@ type listLevel struct {
 }
 
 func newEngine(ch Channel, o Options) *engine {
-	return &engine{v: vocab{channel: ch}, inline: newInline(o.From), dialect: o.From}
+	return &engine{v: newVocab(ch, o.Limit), inline: newInline(o.From), dialect: o.From}
 }
 
 // repairs 는 지금까지 정규화가 고친 것이다.
@@ -1040,7 +1040,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
-	cellVocab := vocab{channel: Plain}
+	cellVocab := newVocab(Plain, 0)
 	if v.tablesNative() {
 		cellVocab = v
 	}

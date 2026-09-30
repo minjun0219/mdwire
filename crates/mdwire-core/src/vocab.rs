@@ -42,11 +42,18 @@ pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Vocab {
     pub channel: Channel,
+    /// 한 조각의 한도. 채널 기본값이거나 호출자가 [`crate::Options::limit`] 로 준 값이다.
+    pub limit: usize,
 }
 
 impl Vocab {
     pub fn new(channel: Channel) -> Self {
-        Self { channel }
+        Self { channel, limit: channel.limit() }
+    }
+
+    /// 한도를 정해 만든다. `None` 이면 채널 기본값. 0 은 1 로 올린다 — 한 글자는 들어가야 한다.
+    pub fn with_limit(channel: Channel, limit: Option<usize>) -> Self {
+        Self { channel, limit: limit.map_or(channel.limit(), |n| n.max(1)) }
     }
 
     /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
@@ -199,7 +206,7 @@ impl Vocab {
                 // 다 차지하면 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다.
                 // 주소는 괄호에 넣어 글로 내보낸다 — 링크는 죽어도 내용은 산다.
                 let markup = escaped_len(url) + "<a href=\"\"></a>".len();
-                if markup >= self.channel.limit() {
+                if markup >= self.limit {
                     out.push_str(text);
                     if !url.is_empty() && !escaped_eq(text, url) {
                         out.push_str(" (");

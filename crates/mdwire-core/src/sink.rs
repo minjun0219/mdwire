@@ -35,7 +35,7 @@ pub(crate) struct PartsSink {
 impl PartsSink {
     pub fn new(v: Vocab) -> Self {
         Self {
-            limit: v.channel.limit(),
+            limit: v.limit,
             v,
             parts: Vec::new(),
             cur: String::new(),

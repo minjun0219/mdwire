@@ -87,3 +87,24 @@ func balancedHTML(s string) bool {
 		}
 	}
 }
+
+// 한도는 호출자가 정한다 — 러스트 쪽 caller_limit_overrides_the_channel_limit.
+func TestCallerLimitOverridesTheChannelLimit(t *testing.T) {
+	long := strings.Repeat("가나다 ", 3000)
+	if n := len(Render(long, Plain)); n != 1 {
+		t.Fatalf("plain 기본 한도는 12,000 이다: %d 조각", n)
+	}
+	parts := RenderWith(long, Plain, Options{Limit: 4096}).Parts
+	if len(parts) < 2 {
+		t.Fatalf("나뉘어야 한다")
+	}
+	for _, p := range parts {
+		if n := len([]rune(p)); n > 4096 {
+			t.Fatalf("%d자 조각 — 한도 4096", n)
+		}
+	}
+	input := "[문서](https://a.com/" + strings.Repeat("x", 200) + ")"
+	if out := strings.Join(RenderWith(input, TelegramHTML, Options{Limit: 100}).Parts, ""); strings.Contains(out, "<a href") {
+		t.Fatalf("한도 100 에 200자 주소 링크: %s", out)
+	}
+}

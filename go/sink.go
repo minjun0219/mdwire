@@ -27,7 +27,7 @@ type partsSink struct {
 }
 
 func newPartsSink(v vocab) *partsSink {
-	return &partsSink{v: v, limit: v.channel.Limit()}
+	return &partsSink{v: v, limit: v.limit}
 }
 
 func (s *partsSink) text(b []byte) { s.pending = append(s.pending, b...) }

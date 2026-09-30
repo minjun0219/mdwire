@@ -94,7 +94,7 @@ struct FenceState {
 impl Engine {
     pub fn new(channel: Channel, options: Options) -> Self {
         Self {
-            v: Vocab::new(channel),
+            v: Vocab::with_limit(channel, options.limit),
             inline: Inline::new(options.from),
             pending: Vec::new(),
             line_open: false,

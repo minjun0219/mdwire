@@ -69,7 +69,7 @@ fn random_input_never_breaks_the_invariants() {
     for round in 0..rounds {
         let input = doc(&mut rng);
         for (channel, from) in Channel::all().into_iter().flat_map(|c| [(c, Dialect::Markdown), (c, Dialect::SlackMrkdwn)]) {
-            let options = Options { from };
+            let options = Options { from, ..Default::default() };
             let parts = mdwire::render_with(&input, channel, options).parts;
             let joined = parts.join("\0");
             // 한도 · 태그 · 이스케이프. 강조 범위와 낱말 손실은 여기서 보지 않는다 — 무작위

@@ -37,9 +37,15 @@ func ParseDialect(name string) (Dialect, bool) {
 	return 0, false
 }
 
-// Options 는 변환 옵션이다. 지금은 입력 방언 하나다.
+// Options 는 변환 옵션이다 — 입력 방언과 조각 한도.
 type Options struct {
 	From Dialect
+	// Limit 은 한 조각의 한도(렌더한 출력의 글자 수)다. 0 이면 채널의 Limit().
+	//
+	// 한도는 보내는 쪽이 정한다 — plain 은 어디로 가는지 모르는 폴백이라 텔레그램으로 보내면
+	// 4096 이어야 한다(12,000 으로 나눈 7,153자 조각이 400 을 받았다). 음수는 1 로 본다.
+	// 스트리밍은 나누지 않으므로 이 값을 보지 않는다.
+	Limit int
 }
 
 // Repairs 는 정규화가 고친 것의 개수다. 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.

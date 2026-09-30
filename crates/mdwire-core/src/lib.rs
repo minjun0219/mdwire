@@ -114,10 +114,19 @@ impl Dialect {
     }
 }
 
-/// 변환 옵션. 지금은 입력 방언 하나다.
+/// 변환 옵션 — 입력 방언과 조각 한도.
+///
+/// 필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Options {
     pub from: Dialect,
+    /// 한 조각의 한도(렌더한 출력의 글자 수). `None` 이면 [`Channel::limit`].
+    ///
+    /// **한도는 보내는 쪽이 정한다.** 채널이 정해 주지 못하는 경우가 있다 — plain 은 어디로
+    /// 가는지 모르는 폴백이라 텔레그램으로 보내면 4096 이어야 하고(12,000 으로 나눈 7,153자
+    /// 조각이 400 을 받았다), 앞에 제목을 붙여 보내는 쪽은 그만큼 덜 써야 한다.
+    /// 스트리밍([`Streamer`])은 나누지 않으므로 이 값을 보지 않는다.
+    pub limit: Option<usize>,
 }
 
 /// 정규화가 고친 것의 개수. **모델이 얼마나 자주 서식을 깨는지**를 재는 데 쓴다.
@@ -305,13 +314,14 @@ pub fn render(input: &str, channel: Channel) -> Vec<String> {
 /// ```
 /// use mdwire::{render_with, Channel, Dialect, Options};
 ///
-/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, Options { from: Dialect::SlackMrkdwn });
+/// let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
+/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
 /// assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
 /// assert_eq!(out.repairs.closed_emphasis, 1);
 /// ```
 pub fn render_with(input: &str, channel: Channel, options: Options) -> Rendered {
     let mut engine = Engine::new(channel, options);
-    let mut sink = PartsSink::new(Vocab::new(channel));
+    let mut sink = PartsSink::new(Vocab::with_limit(channel, options.limit));
     engine.feed(input, &mut sink);
     engine.finish(&mut sink);
     Rendered { repairs: engine.repairs(), parts: sink.into_parts() }

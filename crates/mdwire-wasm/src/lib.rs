@@ -36,6 +36,8 @@ const OPTIONS_TS: &str = r#"
 export interface RenderOptions {
   /** 입력 표기. 슬랙 레거시 mrkdwn(`*굵게*` `~취소~`)으로 쓴 에이전트 출력이면 "slack-mrkdwn". */
   from?: "markdown" | "slack-mrkdwn";
+  /** 조각 한도(글자 수). 생략하면 채널의 한도다 — plain 을 텔레그램에 보내면 4096. 스트리밍은 나누지 않는다. */
+  limit?: number;
 }
 "#;
 
@@ -47,6 +49,9 @@ extern "C" {
 
     #[wasm_bindgen(method, getter)]
     fn from(this: &RenderOptions) -> Option<String>;
+
+    #[wasm_bindgen(method, getter)]
+    fn limit(this: &RenderOptions) -> Option<f64>;
 }
 
 /// 완성된 문서를 변환한다. 한도를 넘으면 조각 배열로 돌아온다.
@@ -196,10 +201,24 @@ fn dialect_of(name: &str) -> Result<Dialect, String> {
 
 fn parse_options(options: Option<RenderOptions>) -> Result<Options, JsError> {
     let mut out = Options::default();
-    if let Some(from) = options.and_then(|o| o.from()) {
+    let Some(options) = options else { return Ok(out) };
+    if let Some(from) = options.from() {
         out.from = dialect_of(&from).map_err(|e| JsError::new(&e))?;
     }
+    if let Some(n) = options.limit() {
+        out.limit = Some(limit_of(n).map_err(|e| JsError::new(&e))?);
+    }
     Ok(out)
+}
+
+/// JS 숫자를 한도로 읽는다. 1 이상의 정수만 받는다 — `NaN`·소수·음수를 조용히 깎으면 호출자
+/// 실수가 한 글자짜리 조각 폭탄이 된다.
+fn limit_of(n: f64) -> Result<usize, String> {
+    if n.is_finite() && n >= 1.0 && n.fract() == 0.0 && n <= u32::MAX as f64 {
+        Ok(n as usize)
+    } else {
+        Err(format!("limit 은 1 이상의 정수다: {n}"))
+    }
 }
 
 #[cfg(test)]
@@ -211,6 +230,8 @@ mod tests {
     fn channel_and_dialect_names_round_trip() {
         assert!(channel_of("telegram-html").is_ok());
         assert!(channel_of("없는채널").is_err());
+        assert_eq!(limit_of(4096.0), Ok(4096));
+        assert!(limit_of(0.0).is_err() && limit_of(1.5).is_err() && limit_of(f64::NAN).is_err());
         assert!(dialect_of("slack-mrkdwn").is_ok());
         assert!(dialect_of("markdown").is_ok());
         assert!(dialect_of("mrkdwn").is_err());

@@ -45,6 +45,7 @@ markers — so you can log how often the model breaks its own formatting.
 ```sh
 cat agent-output.md | mdwire --channel telegram-html          # parts separated by NUL
 cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arrives
+cat agent-output.md | mdwire --channel plain --limit 4096      # plain fallback into Telegram
 
 # The agent wrote Slack's legacy mrkdwn (*bold*, ~strike~)? Say so. --report prints what
 # the normalizer fixed (unclosed emphasis, unclosed fence, …) as one JSON line on stderr.
