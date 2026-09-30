@@ -1062,3 +1062,38 @@ fn caller_limit_overrides_the_channel_limit() {
     let out = mdwire::render_with(&input, Channel::TelegramHtml, opts).parts.join("");
     assert!(!out.contains("<a href"), "한도 100 에 200자 주소 링크: {out}");
 }
+
+/// **브라우저 채널의 정책은 호출자가 정한다** — 줄바꿈, 이미지, 스킴. 기본값이 가장
+/// 보수적이다: `<br>`, 이미지는 링크로만(누르기 전엔 아무것도 안 불러온다), `http(s)`·`mailto`.
+#[test]
+fn html_policy_options() {
+    use mdwire::{HtmlOptions, Images, LineBreaks, Options};
+    let input = "첫 줄\n둘째 ![고양이](https://a.com/c.png) [전화](tel:010) ![나쁨](javascript:x)";
+    let h = |html: HtmlOptions| {
+        mdwire::render_with(input, Channel::Html, Options { html, ..Default::default() }).parts.join("")
+    };
+    assert_eq!(
+        h(HtmlOptions::default()),
+        "<p>첫 줄<br>\n둘째 <a href=\"https://a.com/c.png\">고양이</a> 전화 (tel:010) 나쁨 (javascript:x)</p>"
+    );
+    assert!(h(HtmlOptions { line_breaks: LineBreaks::Space, ..Default::default() }).starts_with("<p>첫 줄\n둘째"));
+    // 불러오기로 해도 허용 스킴이 아닌 주소는 이미지가 되지 않는다.
+    let load = h(HtmlOptions { images: Images::Load, ..Default::default() });
+    assert!(load.contains("<img src=\"https://a.com/c.png\" alt=\"고양이\">") && load.contains("나쁨 (javascript:x)"));
+    // 목록을 주면 그것만 받는다 — 기본값에 더하는 것이 아니다.
+    let tel = h(HtmlOptions { schemes: Some(vec!["https".into(), "TEL".into()]), ..Default::default() });
+    assert!(tel.contains("<a href=\"tel:010\">전화</a>"));
+    let only_tel = h(HtmlOptions { schemes: Some(vec!["tel".into()]), ..Default::default() });
+    assert!(only_tel.contains("고양이 (https://a.com/c.png)"));
+    // 다른 채널의 이미지 — 텔레그램은 링크, GitHub 은 이미지 구문 그대로.
+    assert_eq!(one("![고양이](https://a.com/c.png)", Channel::TelegramHtml), "<a href=\"https://a.com/c.png\">고양이</a>");
+    assert_eq!(one("![고양이](https://a.com/c.png)", Channel::GithubMarkdown), "![고양이](https://a.com/c.png)");
+    // 스트리밍 — 조각 끝의 `!` 는 다음 글자가 `[` 인지 볼 때까지 붙든다.
+    let mut s = mdwire::Streamer::new(Channel::Html);
+    let mut acc = String::new();
+    for piece in ["사진 !", "[고양이](https://a.com/c.png) 끝!"] {
+        s.push_into(piece, &mut acc);
+    }
+    s.finish_into(&mut acc);
+    assert_eq!(acc, render("사진 ![고양이](https://a.com/c.png) 끝!", Channel::Html).join(""));
+}

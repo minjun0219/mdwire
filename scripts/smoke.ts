@@ -23,3 +23,5 @@ import type { MarkdownProps } from "@minjun0219/mdwire/react";
 const events: MdEvent[] = toEvents("<p>x</p>");
 const props: MarkdownProps = { text: "**x**", from: "slack-mrkdwn", components: { a: "span" } };
 void [events, Markdown(props), toElements("<p>x</p>")];
+const htmlOpts: RenderOptions = { html: { lineBreaks: "space", images: "load", schemes: ["https"] } };
+void render("x", "html", htmlOpts);

@@ -136,6 +136,15 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 
 		c := line[i]
 
+		// 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
+		if c == '!' && i+1 < len(line) && line[i+1] == '[' {
+			if t0, t1, u0, u1, ok := findLink(line, i+1); ok {
+				in.renderImage(line[t0:t1], line[u0:u1], out, v)
+				i = u1 + 1
+				continue
+			}
+		}
+
 		if c == '[' {
 			if t0, t1, u0, u1, ok := findLink(line, i); ok {
 				in.renderLink(line[t0:t1], line[u0:u1], out, v)
@@ -614,13 +623,25 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 }
 
 func (in *inline) renderLink(text, url []rune, out *[]byte, v vocab) {
+	in.renderTarget(text, url, out, v, false)
+}
+
+func (in *inline) renderImage(alt, url []rune, out *[]byte, v vocab) {
+	in.renderTarget(alt, url, out, v, true)
+}
+
+func (in *inline) renderTarget(text, url []rune, out *[]byte, v vocab, image bool) {
 	scratch := in.scratch[:0]
 	// 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
 	nested := newInline(in.dialect)
 	nested.render(text, &scratch, v)
 	nested.finishBlock(&scratch, v)
 	in.repairs.add(nested.repairs)
-	v.link(string(scratch), string(url), out)
+	if image {
+		v.image(string(scratch), string(url), out)
+	} else {
+		v.link(string(scratch), string(url), out)
+	}
 	in.scratch = scratch
 }
 

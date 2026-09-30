@@ -2,7 +2,7 @@
 export type MdTag =
   | "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "ul" | "ol" | "li" | "blockquote" | "pre" | "code"
   | "strong" | "em" | "del" | "a" | "table" | "thead" | "tbody" | "tr" | "th" | "td" | "hr" | "br"
-  | "sub" | "sup" | "b" | "i" | "u" | "s" | "strike" | "span" | "small" | "mark" | "kbd";
+  | "sub" | "sup" | "b" | "i" | "u" | "s" | "strike" | "span" | "small" | "mark" | "kbd" | "img";
 
 /**
  * 이벤트 하나. 속성은 코어가 내는 것만 담긴다 —
@@ -12,6 +12,8 @@ export type MdEvent =
   | { type: "open"; tag: MdTag; attrs: Record<string, string> }
   | { type: "close"; tag: MdTag }
   | { type: "void"; tag: "br" | "hr" }
+  /** 이미지는 `html.images: "load"` 일 때만 나온다. `src`·`alt` 를 담는다. */
+  | { type: "void"; tag: "img"; attrs: Record<string, string> }
   | { type: "text"; text: string };
 
 /** html 채널 출력(또는 스트리밍 누적본 + `closeOpen()`)을 이벤트 배열로 푼다. */

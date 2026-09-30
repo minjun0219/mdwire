@@ -29,7 +29,8 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    character goes out escaped (`\~`, `\<`), and emphasis GFM would not close — `**(a)**`
    followed directly by a Korean particle — goes out as `<strong>`. For the browser, `html` draws
    blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
-   source keep no attributes, and only `http(s)`/`mailto` links become `<a>`. While streaming,
+   source keep no attributes, and only `http(s)`/`mailto` links become `<a>` — line breaks,
+   images and allowed schemes are options. While streaming,
    the accumulated output plus `closeOpen()` is always balanced HTML.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.

@@ -39,21 +39,43 @@ pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
 ];
 
 /// 채널 하나의 출력 어휘와 정책.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct Vocab {
     pub channel: Channel,
     /// 한 조각의 한도. 채널 기본값이거나 호출자가 [`crate::Options::limit`] 로 준 값이다.
     pub limit: usize,
+    /// 브라우저 채널의 정책. 스킴 목록은 공유한다 — 표 칸마다 어휘를 복제해도 목록은 한 벌.
+    br: bool,
+    load_images: bool,
+    schemes: Option<std::rc::Rc<[String]>>,
 }
 
 impl Vocab {
     pub fn new(channel: Channel) -> Self {
-        Self { channel, limit: channel.limit() }
+        Self::from_options(channel, &crate::Options::default())
     }
 
-    /// 한도를 정해 만든다. `None` 이면 채널 기본값. 0 은 1 로 올린다 — 한 글자는 들어가야 한다.
-    pub fn with_limit(channel: Channel, limit: Option<usize>) -> Self {
-        Self { channel, limit: limit.map_or(channel.limit(), |n| n.max(1)) }
+    /// 옵션으로 만든다. 한도가 `None` 이면 채널 기본값, 0 은 1 로 올린다 — 한 글자는 들어가야 한다.
+    pub fn from_options(channel: Channel, o: &crate::Options) -> Self {
+        Self {
+            channel,
+            limit: o.limit.map_or(channel.limit(), |n| n.max(1)),
+            br: o.html.line_breaks == crate::LineBreaks::Br,
+            load_images: o.html.images == crate::Images::Load,
+            schemes: o.html.schemes.as_ref().map(|s| s.iter().map(|x| x.to_ascii_lowercase()).collect()),
+        }
+    }
+
+    /// 브라우저에서 눌러도(불러와도) 되는 주소인가 — 허용 스킴만. 대소문자·앞 공백으로 숨긴
+    /// `JavaScript:` 도 스킴이 달라 걸러진다.
+    fn allowed(&self, url: &str) -> bool {
+        let u = url.trim_start();
+        let Some(colon) = u.find(':') else { return false };
+        let scheme = &u[..colon];
+        match &self.schemes {
+            None => ["http", "https", "mailto"].iter().any(|s| scheme.eq_ignore_ascii_case(s)),
+            Some(list) => list.iter().any(|s| scheme.eq_ignore_ascii_case(s)),
+        }
     }
 
     /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
@@ -78,7 +100,7 @@ impl Vocab {
     /// 블록 안의 줄바꿈. 브라우저는 `\n` 을 공백으로 접으므로 `<br>` 을 앞에 둔다 — 다른
     /// 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
     pub fn line_break(&self) -> &'static str {
-        if self.is_html() { "<br>\n" } else { "\n" }
+        if self.is_html() && self.br { "<br>\n" } else { "\n" }
     }
 
     /// 마크업 문법 자체가 없는 채널인가. 강조도 표도 글자로 내려앉는다.
@@ -225,7 +247,7 @@ impl Vocab {
                 // **`innerHTML` 로 들어가는 출력이라 스킴을 가린다.** `[x](javascript:…)` 를
                 // 그대로 `<a href>` 로 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면
                 // 링크 없이 글과 주소만 낸다 — 내용은 살린다.
-                if !safe_href(url) {
+                if !self.allowed(url) {
                     out.push_str(text);
                     if !url.is_empty() && !escaped_eq(text, url) {
                         out.push_str(" (");
@@ -262,6 +284,35 @@ impl Vocab {
                 out.push_str("](");
                 out.push_str(url);
                 out.push(')');
+            }
+        }
+    }
+
+    /// 이미지 `![alt](url)` 을 적는다. 텍스트는 이미 렌더된 대체 글이다.
+    ///
+    /// 브라우저는 옵션이 `Load` 이고 주소가 허용 스킴일 때만 `<img>` 로 불러온다 — 기본은
+    /// 링크다(누르기 전에는 아무것도 안 불러온다). 텔레그램·plain 은 이미지 구문이 없어 링크로,
+    /// 마크다운 채널은 `![alt](url)` 그대로 둔다(GitHub 은 그린다).
+    pub fn image(&self, alt: &str, url: &str, out: &mut String) {
+        match self.channel {
+            Channel::Html if self.load_images && self.allowed(url) => {
+                out.push_str("<img src=\"");
+                push_attr(url, out);
+                out.push_str("\" alt=\"");
+                // 대체 글은 이미 escape 된 본문이다. 속성값이라 `"` 만 더 막는다.
+                for c in alt.chars() {
+                    if c == '"' {
+                        out.push_str("&quot;");
+                    } else {
+                        out.push(c);
+                    }
+                }
+                out.push_str("\">");
+            }
+            Channel::Html | Channel::TelegramHtml | Channel::Plain => self.link(alt, url, out),
+            Channel::SlackMarkdown | Channel::GithubMarkdown => {
+                out.push('!');
+                self.link(alt, url, out);
             }
         }
     }
@@ -383,15 +434,6 @@ fn push_attr(s: &str, out: &mut String) {
             _ => out.push(c),
         }
     }
-}
-
-/// 브라우저에서 눌러도 되는 주소인가 — `http(s)`·`mailto` 만. 대소문자·앞 공백으로 숨긴
-/// `JavaScript:` 도 스킴이 달라 걸러진다.
-fn safe_href(url: &str) -> bool {
-    let u = url.trim_start();
-    ["http://", "https://", "mailto:"]
-        .iter()
-        .any(|s| u.len() >= s.len() && u.as_bytes()[..s.len()].eq_ignore_ascii_case(s.as_bytes()))
 }
 
 /// escape 하고 나면 몇 글자가 되는가. **재기만 하고 만들지는 않는다** — 스트리밍

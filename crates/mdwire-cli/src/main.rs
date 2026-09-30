@@ -14,7 +14,7 @@
 //! `--batch jsonl` 은 문서 여럿을 한 프로세스로 잰다 — 답변 수백 개의 품질을 점검할 때
 //! 문서마다 프로세스를 띄우지 않게.
 
-use mdwire::{Channel, Dialect, Options, Repairs, Streamer};
+use mdwire::{Channel, Dialect, Images, LineBreaks, Options, Repairs, Streamer};
 use serde_json::value::RawValue;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Read, Write};
@@ -34,6 +34,9 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
   --channel <이름>      필수
   --from <방언>         입력 표기. markdown(기본) · slack-mrkdwn
   --limit <글자 수>     조각 한도. 기본은 채널의 한도 — plain 을 텔레그램에 보내면 4096
+  --html-line-breaks <br|space>   html: 블록 안 줄바꿈. 기본 br
+  --html-images <link|load>       html: 이미지를 링크로만(기본) · <img> 로 불러오기
+  --html-schemes <목록>           html: 링크·이미지 주소로 받는 스킴, 쉼표로. 기본 http,https,mailto
   --stream              stdin 을 읽는 대로 내보낸다. 한도 분할은 하지 않는다
   --report              정규화가 고친 것을 stderr 에 JSON 한 줄로 낸다
   --batch jsonl         문서 여럿을 JSON lines 로 받아 문서마다 고친 것을 stdout 에
@@ -87,6 +90,24 @@ fn run() -> Result<(), String> {
                     return Err(format!("모르는 --batch 형식: {v} (jsonl 만 받는다)"));
                 }
                 batch = true;
+            }
+            "--html-line-breaks" => {
+                options.html.line_breaks = match value()?.as_str() {
+                    "br" => LineBreaks::Br,
+                    "space" => LineBreaks::Space,
+                    v => return Err(format!("--html-line-breaks 는 br · space 다: {v}")),
+                };
+            }
+            "--html-images" => {
+                options.html.images = match value()?.as_str() {
+                    "link" => Images::Link,
+                    "load" => Images::Load,
+                    v => return Err(format!("--html-images 는 link · load 다: {v}")),
+                };
+            }
+            "--html-schemes" => {
+                let v = value()?;
+                options.html.schemes = Some(v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
             }
             "--limit" => {
                 let v = value()?;
@@ -175,7 +196,7 @@ fn batch_jsonl(channel: Channel, options: Options, input: impl BufRead, out: &mu
         }
         match read_doc(line) {
             Ok((id, text)) => {
-                let repairs = mdwire::render_with(&text, channel, options).repairs;
+                let repairs = mdwire::render_with(&text, channel, options.clone()).repairs;
                 let id = id.map(|id| format!("\"id\":{id},")).unwrap_or_default();
                 writeln!(out, "{{\"line\":{n},{id}{}}}", repairs_fields(&repairs))?;
             }

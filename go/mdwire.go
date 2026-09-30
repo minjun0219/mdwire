@@ -37,7 +37,7 @@ func ParseDialect(name string) (Dialect, bool) {
 	return 0, false
 }
 
-// Options 는 변환 옵션이다 — 입력 방언과 조각 한도.
+// Options 는 변환 옵션이다 — 입력 방언, 조각 한도, 브라우저 채널의 정책. 영값이 기본값이다.
 type Options struct {
 	From Dialect
 	// Limit 은 한 조각의 한도(렌더한 출력의 글자 수)다. 0 이면 채널의 Limit().
@@ -46,7 +46,42 @@ type Options struct {
 	// 4096 이어야 한다(12,000 으로 나눈 7,153자 조각이 400 을 받았다). 음수는 1 로 본다.
 	// 스트리밍은 나누지 않으므로 이 값을 보지 않는다.
 	Limit int
+	// HTML 은 브라우저 채널(HTML)의 정책이다. 다른 채널은 보지 않는다.
+	HTML HTMLOptions
 }
+
+// HTMLOptions 는 브라우저 채널의 정책이다. 영값이 가장 보수적이다 — <br> 줄바꿈, 이미지는
+// 링크로만, 링크는 http·https·mailto 만.
+type HTMLOptions struct {
+	LineBreaks LineBreaks
+	Images     Images
+	// Schemes 는 링크·이미지 주소로 받는 스킴이다("https" 처럼 콜론 없이). nil 이면 http·https·
+	// mailto. 목록을 주면 그것만 받는다 — 기본값에 더하는 것이 아니다. 빈 슬라이스(nil 이 아닌)는
+	// 아무 스킴도 받지 않는다.
+	Schemes []string
+}
+
+// LineBreaks 는 블록 안의 줄바꿈을 어떻게 낼지다.
+type LineBreaks int
+
+const (
+	// LineBreaksBR 은 <br> 이다 — 채팅·메모처럼 저자의 줄바꿈이 뜻인 글. 다른 채널이 다
+	// 줄바꿈을 살린다.
+	LineBreaksBR LineBreaks = iota
+	// LineBreaksSpace 는 줄바꿈 글자만 낸다 — 브라우저가 공백으로 접는다. 80열로 wrap 된 문서를
+	// 문단으로 읽을 때.
+	LineBreaksSpace
+)
+
+// Images 는 이미지 `![alt](url)` 을 어떻게 낼지다.
+type Images int
+
+const (
+	// ImagesLink 는 <a href>alt</a> 다 — 누르기 전에는 아무것도 불러오지 않는다(추적 픽셀이 없다).
+	ImagesLink Images = iota
+	// ImagesLoad 는 <img src alt> 다 — 주소가 허용 스킴일 때만. 아니면 ImagesLink 처럼 낸다.
+	ImagesLoad
+)
 
 // Repairs 는 정규화가 고친 것의 개수다. 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
 type Repairs struct {

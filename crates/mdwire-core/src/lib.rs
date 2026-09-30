@@ -114,10 +114,10 @@ impl Dialect {
     }
 }
 
-/// 변환 옵션 — 입력 방언과 조각 한도.
+/// 변환 옵션 — 입력 방언, 조각 한도, 브라우저 채널의 정책.
 ///
 /// 필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Options {
     pub from: Dialect,
     /// 한 조각의 한도(렌더한 출력의 글자 수). `None` 이면 [`Channel::limit`].
@@ -127,6 +127,39 @@ pub struct Options {
     /// 조각이 400 을 받았다), 앞에 제목을 붙여 보내는 쪽은 그만큼 덜 써야 한다.
     /// 스트리밍([`Streamer`])은 나누지 않으므로 이 값을 보지 않는다.
     pub limit: Option<usize>,
+    /// 브라우저 채널([`Channel::Html`])의 정책. 다른 채널은 보지 않는다.
+    pub html: HtmlOptions,
+}
+
+/// 브라우저 채널의 정책. 기본값이 가장 보수적이다 — `<br>` 줄바꿈, 이미지는 링크로만,
+/// 링크는 `http`·`https`·`mailto` 만.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HtmlOptions {
+    pub line_breaks: LineBreaks,
+    pub images: Images,
+    /// 링크·이미지 주소로 받는 스킴(`"https"` 처럼 콜론 없이). `None` 이면 `http`·`https`·
+    /// `mailto`. 목록을 주면 **그것만** 받는다 — 기본값에 더하는 것이 아니다.
+    pub schemes: Option<Vec<String>>,
+}
+
+/// 블록 안의 줄바꿈을 어떻게 낼지.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineBreaks {
+    /// `<br>` — 채팅·메모처럼 저자의 줄바꿈이 뜻인 글. 다른 채널이 다 줄바꿈을 살린다.
+    #[default]
+    Br,
+    /// 줄바꿈 글자만 — 브라우저가 공백으로 접는다. 80열로 wrap 된 문서를 문단으로 읽을 때.
+    Space,
+}
+
+/// 이미지 `![alt](url)` 을 어떻게 낼지.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Images {
+    /// `<a href>alt</a>` — 누르기 전에는 아무것도 불러오지 않는다(추적 픽셀이 없다).
+    #[default]
+    Link,
+    /// `<img src alt>` — 주소가 허용 스킴일 때만. 아니면 `Link` 처럼 낸다.
+    Load,
 }
 
 /// 정규화가 고친 것의 개수. **모델이 얼마나 자주 서식을 깨는지**를 재는 데 쓴다.
@@ -202,7 +235,7 @@ impl Streamer {
 
     /// 옵션을 주고 만든다 — 입력 방언 따위.
     pub fn with_options(channel: Channel, options: Options) -> Self {
-        Self { engine: Engine::new(channel, options), buf: String::new(), started: false }
+        Self { engine: Engine::new(channel, &options), buf: String::new(), started: false }
     }
 
     /// 지금까지 정규화가 고친 것. `finish` 뒤에 보면 문서 전체의 값이다.
@@ -320,8 +353,8 @@ pub fn render(input: &str, channel: Channel) -> Vec<String> {
 /// assert_eq!(out.repairs.closed_emphasis, 1);
 /// ```
 pub fn render_with(input: &str, channel: Channel, options: Options) -> Rendered {
-    let mut engine = Engine::new(channel, options);
-    let mut sink = PartsSink::new(Vocab::with_limit(channel, options.limit));
+    let mut engine = Engine::new(channel, &options);
+    let mut sink = PartsSink::new(Vocab::from_options(channel, &options));
     engine.feed(input, &mut sink);
     engine.finish(&mut sink);
     Rendered { repairs: engine.repairs(), parts: sink.into_parts() }
