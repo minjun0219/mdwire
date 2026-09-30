@@ -39,6 +39,11 @@ pub enum Channel {
     /// GitHub 코멘트·PR 본문(GFM). 표·헤딩·취소선을 다 그린다. 65,536자.
     /// 슬랙과 같은 마크다운을 내되, GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 탈출한다.
     GithubMarkdown,
+    /// 노션 페이지 본문(Notion-flavored Markdown — API `markdown` 필드·커넥터). 헤딩은 네 단계.
+    /// GitHub 과 같은 마크다운을 내되, 노션이 못 그리는 인라인 HTML 은 벗기고(글자로 보인다),
+    /// 오토링크 `<url>` 은 `[url](url)` 로 쓴다(꺾쇠가 글자로 남는다). 조사 앞 강조는 노션이 그대로
+    /// 그려서 `<strong>` 으로 바꾸지 않는다 — 바꾸면 오히려 태그가 글자로 보인다.
+    NotionMarkdown,
     /// 모든 마크업 제거. 폴백 경로.
     Plain,
     /// 브라우저에 넣을 HTML 조각. 헤딩·목록·표·코드블록을 태그로 그린다. 한도 없음.
@@ -56,14 +61,22 @@ impl Channel {
             Channel::TelegramHtml => "telegram-html",
             Channel::SlackMarkdown => "slack-markdown",
             Channel::GithubMarkdown => "github-markdown",
+            Channel::NotionMarkdown => "notion-markdown",
             Channel::Plain => "plain",
             Channel::Html => "html",
         }
     }
 
     /// 내보낼 수 있는 채널 전부. 코퍼스와 하네스가 이 목록을 돈다.
-    pub fn all() -> [Channel; 5] {
-        [Channel::TelegramHtml, Channel::SlackMarkdown, Channel::GithubMarkdown, Channel::Plain, Channel::Html]
+    pub fn all() -> [Channel; 6] {
+        [
+            Channel::TelegramHtml,
+            Channel::SlackMarkdown,
+            Channel::GithubMarkdown,
+            Channel::NotionMarkdown,
+            Channel::Plain,
+            Channel::Html,
+        ]
     }
 
     /// 이름으로 채널을 찾는다.
@@ -78,6 +91,9 @@ impl Channel {
             Channel::SlackMarkdown | Channel::Plain => 12_000,
             // 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
             Channel::GithubMarkdown => 65_536,
+            // **재지 않았다.** 페이지 하나에 들어갈 본문이라 GitHub 과 같은 값을 둔다. 보내는 쪽
+            // 한도가 따로 있으면 [`Options::limit`] 으로 준다.
+            Channel::NotionMarkdown => 65_536,
             // 브라우저에는 메시지 한도가 없다. 나누지 않는다.
             Channel::Html => usize::MAX,
         }

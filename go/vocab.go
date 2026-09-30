@@ -125,7 +125,9 @@ func (v vocab) lineBreak() string {
 }
 
 // isMarkdown 은 마크다운을 그대로 내보내는 채널인가다.
-func (v vocab) isMarkdown() bool { return v.channel == SlackMarkdown || v.channel == GithubMarkdown }
+func (v vocab) isMarkdown() bool {
+	return v.channel == SlackMarkdown || v.channel == GithubMarkdown || v.channel == NotionMarkdown
+}
 
 // isPlain 은 마크업 문법 자체가 없는 채널인가다. 강조도 표도 글자로 내려앉는다.
 func (v vocab) isPlain() bool { return v.channel == Plain }
@@ -251,7 +253,14 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 
 // escapes 는 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가다.
 func (v vocab) escapes(c rune) bool {
-	return v.channel == GithubMarkdown && (c == '~' || c == '<' || c == '*')
+	switch v.channel {
+	case GithubMarkdown:
+		return c == '~' || c == '<' || c == '*'
+	case NotionMarkdown:
+		// 노션은 마스킹 번호의 별표를 먹고 홀로 쓴 역슬래시를 지운다(실측 2026-10-01).
+		return c == '*' || c == '\\'
+	}
+	return false
 }
 
 // codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 탈출이 글자로 보인다 —
@@ -326,7 +335,8 @@ func (v vocab) link(text, url string, out *[]byte) {
 	default:
 		// 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다. 스킴이 있어야
 		// 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
-		if text == url && strings.Contains(url, "://") {
+		// 노션은 <url> 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다.
+		if text == url && strings.Contains(url, "://") && v.channel != NotionMarkdown {
 			*out = append(*out, '<')
 			*out = append(*out, url...)
 			*out = append(*out, '>')
@@ -441,6 +451,10 @@ func (v vocab) maxHeading() int {
 	if v.channel == GithubMarkdown || v.channel == HTML {
 		// GitHub 은 여섯 단계를 크기를 달리해 그린다.
 		return 6
+	}
+	if v.channel == NotionMarkdown {
+		// 노션 헤딩은 네 단계다 — 다섯·여섯은 노션이 넷으로 바꾼다.
+		return 4
 	}
 	return 0
 }

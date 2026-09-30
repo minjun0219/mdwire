@@ -89,7 +89,10 @@ impl Vocab {
     /// 문서). 고정폭 코드블록으로 바꾸면 화면에서 표가 아니라 코드로 보인다. GitHub 은
     /// GFM 표가 원래 문법이다.
     pub fn tables_native(&self) -> bool {
-        matches!(self.channel, Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::Html)
+        matches!(
+            self.channel,
+            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown | Channel::Html
+        )
     }
 
     /// 브라우저용 HTML 채널인가. 블록까지 태그로 그린다(`<p>` `<h2>` `<ul>` `<table>`).
@@ -195,8 +198,16 @@ impl Vocab {
     /// `*` 도 GitHub 에서는 탈출한다 — mdwire 가 글자로 판정한 별표를 GFM 이 다시 읽는다.
     /// 마스킹 번호 `1***-****-****-001*` 의 `-****-` 가 `-<strong>-</strong>-` 로 먹혔다(실측
     /// 2026-09-30). 강조 마커는 `open`/`close` 로 따로 나가니 여기 오는 별표는 전부 글자다.
+    ///
+    /// **노션은 `*` 와 `\` 를 탈출한다**(실측 2026-10-01, 커넥터). 마스킹 번호가 GitHub 처럼
+    /// 뭉개지고(`1***-****-001*` → `1***-**--001*`), 홀로 쓴 `\` 는 사라진다. `~` 와 `<` 는
+    /// 노션이 글자로 그려 손대지 않는다.
     pub fn escapes(&self, c: char) -> bool {
-        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<' | '*')
+        match self.channel {
+            Channel::GithubMarkdown => matches!(c, '~' | '<' | '*'),
+            Channel::NotionMarkdown => matches!(c, '*' | '\\'),
+            _ => false,
+        }
     }
 
     /// 코드 안의 글자 하나를 적는다. **코드 안에서는 마크다운 탈출이 글자로 보인다** —
@@ -278,7 +289,8 @@ impl Vocab {
             _ => {
                 // 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다.
                 // 스킴이 있어야 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
-                if text == url && url.contains("://") {
+                // 노션은 `<url>` 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다.
+                if text == url && url.contains("://") && self.channel != Channel::NotionMarkdown {
                     out.push('<');
                     out.push_str(url);
                     out.push('>');
@@ -315,7 +327,7 @@ impl Vocab {
                 out.push_str("\">");
             }
             Channel::Html | Channel::TelegramHtml | Channel::Plain => self.link(alt, url, out),
-            Channel::SlackMarkdown | Channel::GithubMarkdown => {
+            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => {
                 out.push('!');
                 self.link(alt, url, out);
             }
@@ -349,7 +361,7 @@ impl Vocab {
     /// 불릿 마커. `SPEC.md` 8절의 표.
     pub fn bullet(&self) -> &'static str {
         match self.channel {
-            Channel::SlackMarkdown | Channel::GithubMarkdown => "- ",
+            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => "- ",
             _ => "• ",
         }
     }
@@ -383,6 +395,8 @@ impl Vocab {
             Channel::SlackMarkdown => 3,
             // GitHub 은 여섯 단계를 크기를 달리해 그린다.
             Channel::GithubMarkdown | Channel::Html => 6,
+            // 노션 헤딩은 네 단계다 — 다섯·여섯은 노션이 넷으로 바꾼다(명세, 실측도 같다).
+            Channel::NotionMarkdown => 4,
             Channel::TelegramHtml | Channel::Plain => 0,
         }
     }

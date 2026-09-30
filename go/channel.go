@@ -25,11 +25,15 @@ const (
 	// 속성을 버린 인라인 태그만 살리며, 링크는 http(s)·mailto 만 <a> 로 낸다. 스트리밍
 	// 누적본에 Streamer.CloseOpen 을 붙이면 그대로 넣어도 되는 모양이 된다. 값이 밀리지 않게 끝에 둔다.
 	HTML
+	// NotionMarkdown 은 노션 페이지 본문(Notion-flavored Markdown)이다. 헤딩은 네 단계. GitHub 과
+	// 같은 마크다운을 내되, 노션이 못 그리는 인라인 HTML 은 벗기고 오토링크는 [url](url) 로 쓴다.
+	// 조사 앞 강조는 노션이 그대로 그려서 <strong> 으로 바꾸지 않는다. 값이 밀리지 않게 끝에 둔다.
+	NotionMarkdown
 )
 
 // Channels 는 내보낼 수 있는 채널 전부다. 코퍼스와 하네스가 이 목록을 돈다.
 func Channels() []Channel {
-	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, Plain, HTML}
+	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, HTML}
 }
 
 // Name 은 코퍼스 디렉토리와 CLI 인자에서 쓰는 이름이다. 채널을 문자열로 다루는 곳의 정본이다.
@@ -41,6 +45,8 @@ func (c Channel) Name() string {
 		return "slack-markdown"
 	case GithubMarkdown:
 		return "github-markdown"
+	case NotionMarkdown:
+		return "notion-markdown"
 	case HTML:
 		return "html"
 	default:
@@ -65,6 +71,9 @@ func (c Channel) Limit() int {
 		return 4096
 	case GithubMarkdown:
 		// 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
+		return 65_536
+	case NotionMarkdown:
+		// 재지 않았다. 페이지 하나의 본문이라 GitHub 과 같은 값을 둔다 — 러스트 쪽과 같다.
 		return 65_536
 	case HTML:
 		// 브라우저에는 메시지 한도가 없다. 나누지 않는다.

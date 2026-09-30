@@ -710,6 +710,24 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
 }
 
+/// **노션은 GitHub 과 같은 마크다운에서 출발하되 반대로 가는 곳이 있다**(실측 2026-10-01, 커넥터로
+/// 페이지를 만들고 되읽었다). 조사 앞 강조는 노션이 그대로 그려 `<strong>` 으로 바꾸지 않고, 인라인
+/// HTML 은 글자로 보여서 벗긴다. 마스킹 번호의 `*` 와 홀로 쓴 `\` 는 노션이 먹어서 탈출하고,
+/// `~`·`<` 는 글자로 그려 둔다. `<url>` 은 꺾쇠가 글자로 남아 링크 문법으로 쓴다.
+#[test]
+fn notion_escapes_what_it_eats_and_strips_tags() {
+    let n = |s| one(s, Channel::NotionMarkdown);
+    assert_eq!(n("**설정(config)**을 바꾼다"), "**설정(config)**을 바꾼다");
+    assert_eq!(n("H<sub>2</sub>O 와 <kbd>C</kbd>"), "H2O 와 C");
+    assert_eq!(n("카드 1***-****-001* 끝"), r"카드 1\*\*\*-\*\*\*\*-001\* 끝");
+    assert_eq!(n(r"백슬래시 \ 하나"), r"백슬래시 \\ 하나");
+    assert_eq!(n("약 ~40km, Vec<T>"), "약 ~40km, Vec<T>");
+    // 저자가 탈출해 둔 것은 한 번만, 코드 안은 그대로.
+    assert_eq!(n(r"\*별\* `a*b\c`"), r"\*별\* `a*b\c`");
+    assert_eq!(n("<https://a.com/x_y>"), "[https://a.com/x_y](https://a.com/x_y)");
+    assert_eq!(n("##### 다섯\n\n* 별표 목록"), "#### 다섯\n\n- 별표 목록");
+}
+
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
 /// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
 #[test]

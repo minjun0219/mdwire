@@ -28,7 +28,7 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
   mdwire --channel <채널> [--from <방언>] --batch jsonl
 
 채널:
-  telegram-html · slack-markdown · github-markdown · plain · html
+  telegram-html · slack-markdown · github-markdown · notion-markdown · plain · html
 
 옵션:
   --channel <이름>      필수
