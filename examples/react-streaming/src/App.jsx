@@ -1,9 +1,10 @@
-// 같은 LLM 답변을 같은 토큰으로 흘려, 렌더러 넷을 나란히 본다.
+// 같은 LLM 답변을 같은 토큰으로 흘려, 렌더러 다섯을 나란히 본다.
 //
 // - react-markdown: 누적본을 매번 통째로 다시 그린다
 // - Streamdown: 누적본을 매번 다시 그리되, 안 닫힌 구문을 보정한다
-// - mdwire → Streamdown: mdwire 스트리머가 확정한 것만 Streamdown 에 넘긴다(브릿지)
-// - mdwire: useMarkdownStream — 스트리머 출력을 React 요소로
+// - mdwire → Streamdown: mdwire 스트리머가 정규화한 누적본 + 미리보기를 Streamdown 에 넘긴다(브릿지)
+// - mdwire: useMarkdownStream — 기본(eager)은 붙든 것도 먼저 그린다
+// - mdwire (eager: false): 확정된 것만 — 뒤 토큰이 앞 글을 안 고치는 대신 강조·표에서 멈춰 보인다
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -38,7 +39,8 @@ export function App() {
         <h1>mdwire — 스트리밍 비교</h1>
         <p>
           같은 답변을 같은 토큰({TOKENS.length}개)으로 흘린다. 반쪽 마커(<code>**굵</code>, 여는 백틱)가 글자로
-          비쳤다 사라지는지, 조사 앞 굵게(<code>**설정(config)**을</code>)가 끝까지 그려지는지 본다.
+          비쳤다 사라지는지, 조사 앞 굵게(<code>**설정(config)**을</code>)가 끝까지 그려지는지, 강조·표가 닫힐
+          때까지 멈춰 보이는지 본다.
         </p>
         <label>
           토큰 간격 {delay}ms
@@ -58,9 +60,10 @@ function Panes({ delay }) {
   const [bridged, setBridged] = useState("");
   const bridge = useRef(null);
   const mdwire = useMarkdownStream();
+  const settled = useMarkdownStream({ eager: false });
 
   useEffect(() => {
-    // 브릿지 — mdwire 가 GitHub 마크다운으로 정규화하고 확정한 것만 Streamdown 에 준다.
+    // 브릿지 — mdwire 가 GitHub 마크다운으로 정규화한 누적본에 미리보기 꼬리를 붙여 Streamdown 에 준다.
     bridge.current = new Streamer("github-markdown");
     let i = 0;
     let done = "";
@@ -69,14 +72,16 @@ function Panes({ delay }) {
         done += bridge.current.finish();
         setBridged(done);
         mdwire.finish();
+        settled.finish();
         clearInterval(timer);
         return;
       }
       const tok = TOKENS[i++];
       setAcc((a) => a + tok);
       done += bridge.current.push(tok);
-      setBridged(done + bridge.current.closeOpen());
+      setBridged(done + bridge.current.preview());
       mdwire.push(tok);
+      settled.push(tok);
     }, delay);
     return () => {
       clearInterval(timer);
@@ -94,11 +99,14 @@ function Panes({ delay }) {
       <Pane title="Streamdown" note="누적본 + 안 닫힌 구문 보정">
         <Streamdown>{acc}</Streamdown>
       </Pane>
-      <Pane title="mdwire → Streamdown" note="스트리머가 확정한 것만 넘김">
+      <Pane title="mdwire → Streamdown" note="정규화한 누적본 + 미리보기">
         <Streamdown>{bridged}</Streamdown>
       </Pane>
-      <Pane title="mdwire" note="useMarkdownStream">
+      <Pane title="mdwire" note="useMarkdownStream()">
         {mdwire.elements}
+      </Pane>
+      <Pane title="mdwire" note="useMarkdownStream({ eager: false })">
+        {settled.elements}
       </Pane>
     </div>
   );

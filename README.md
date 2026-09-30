@@ -31,7 +31,7 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
    source keep no attributes, and only `http(s)`/`mailto` links become `<a>` — line breaks,
    images and allowed schemes are options. While streaming,
-   the accumulated output plus `closeOpen()` is always balanced HTML.
+   the accumulated output plus `preview()` (or `closeOpen()`) is always balanced HTML.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
 
@@ -67,17 +67,19 @@ import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // np
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 
-// A channel that rewrites the whole message (Telegram edit): send acc plus the tail
-// that closes open blocks. Keep acc itself untouched.
+// A channel that rewrites the whole message (Telegram edit): send acc plus the preview —
+// what is still held (open bold, table rows, a code span) drawn as if the input ended here.
+// Keep acc itself untouched. After finish, skip the last edit if nothing changed.
 const s = new Streamer("telegram-html");
 let acc = "";
 for await (const chunk of tokens) {
   acc += s.push(chunk);
-  await edit(acc + s.closeOpen());
+  await edit(acc + s.preview());
 }
 acc += s.finish();
+if (s.revised()) await edit(acc);
 
-// An append-only channel (Slack appendStream): send each piece as is — never closeOpen.
+// An append-only channel (Slack appendStream): send each piece as is — never preview.
 const t = new Streamer("slack-markdown");
 for await (const chunk of tokens) {
   const piece = t.push(chunk);
@@ -97,6 +99,10 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 <Markdown text={answer} components={{ a: RouterLink }} />  // a finished answer
 const { elements, push, finish } = useMarkdownStream();     // streaming: push(token), finish()
 ```
+
+The hook draws held content early by default; `useMarkdownStream({ eager: false })` shows only
+what is final, and `onSettled(html, revised)` tells you whether the finished text differs from
+the last frame.
 
 [`examples/react-streaming`](examples/react-streaming) streams one answer into react-markdown, Streamdown,
 mdwire in front of Streamdown, and mdwire side by side. Measured numbers are in `DESIGN.md`.

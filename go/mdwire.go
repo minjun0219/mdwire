@@ -1,5 +1,7 @@
 package mdwire
 
+import "bytes"
+
 // Render 는 완성된 문서를 한 번에 변환한다. 한도를 넘으면 안전한 지점에서 나눈다 — 나누는
 // 자리는 렌더 결과가 아니라 구조에서 고른다. 블록이 끝나 열린 마크업이 없는 지점만 경계가
 // 된다. 변환 후에 문자 수로 자르면 `<code>` 가 열린 채 잘리고 채널은 400 을 준다.
@@ -130,6 +132,12 @@ type Streamer struct {
 	// 줄바꿈이 아닌 글자를 하나라도 내보냈는가. 앞머리 빈 줄은 내보내지 않는다 — 완성본이
 	// 조각 앞머리의 줄바꿈을 털고 시작하므로 스트리밍도 같아야 둘이 같은 답을 낸다.
 	started bool
+	// tail 은 마지막 Preview 의 꼬리다. 재사용 버퍼 — 열린 블록만큼이지 문서 전체가 아니다.
+	tail []byte
+	// previewed 는 미리보기를 한 번이라도 했는가, dirty 는 그 뒤에 조각이 더 들어왔는가다.
+	previewed, dirty bool
+	// revised 는 Revised 의 답이다. Finish 가 정한다.
+	revised bool
 }
 
 // NewStreamer 는 채널 하나에 묶인 변환기를 만든다.
@@ -139,7 +147,7 @@ func NewStreamer(ch Channel) *Streamer {
 
 // NewStreamerWith 는 옵션을 주고 만든다 — 입력 방언 따위.
 func NewStreamerWith(ch Channel, o Options) *Streamer {
-	return &Streamer{e: newEngine(ch, o)}
+	return &Streamer{e: newEngine(ch, o), revised: true}
 }
 
 // Repairs 는 지금까지 정규화가 고친 것이다. Finish 뒤에 보면 문서 전체의 값이다.
@@ -148,6 +156,7 @@ func (s *Streamer) Repairs() Repairs { return s.e.repairs() }
 // PushTo 는 조각을 밀어 넣고 지금 내보낼 수 있는 출력을 dst 에 붙인다. 정본 서명 —
 // 호출자 버퍼에 직접 쓰므로 조각당 할당이 없다.
 func (s *Streamer) PushTo(chunk string, dst *[]byte) {
+	s.dirty = s.dirty || chunk != ""
 	from := len(*dst)
 	s.e.feed(chunk, bytesSink{dst})
 	s.trimLeading(dst, from)
@@ -165,7 +174,39 @@ func (s *Streamer) FinishTo(dst *[]byte) {
 	from := len(*dst)
 	s.e.finish(bytesSink{dst})
 	s.trimLeading(dst, from)
+	s.revised = !s.previewed || s.dirty || !bytes.Equal(s.tail, (*dst)[from:])
 }
+
+// PreviewTo 는 지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리를 dst 에 붙인다 — 러스트 쪽
+// Streamer::preview. CloseOpenTo 와 같은 자리에 들어가지만 붙들고 있던 것까지 그린다: 열린
+// 강조는 닫아서, 표는 지금까지 온 행으로, 코드 스팬은 닫아서. 누적본을 통째로 다시 그리는 쪽
+// (텔레그램 editMessageText, 슬랙 chat.update)의 기본값이다.
+//
+// 꼬리는 일괄 렌더와 같은 finish 경로라 문법은 늘 맞지만 추측이다 — 뒤의 조각이 모양을 바꿀 수
+// 있다. 끝난 뒤 마지막 미리보기와 달라졌는지는 Revised 가 알려 준다. 비용은 열린 블록 크기에
+// 비례한다(엔진을 복제한다). 조각마다 말고 화면을 그릴 때 부른다.
+func (s *Streamer) PreviewTo(dst *[]byte) {
+	s.tail = s.tail[:0]
+	s.e.preview(bytesSink{&s.tail})
+	if !s.started {
+		s.tail = bytes.TrimLeft(s.tail, "\n")
+	}
+	s.previewed, s.dirty = true, false
+	*dst = append(*dst, s.tail...)
+}
+
+// Preview 는 PreviewTo 의 편의 서명이다.
+func (s *Streamer) Preview() string {
+	var b []byte
+	s.PreviewTo(&b)
+	return string(b)
+}
+
+// Revised 는 완성본이 마지막 미리보기와 다른가다 — Finish 뒤에 본다. 거짓이면 마지막으로 그린
+// 화면(누적본 + Preview)이 곧 완성본이라 다시 그릴 필요가 없다. 텔레그램은 같은 내용으로 편집하면
+// 400("message is not modified")을 주므로 이걸 보고 마지막 편집을 건너뛴다. 미리보기를 안 했거나
+// 그 뒤에 조각이 더 왔으면 참이다.
+func (s *Streamer) Revised() bool { return s.revised }
 
 // Finish 는 FinishTo 의 편의 서명이다.
 func (s *Streamer) Finish() string {

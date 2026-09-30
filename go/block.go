@@ -1,6 +1,7 @@
 package mdwire
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -165,6 +166,37 @@ func (e *engine) feed(chunk string, s sink) {
 		e.progress(true, s)
 		chunk = chunk[nl+1:]
 	}
+}
+
+// preview 는 지금 입력이 끝났다면 나올 꼬리를 s 에 쓴다 — 러스트 쪽 Engine::preview. 자기 상태는
+// 건드리지 않고 복제본에 finish 를 부른다. 코드 스팬만 닫는 백틱을 넣어 준다(안 닫힌 코드 스팬은
+// 일괄 렌더에서 글자로 되돌아가, 미리보기에서 여는 백틱이 비친다).
+func (e *engine) preview(s sink) {
+	c := e.clone()
+	if run, ok := c.inline.openCodeRun(); ok {
+		c.feed(strings.Repeat("`", run), s)
+	}
+	c.finish(s)
+}
+
+// clone 은 깊은 복사다. 슬라이스를 나눠 쓰면 복제본의 finish 가 원본의 버퍼를 덮어쓴다.
+func (e *engine) clone() *engine {
+	c := *e
+	in := *e.inline
+	in.open = slices.Clone(in.open)
+	in.scratch = slices.Clone(in.scratch)
+	in.codeSrc = slices.Clone(in.codeSrc)
+	in.strippedTags = slices.Clone(in.strippedTags)
+	c.inline = &in
+	c.pending = slices.Clone(e.pending)
+	c.out = slices.Clone(e.out)
+	c.lists = slices.Clone(e.lists)
+	c.table.align = slices.Clone(e.table.align)
+	c.table.rows = make([][]string, len(e.table.rows))
+	for i, r := range e.table.rows {
+		c.table.rows[i] = slices.Clone(r)
+	}
+	return &c
 }
 
 func (e *engine) finish(s sink) {

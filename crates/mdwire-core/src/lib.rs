@@ -236,6 +236,14 @@ pub struct Streamer {
     /// 비고 그 뒤의 줄바꿈만 남는데, 완성본은 조각 앞머리의 줄바꿈을 털고 시작한다
     /// (`sink::PartsSink`). 스트리밍도 같아야 한다 — 그래야 둘이 같은 답을 낸다.
     started: bool,
+    /// 마지막 [`Streamer::preview`] 의 꼬리. 재사용 버퍼 — 열린 블록만큼이지 문서 전체가 아니다.
+    tail: String,
+    /// 미리보기를 한 번이라도 했는가.
+    previewed: bool,
+    /// 마지막 미리보기 뒤에 조각이 더 들어왔는가.
+    dirty: bool,
+    /// [`Streamer::revised`] 의 답. `finish` 가 정한다.
+    revised: bool,
 }
 
 impl Streamer {
@@ -245,7 +253,15 @@ impl Streamer {
 
     /// 옵션을 주고 만든다 — 입력 방언 따위.
     pub fn with_options(channel: Channel, options: Options) -> Self {
-        Self { engine: Engine::new(channel, &options), buf: String::new(), started: false }
+        Self {
+            engine: Engine::new(channel, &options),
+            buf: String::new(),
+            started: false,
+            tail: String::new(),
+            previewed: false,
+            dirty: false,
+            revised: true,
+        }
     }
 
     /// 지금까지 정규화가 고친 것. `finish` 뒤에 보면 문서 전체의 값이다.
@@ -282,6 +298,7 @@ impl Streamer {
 
     /// 호출자 버퍼에 직접 쓴다. 정본 서명 — 조각당 할당이 0 이다.
     pub fn push_into(&mut self, chunk: &str, out: &mut String) {
+        self.dirty |= !chunk.is_empty();
         let from = out.len();
         let mut sink = StringSink(out);
         self.engine.feed(chunk, &mut sink);
@@ -303,6 +320,63 @@ impl Streamer {
         let mut sink = StringSink(out);
         self.engine.finish(&mut sink);
         self.trim_leading(out, from);
+        self.revised = !self.previewed || self.dirty || self.tail != out[from..];
+    }
+
+    /// **지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리.** 누적본에 이걸 붙이면 그 자리에서 보낼 수
+    /// 있는 모양이다 — [`Streamer::close_open`] 과 같은 자리에 들어가지만, 붙들고 있던 것까지
+    /// 그린다: 열린 강조는 닫아서(`**굵` → `<b>굵</b>`), 표는 지금까지 온 행으로, 코드 스팬은
+    /// 닫아서. 누적본을 통째로 다시 그리는 쪽(React, 텔레그램 `editMessageText`, 슬랙
+    /// `chat.update`)의 기본값이다.
+    ///
+    /// 꼬리는 일괄 렌더와 같은 `finish` 경로라 문법은 늘 맞는다. 다만 **추측**이다 — 끝내 안
+    /// 닫힌 코드 스팬이 글자로 되돌아가는 것처럼 뒤의 조각이 모양을 바꿀 수 있다. 끝난 뒤에
+    /// 마지막 미리보기와 달라졌는지는 [`Streamer::revised`] 가 알려 준다. 누적본 자체에는
+    /// 넣지 않는다.
+    ///
+    /// 비용은 지금 열린 블록 크기에 비례한다(엔진을 복제한다). 조각마다 부르지 말고 화면을
+    /// 그릴 때 부른다.
+    ///
+    /// ```
+    /// use mdwire::{Channel, Streamer};
+    ///
+    /// let mut s = Streamer::new(Channel::TelegramHtml);
+    /// let mut acc = String::new();
+    /// s.push_into("앞말 **굵", &mut acc);
+    /// assert_eq!(acc, "앞말 ");                       // 확정분은 여기까지
+    /// assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>");
+    ///
+    /// s.push_into("게** 끝", &mut acc);
+    /// let last = format!("{acc}{}", s.preview());
+    /// s.finish_into(&mut acc);
+    /// assert_eq!(acc, last);
+    /// assert!(!s.revised());                          // 마지막 화면이 곧 완성본
+    /// ```
+    pub fn preview(&mut self) -> &str {
+        let mut tail = std::mem::take(&mut self.tail);
+        tail.clear();
+        self.engine.preview(&mut StringSink(&mut tail));
+        if !self.started {
+            let keep = tail.len() - tail.trim_start_matches('\n').len();
+            tail.drain(..keep);
+        }
+        self.tail = tail;
+        self.previewed = true;
+        self.dirty = false;
+        &self.tail
+    }
+
+    /// [`Streamer::preview`] 를 호출자 버퍼에 덧붙인다.
+    pub fn preview_into(&mut self, out: &mut String) {
+        out.push_str(self.preview());
+    }
+
+    /// **완성본이 마지막 미리보기와 다른가** — `finish` 뒤에 본다. 거짓이면 마지막으로 그린
+    /// 화면(`누적본 + preview`)이 곧 완성본이라 다시 그릴 필요가 없다. 텔레그램은 같은 내용으로
+    /// 편집하면 400("message is not modified")을 주므로 이걸 보고 마지막 편집을 건너뛴다.
+    /// 미리보기를 안 했거나 그 뒤에 조각이 더 왔으면 참이다.
+    pub fn revised(&self) -> bool {
+        self.revised
     }
 
     /// **지금까지 받은 것을 그대로 보내도 되게 만든다.** 상태는 건드리지 않으므로

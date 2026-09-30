@@ -28,7 +28,7 @@ LLM 마크다운  →  정규화  →  채널용 렌더  →  안전한 분할  
    블록까지 태그로 그리고 `innerHTML` 로 바로 넣어도 된다 — 글자는 escape 하고, 원문 태그는
    속성을 버린 이름만 살리고, `http(s)`·`mailto` 링크만 `<a>` 로 낸다 — 줄바꿈·이미지·허용
    스킴은 옵션이다. 스트리밍 중에는 누적본에
-   `closeOpen()` 을 붙이면 언제나 균형 잡힌 HTML 이다.
+   `preview()`(또는 `closeOpen()`)를 붙이면 언제나 균형 잡힌 HTML 이다.
 3. **분할.** 채널 한도를 지키되 마크업 한가운데를 자르지 않는다. 스트리밍도 같다 —
    조각 경계가 `**굵게**` 안에 떨어지면 안 된다.
 
@@ -64,17 +64,19 @@ import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // np
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 
-// 메시지 전체를 고쳐 쓰는 채널(텔레그램 edit): acc 에 열린 블록을 닫는 꼬리를 붙여
-// 보낸다. acc 자체는 건드리지 않는다.
+// 메시지 전체를 고쳐 쓰는 채널(텔레그램 edit): acc 에 미리보기를 붙여 보낸다 — 붙들고 있는
+// 것(열린 굵게·표 행·코드 스팬)을 입력이 여기서 끝났다면처럼 그린다. acc 자체는 건드리지
+// 않는다. 끝난 뒤 바뀐 게 없으면 마지막 편집은 건너뛴다.
 const s = new Streamer("telegram-html");
 let acc = "";
 for await (const chunk of tokens) {
   acc += s.push(chunk);
-  await edit(acc + s.closeOpen());
+  await edit(acc + s.preview());
 }
 acc += s.finish();
+if (s.revised()) await edit(acc);
 
-// 이어 붙이기만 하는 채널(슬랙 appendStream): 받은 조각을 그대로 보낸다 — closeOpen 은 쓰지 않는다.
+// 이어 붙이기만 하는 채널(슬랙 appendStream): 받은 조각을 그대로 보낸다 — preview 는 쓰지 않는다.
 const t = new Streamer("slack-markdown");
 for await (const chunk of tokens) {
   const piece = t.push(chunk);
@@ -94,6 +96,9 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 <Markdown text={answer} components={{ a: RouterLink }} />  // 완성된 답
 const { elements, push, finish } = useMarkdownStream();     // 스트리밍: push(토큰), finish()
 ```
+
+훅은 기본으로 붙든 것도 먼저 그린다. `useMarkdownStream({ eager: false })` 면 확정된 것만
+보이고, `onSettled(html, revised)` 가 완성본이 마지막 화면과 다른지 알려 준다.
 
 [`examples/react-streaming`](examples/react-streaming) 은 같은 답변을 react-markdown, Streamdown, Streamdown
 앞에 둔 mdwire, mdwire 로 나란히 흘려 본다. 잰 수치는 `DESIGN.md` 에 있다.
