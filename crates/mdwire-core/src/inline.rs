@@ -39,6 +39,8 @@ struct Open {
     /// 짝이 오면 닫지만, 안 오면 닫아 주지 않고 글자로 되돌린다. mrkdwn 의 홑 `~` 다 —
     /// 한국어에서 물결표는 근사값·범위로 흔해서(`약 ~40km`), 블록 끝까지 그어 버리면 안 된다.
     soft: bool,
+    /// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
+    before: Option<char>,
 }
 
 pub(crate) struct Inline {
@@ -61,6 +63,10 @@ pub(crate) struct Inline {
     dialect: Dialect,
     /// 정규화가 고친 것. 블록이 끝날 때 닫은 강조, 글자로 되돌린 코드 스팬, 버린 마커.
     pub repairs: Repairs,
+    /// 지금 닫는 마커 바로 뒤의 원문 글자. 짝이 맞아 닫을 때만 뜻이 있다.
+    after_close: Option<char>,
+    /// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
+    pub in_cell: bool,
 }
 
 impl Inline {
@@ -72,6 +78,8 @@ impl Inline {
             code_src: Vec::new(),
             dialect,
             repairs: Repairs::default(),
+            after_close: None,
+            in_cell: false,
         }
     }
 
@@ -192,6 +200,7 @@ impl Inline {
                     guess: false,
                     after_space: prev.is_none_or(char::is_whitespace),
                     soft: false,
+                    before: prev,
                 });
                 i += run;
                 continue;
@@ -293,22 +302,28 @@ impl Inline {
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
                 // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
-                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft)),
+                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev)),
                 // mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
                 Some(_) if !after_space && soft_blocked_close => v.escape_char(c, out),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
-                Some(at) if !after_space => self.close_at(at, out, v),
+                Some(at) if !after_space => {
+                    self.after_close = next;
+                    self.close_at(at, out, v)
+                }
                 // 앞이 공백인데 뒤로는 열 수 있다 — 여는 마커가 또 왔다. **먼저 열린 쪽이
                 // 진다.** `채널**이다. …⏎**신분 공개**이` 에서 첫 `**` 는 짝 잃은 마커고
                 // 둘째 줄이 온전한 굵게다 — CommonMark 도 슬랙도 그렇게 읽는다(실측). 먼저
                 // 열린 마커는 앞이 공백이었으면 글자로 되돌리고, 글자였으면 버린다. 여기서
                 // "닫기"로 읽으면 강조 범위가 뒤집힌다 — 그 고장이 원본이다. 규칙 2.
                 Some(at) if left && at + 1 == self.open.len() => {
-                    self.reopen_at(at, out, v, (emph, take, c, after_space, soft))
+                    self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev))
                 }
                 // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
                 Some(_) if left => {}
-                Some(at) => self.close_at(at, out, v),
+                Some(at) => {
+                    self.after_close = next;
+                    self.close_at(at, out, v)
+                }
                 None if left => self.open.push(Open {
                     emph,
                     at: out.len(),
@@ -317,6 +332,7 @@ impl Inline {
                     guess: false,
                     after_space,
                     soft,
+                    before: prev,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
                 None => self.open.push(Open {
@@ -327,6 +343,7 @@ impl Inline {
                     guess: true,
                     after_space,
                     soft,
+                    before: prev,
                 }),
             }
             i += take;
@@ -383,9 +400,15 @@ impl Inline {
     /// 되돌린다(`2 ** 3`) — 진짜 여는 마커였다가 진 `**` 는 짝 잃은 마커라 버린다. 되돌리면
     /// 텔레그램 화면에 `**` 가 글자로 남는다.
     ///
-    /// `fresh` 는 새로 열 마커 — (종류, 런 길이, 글자, 앞이 공백이었는가, 부드러운가).
-    fn reopen_at(&mut self, at: usize, out: &mut String, v: &Vocab, fresh: (Emph, usize, char, bool, bool)) {
-        let (emph, take, c, after_space, soft) = fresh;
+    /// `fresh` 는 새로 열 마커 — (종류, 런 길이, 글자, 앞이 공백이었는가, 부드러운가, 앞 글자).
+    fn reopen_at(
+        &mut self,
+        at: usize,
+        out: &mut String,
+        v: &Vocab,
+        fresh: (Emph, usize, char, bool, bool, Option<char>),
+    ) {
+        let (emph, take, c, after_space, soft, before) = fresh;
         // `at` 위에 열린 것들은 먼저 정리한다 — `a*** **x` 처럼 추측 둘이 겹쳐 있을 때
         // 아래쪽이 물러난다. 위쪽을 두고 아래만 빼면 열린 것들의 순서가 깨진다.
         while self.open.len() > at + 1 {
@@ -397,7 +420,7 @@ impl Inline {
         } else {
             self.repairs.dropped_marker += 1;
         }
-        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, soft });
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, soft, before });
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
@@ -487,6 +510,17 @@ impl Inline {
                 return;
             }
         }
+        // **GitHub 이 이 짝을 강조로 읽지 않으면 태그로 낸다.** GFM 은 CommonMark 의 flanking
+        // 규칙을 따라서, 닫는 `**` 앞이 구두점이고 뒤에 글자가 오면 닫지 못한다 —
+        // `**설정(config)**을` 이 별표째 글자로 남고, 짝이 뒤의 `**` 와 엇갈려 범위가
+        // 뒤집힌다(실측 2026-09-30). 한국어는 조사가 붙어서 이 모양이 흔하다. `<strong>` 은
+        // flanking 을 안 따지고 GitHub 이 그대로 그린다.
+        let after = if matched { self.after_close } else { None };
+        if v.html_emphasis() && open.emph != Emph::Code && !gfm_pairs(open.before, &out[open.at..], after) {
+            out.insert_str(open.at, v.open_html(open.emph));
+            out.push_str(v.close_html(open.emph));
+            return;
+        }
         out.insert_str(open.at, v.open(open.emph));
         out.push_str(v.close(open.emph));
     }
@@ -554,8 +588,20 @@ impl Inline {
             return None;
         }
         if !closing && eq_ignore_case(name, "br") {
-            out.push('\n');
-            self.prev = Some('\n');
+            // **표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다** — 칸 안에 `\n` 이 들어가면 GFM 은
+            // 그 뒤를 새 행으로 읽어 내용이 엉뚱한 열로 간다. 칸 안 줄바꿈은 GFM 에서 흔히
+            // `<br>` 로 쓰므로 그걸 그리는 GitHub 에는 그대로 두고, 나머지는 공백으로 편다.
+            if self.in_cell {
+                if v.html_emphasis() {
+                    out.push_str("<br>");
+                } else {
+                    out.push(' ');
+                }
+                self.prev = Some(' ');
+            } else {
+                out.push('\n');
+                self.prev = Some('\n');
+            }
         }
         Some(close + 1)
     }
@@ -575,6 +621,20 @@ impl Inline {
 
         self.scratch = scratch;
     }
+}
+
+/// GFM(CommonMark)이 `before` + 마커 + `body` + 마커 + `after` 를 강조로 읽는가.
+///
+/// 여는 마커는 좌측 flanking, 닫는 마커는 우측 flanking 이어야 한다. 구두점은 CommonMark
+/// 0.31 처럼 기호까지 친다 — 글자·숫자·공백이 아니면 구두점이다(`🔥` 도).
+fn gfm_pairs(before: Option<char>, body: &str, after: Option<char>) -> bool {
+    let punct = |c: char| !c.is_alphanumeric() && !c.is_whitespace();
+    let (Some(first), Some(last)) = (body.chars().next(), body.chars().next_back()) else {
+        return true;
+    };
+    let left = !first.is_whitespace() && (!punct(first) || before.is_none_or(|b| b.is_whitespace() || punct(b)));
+    let right = !last.is_whitespace() && (!punct(last) || after.is_none_or(|a| a.is_whitespace() || punct(a)));
+    left && right
 }
 
 /// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —

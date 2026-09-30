@@ -101,8 +101,9 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     }
 
     over_limit(output, channel, &mut findings);
-    emphasis_range(input, output, channel, &mut findings);
-    stray_markers(input, output, channel, &mut findings);
+    let marked = tags_as_markers(output, channel);
+    emphasis_range(input, &marked, channel, &mut findings);
+    stray_markers(input, &marked, channel, &mut findings);
     if matches!(channel, Channel::TelegramHtml) {
         // **조각마다 따로 본다.** 조각 하나가 곧 메시지 하나다. 이어 붙여서 보면
         // 여는 태그와 닫는 태그가 서로 다른 메시지에 있어도 균형이 맞아 보인다.
@@ -173,6 +174,21 @@ fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
             if missing.len() > 5 { " …" } else { "" }
         ),
     });
+}
+
+/// GitHub 출력의 강조 태그를 마커로 읽는다.
+///
+/// 코어는 GFM 이 마커를 못 읽는 자리(`**설정(config)**을`)에서 `<strong>` 따위로 낸다.
+/// 범위와 짝을 재는 쪽은 마크다운 마커로 읽으므로, 같은 뜻의 마커로 바꿔 놓고 잰다.
+fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> {
+    if channel != Channel::GithubMarkdown || !output.contains('<') {
+        return std::borrow::Cow::Borrowed(output);
+    }
+    let mut s = output.to_string();
+    for (tag, marker) in [("strong", "**"), ("em", "*"), ("del", "~~")] {
+        s = s.replace(&format!("<{tag}>"), marker).replace(&format!("</{tag}>"), marker);
+    }
+    std::borrow::Cow::Owned(s)
 }
 
 /// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.

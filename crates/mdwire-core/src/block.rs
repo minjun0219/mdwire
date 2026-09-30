@@ -970,6 +970,7 @@ impl Table {
         // 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의
         // `**x` 를 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
         let mut inline = Inline::new(dialect);
+        inline.in_cell = true;
         let mut chars: Vec<char> = Vec::new();
         for row in &rows {
             let mut line = Vec::with_capacity(cols);

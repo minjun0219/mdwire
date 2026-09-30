@@ -25,7 +25,8 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
    tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
-   character goes out escaped (`\~`, `\<`).
+   character goes out escaped (`\~`, `\<`), and emphasis GFM would not close — `**(a)**`
+   followed directly by a Korean particle — goes out as `<strong>`.
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
 

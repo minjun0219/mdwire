@@ -57,6 +57,30 @@ impl Vocab {
         }
     }
 
+    /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 —
+    /// 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
+    pub fn html_emphasis(&self) -> bool {
+        self.channel == Channel::GithubMarkdown
+    }
+
+    pub fn open_html(&self, e: Emph) -> &'static str {
+        match e {
+            Emph::Bold => "<strong>",
+            Emph::Italic => "<em>",
+            Emph::Strike => "<del>",
+            Emph::Code => "<code>",
+        }
+    }
+
+    pub fn close_html(&self, e: Emph) -> &'static str {
+        match e {
+            Emph::Bold => "</strong>",
+            Emph::Italic => "</em>",
+            Emph::Strike => "</del>",
+            Emph::Code => "</code>",
+        }
+    }
+
     pub fn close(&self, e: Emph) -> &'static str {
         match (self.channel, e) {
             (Channel::TelegramHtml, Emph::Bold) => "</b>",

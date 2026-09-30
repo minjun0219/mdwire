@@ -63,6 +63,36 @@ func (v vocab) open(e emph) string {
 	}
 }
 
+// htmlEmphasis 는 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가다. GitHub 만
+// 그렇다 — 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
+func (v vocab) htmlEmphasis() bool { return v.channel == GithubMarkdown }
+
+func (v vocab) openHTML(e emph) string {
+	switch e {
+	case emphBold:
+		return "<strong>"
+	case emphItalic:
+		return "<em>"
+	case emphStrike:
+		return "<del>"
+	default:
+		return "<code>"
+	}
+}
+
+func (v vocab) closeHTML(e emph) string {
+	switch e {
+	case emphBold:
+		return "</strong>"
+	case emphItalic:
+		return "</em>"
+	case emphStrike:
+		return "</del>"
+	default:
+		return "</code>"
+	}
+}
+
 func (v vocab) close(e emph) string {
 	if v.channel == TelegramHTML {
 		switch e {

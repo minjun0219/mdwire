@@ -707,6 +707,31 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
 }
 
+/// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
+/// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
+#[test]
+fn github_uses_tags_where_gfm_cannot_pair_markers() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("**설정(config)**을 바꾼다"), "<strong>설정(config)</strong>을 바꾼다");
+    assert_eq!(g("*\"인용\"*은 · ~~(취소)~~가"), "<em>\"인용\"</em>은 · <del>(취소)</del>가");
+    assert_eq!(g("**`코드`**였다"), "<strong>`코드`</strong>였다");
+    // GFM 이 읽는 자리는 마커 그대로다 — 원문을 되도록 그대로 둔다.
+    assert_eq!(g("**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤"), "**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤");
+    // 슬랙은 재 본 적이 없어 그대로 둔다.
+    assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)**을");
+}
+
+/// **표 칸 안의 `<br>` 은 줄바꿈이 될 수 없다.** 칸 안에 줄바꿈이 들어가면 GFM 은 뒤를 새
+/// 행으로 읽어 내용이 엉뚱한 열로 간다. GitHub 은 칸 안 `<br>` 을 그리니 그대로 둔다.
+#[test]
+fn br_inside_a_table_cell_keeps_the_row() {
+    let input = "| a | 첫째<br>둘째 |\n|---|---|\n| 1 | 2 |";
+    assert_eq!(one(input, Channel::GithubMarkdown), "| a | 첫째<br>둘째 |\n| --- | --- |\n| 1 | 2 |");
+    assert_eq!(one(input, Channel::SlackMarkdown), "| a | 첫째 둘째 |\n| --- | --- |\n| 1 | 2 |");
+    // 칸 밖은 여전히 줄바꿈이다.
+    assert_eq!(one("줄<br>바꿈", Channel::GithubMarkdown), "줄\n바꿈");
+}
+
 /// **`** 띄운 굵게 **` 는 글자다.** 열 수도 닫을 수도 없는 마커 둘이라 CommonMark 도
 /// 슬랙도 글자로 둔다. 전에는 닫는 쪽만 삼켜 `** 띄운 굵게  는` 이 됐다 — 내용 손실이다.
 #[test]

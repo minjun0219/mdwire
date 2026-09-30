@@ -269,7 +269,8 @@ type markup struct {
 type tag struct{ name, full string }
 
 // span 은 짝이 맞는 인라인 스팬 하나다. 위치는 글자 단위. 코드 스팬은 run 이 백틱 런 길이고,
-// 강조는 marker 가 마커 글자다.
+// 강조는 marker 가 마커 글자다. GitHub 에서 마커 대신 낸 태그는 marker 가 여는 태그
+// (`<strong>`)다 — 마커가 flanking 에 걸리는 자리에만 나온다(gfmPairs).
 type span struct {
 	run    int
 	marker string
@@ -277,7 +278,9 @@ type span struct {
 	end    int // 닫는 마커 다음 위치
 }
 
-func (sp span) write(out *[]byte) {
+func (sp span) isTag() bool { return strings.HasPrefix(sp.marker, "<") }
+
+func (sp span) writeOpen(out *[]byte) {
 	if sp.marker != "" {
 		*out = append(*out, sp.marker...)
 		return
@@ -287,11 +290,53 @@ func (sp span) write(out *[]byte) {
 	}
 }
 
-func (sp span) length() int {
-	if sp.marker != "" {
-		return len(sp.marker)
+func (sp span) writeClose(out *[]byte) {
+	if sp.isTag() {
+		*out = append(*out, "</"...)
+		*out = append(*out, sp.marker[1:]...)
+		return
 	}
-	return sp.run
+	sp.writeOpen(out)
+}
+
+// reopenLen 은 닫고 다시 여는 데 드는 글자 수다.
+func (sp span) reopenLen() int {
+	switch {
+	case sp.isTag():
+		return len(sp.marker)*2 + 1
+	case sp.marker != "":
+		return len(sp.marker) * 2
+	}
+	return sp.run * 2
+}
+
+// emphTags 는 렌더러가 마커 대신 내는 태그다. 여는 태그에 속성이 없다.
+var emphTags = [...]string{"<strong>", "<em>", "<del>"}
+
+// emphTagAt 은 at 에서 렌더러가 낸 강조 태그가 시작하면 (여는 태그, 닫는 태그인가, 길이)다.
+func emphTagAt(ch []rune, at int) (string, bool, int) {
+	closing := at+1 < len(ch) && ch[at+1] == '/'
+	for _, t := range emphTags {
+		want := t
+		if closing {
+			want = "</" + t[1:]
+		}
+		n := len(want)
+		if at+n > len(ch) {
+			continue
+		}
+		hit := true
+		for k, c := range []byte(want) {
+			if ch[at+k] != rune(c) {
+				hit = false
+				break
+			}
+		}
+		if hit {
+			return t, closing, n
+		}
+	}
+	return "", false, 0
 }
 
 func newMarkup() markup {
@@ -412,7 +457,7 @@ func (m *markup) reserve() int {
 	}
 	// 스팬은 닫는 마커와 다시 여는 마커, 두 번.
 	for _, sp := range m.openSpans() {
-		n += sp.length() * 2
+		n += sp.reopenLen()
 	}
 	return n
 }
@@ -421,7 +466,7 @@ func (m *markup) closeAll(out *[]byte, v vocab) {
 	// 안쪽부터 — 늦게 열린 것이 안쪽이다.
 	open := m.openSpans()
 	for i := len(open) - 1; i >= 0; i-- {
-		open[i].write(out)
+		open[i].writeClose(out)
 	}
 	for i := len(m.tags) - 1; i >= 0; i-- {
 		*out = append(*out, "</"...)
@@ -451,7 +496,7 @@ func (m *markup) reopen(out *[]byte) {
 		*out = append(*out, t.full...)
 	}
 	for _, sp := range m.openSpans() {
-		sp.write(out)
+		sp.writeOpen(out)
 	}
 }
 
@@ -567,6 +612,24 @@ func scanSpans(text string) []span {
 				i = closeAt + run
 			} else {
 				i += run
+			}
+			continue
+		}
+		if c == '<' {
+			t, closing, n := emphTagAt(ch, i)
+			switch {
+			case n == 0:
+				i++
+			case !closing:
+				open = append(open, openSpan{marker: t, at: i})
+				i += n
+			default:
+				if len(open) > 0 && open[len(open)-1].marker == t {
+					o := open[len(open)-1]
+					open = open[:len(open)-1]
+					spans = append(spans, span{marker: t, start: o.at, end: i + n})
+				}
+				i += n
 			}
 			continue
 		}

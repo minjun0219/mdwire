@@ -1,8 +1,8 @@
 package mdwire
 
 import (
-	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 인라인 파서 — 강조의 짝을 맞춘다. 이 파일이 이 라이브러리의 이유다.
@@ -32,6 +32,8 @@ type openMark struct {
 	afterSpace bool
 	// 짝이 오면 닫지만, 안 오면 닫아 주지 않고 글자로 되돌린다. mrkdwn 의 홑 `~` 다.
 	soft bool
+	// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
+	before rune
 }
 
 type inline struct {
@@ -47,10 +49,14 @@ type inline struct {
 	dialect Dialect
 	// 정규화가 고친 것.
 	repairs Repairs
+	// 지금 닫는 마커 바로 뒤의 원문 글자. 짝이 맞아 닫을 때만 뜻이 있다.
+	afterClose rune
+	// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
+	inCell bool
 }
 
 func newInline(d Dialect) *inline {
-	return &inline{prev: noChar, dialect: d}
+	return &inline{prev: noChar, dialect: d, afterClose: noChar}
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
@@ -151,7 +157,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			run := runLen(line, i, '`')
 			prev := in.prevChar(line, i)
 			in.codeSrc = in.codeSrc[:0]
-			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev)})
+			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev), before: prev})
 			i += run
 			continue
 		}
@@ -222,7 +228,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		softBlockedOpen := soft && ((prev != noChar && isWordChar(prev)) || (next >= '0' && next <= '9'))
 		softBlockedClose := soft && next != noChar && next < 0x80 && isASCIIAlnum(next)
 		left := canOpen(prev, next) && !intraword && !softBlockedOpen
-		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft}
+		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev}
 
 		switch {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
@@ -240,6 +246,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			v.escapeChar(c, out)
 		// 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
 		case same >= 0 && !afterSpace:
+			in.afterClose = next
 			in.closeAt(same, out, v)
 		// 앞이 공백인데 뒤로는 열 수 있다 — 여는 마커가 또 왔다. 먼저 열린 쪽이 진다. 규칙 2.
 		case same >= 0 && left && same+1 == len(in.open):
@@ -247,6 +254,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
 		case same >= 0 && left:
 		case same >= 0:
+			in.afterClose = next
 			in.closeAt(same, out, v)
 		case left:
 			fresh.at = len(*out)
@@ -410,8 +418,36 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 			return
 		}
 	}
+	// GitHub 이 이 짝을 강조로 읽지 않으면 태그로 낸다. GFM 은 CommonMark 의 flanking 규칙을
+	// 따라서, 닫는 `**` 앞이 구두점이고 뒤에 글자가 오면 닫지 못한다 — `**설정(config)**을` 이
+	// 별표째 글자로 남고, 짝이 뒤의 `**` 와 엇갈려 범위가 뒤집힌다(실측 2026-09-30).
+	after := noChar
+	if matched {
+		after = in.afterClose
+	}
+	if v.htmlEmphasis() && o.emph != emphCode && !gfmPairs(o.before, (*out)[o.at:], after) {
+		insertAt(out, o.at, v.openHTML(o.emph))
+		*out = append(*out, v.closeHTML(o.emph)...)
+		return
+	}
 	insertAt(out, o.at, v.open(o.emph))
 	*out = append(*out, v.close(o.emph)...)
+}
+
+// gfmPairs 는 GFM(CommonMark)이 before + 마커 + body + 마커 + after 를 강조로 읽는가다.
+// 여는 마커는 좌측 flanking, 닫는 마커는 우측 flanking 이어야 한다. 구두점은 CommonMark 0.31
+// 처럼 기호까지 친다 — 글자·숫자·공백이 아니면 구두점이다.
+func gfmPairs(before rune, body []byte, after rune) bool {
+	if len(body) == 0 {
+		return true
+	}
+	first, _ := utf8.DecodeRune(body)
+	last, _ := utf8.DecodeLastRune(body)
+	punct := func(c rune) bool { return !isAlphanumeric(c) && !unicode.IsSpace(c) }
+	edge := func(c rune) bool { return c == noChar || unicode.IsSpace(c) || punct(c) }
+	left := !unicode.IsSpace(first) && (!punct(first) || edge(before))
+	right := !unicode.IsSpace(last) && (!punct(last) || edge(after))
+	return left && right
 }
 
 // angle 은 `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
@@ -476,8 +512,20 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		return 0
 	}
 	if !closing && eqIgnoreCase(name, "br") {
-		*out = append(*out, '\n')
-		in.prev = '\n'
+		// 표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다 — 칸 안에 `\n` 이 들어가면 GFM 은 그 뒤를
+		// 새 행으로 읽어 내용이 엉뚱한 열로 간다. 그걸 그리는 GitHub 에는 그대로 두고,
+		// 나머지는 공백으로 편다.
+		switch {
+		case in.inCell && v.htmlEmphasis():
+			*out = append(*out, "<br>"...)
+			in.prev = ' '
+		case in.inCell:
+			*out = append(*out, ' ')
+			in.prev = ' '
+		default:
+			*out = append(*out, '\n')
+			in.prev = '\n'
+		}
 	}
 	return closeAt + 1
 }
@@ -609,5 +657,9 @@ func insertMarker(out *[]byte, at int, c rune, n int, v vocab) {
 		insertRun(out, at, c, n)
 		return
 	}
-	insertAt(out, at, strings.Repeat("\\"+string(c), n))
+	// 문자열을 만들지 않고 자리를 늘려 `\` 와 마커를 번갈아 채운다 — 조각마다 불리는 경로다.
+	insertRun(out, at, c, 2*n)
+	for k := 0; k < n; k++ {
+		(*out)[at+2*k] = '\\'
+	}
 }
