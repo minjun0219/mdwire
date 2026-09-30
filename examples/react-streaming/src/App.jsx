@@ -18,8 +18,10 @@ function tokenize(text) {
   const out = [];
   let seed = 7;
   for (let i = 0; i < cps.length; ) {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    const n = 1 + (seed % 6);
+    // 32비트 정수 연산으로 — `seed * 1103515245` 는 안전 정수 범위를 넘어 아래 비트가 반올림돼,
+    // 토큰 길이가 1·3·5 에 몰렸다(리뷰에서 나왔다). LCG 의 아래 비트는 주기가 짧아 위 비트를 쓴다.
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    const n = 1 + ((seed >>> 16) % 6);
     out.push(cps.slice(i, i + n).join(""));
     i += n;
   }
