@@ -64,7 +64,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			}
 			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|plain [--from markdown|slack-mrkdwn] [--stream] [--report] [--batch jsonl] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|plain [--from markdown|slack-mrkdwn] [--stream] [--report] [--batch jsonl] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])
@@ -72,7 +72,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 	}
 	ch, ok := mdwire.ParseChannel(channel)
 	if !ok {
-		return fmt.Errorf("모르는 채널: %q (telegram-html · slack-markdown · plain)", channel)
+		return fmt.Errorf("모르는 채널: %q (telegram-html · slack-markdown · github-markdown · plain)", channel)
 	}
 	// 쓰기·비우기 실패를 삼키지 않는다 — 닫힌 파이프나 가득 찬 장치에 잘린 출력을 내고 0 으로
 	// 끝나면 호출자가 배달 실패를 알 수 없다.

@@ -8,7 +8,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 bin=${MDWIRE:-"$here/../../target/release/mdwire"}
-channels=(telegram-html slack-markdown plain)
+channels=(telegram-html slack-markdown github-markdown plain)
 # `<이름>-input.txt` 마다 `<이름>.<채널>.txt` 를 만든다. inline 은 한 문단(인라인 파서만),
 # block 은 문서(완성본 파이프라인)다 — 둘 다 러스트 CLI 로 뽑는다.
 for set in inline block mrkdwn; do

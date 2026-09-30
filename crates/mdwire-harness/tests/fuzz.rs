@@ -117,13 +117,16 @@ fn random_long_input_splits_cleanly() {
     for round in 0..150 {
         let mut input = String::new();
         // 짧은 문서 여러 개를 이어서 **모든 채널의** 한도를 확실히 넘긴다 — 가장 큰
-        // 한도(슬랙·plain 12,000)의 두 배. 텔레그램만 넘기면 나머지 채널의 분할 경로는
-        // 한 번도 안 돈다.
-        let target = Channel::all().iter().map(|c| c.limit()).max().expect("채널이 있다") * 2;
+        // 한도의 두 배. 텔레그램만 넘기면 나머지 채널의 분할 경로는 한 번도 안 돈다.
+        // **GitHub 한도(65,536)는 열 번에 한 번만 넘긴다.** 매번 채우면 퍼즈가 여덟 배
+        // 느려지는데(8초 → 67초) 분할 경로는 슬랙과 같은 코드다.
+        let wide = round % 10 == 0;
+        let reach = |c: &Channel| wide || c.limit() <= Channel::SlackMarkdown.limit();
+        let target = Channel::all().iter().filter(|c| reach(c)).map(|c| c.limit()).max().expect("채널이 있다") * 2;
         while input.chars().count() < target {
             input.push_str(&doc(&mut rng));
         }
-        for channel in Channel::all() {
+        for channel in Channel::all().into_iter().filter(reach) {
             let parts = mdwire::render(&input, channel);
             if parts.len() < 2 {
                 failures.push(format!("#{round} {}: 한도를 넘겼는데 안 나뉘었다", channel.name()));

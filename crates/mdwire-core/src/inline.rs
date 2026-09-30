@@ -140,7 +140,7 @@ impl Inline {
                         // `` ` foo `` bar ` `` 의 내용이 "foo `" 로 잘리던 것이 이것이다.
                         let step = run.max(1);
                         for k in 0..step {
-                            v.escape_char(line[i + k], out);
+                            v.code_char(line[i + k], out);
                             self.code_src.push(line[i + k]);
                         }
                         i += step;
@@ -393,9 +393,7 @@ impl Inline {
         }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
         if old.run == 1 || (old.guess && old.after_space) {
-            for _ in 0..old.run {
-                out.insert(old.at, old.ch);
-            }
+            insert_marker(out, old.at, old.ch, old.run, v);
         } else {
             self.repairs.dropped_marker += 1;
         }
@@ -435,9 +433,7 @@ impl Inline {
             // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
             // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
             if open.after_space || open.run == 1 {
-                for _ in 0..open.run {
-                    out.insert(open.at, open.ch);
-                }
+                insert_marker(out, open.at, open.ch, open.run, v);
             } else {
                 self.repairs.dropped_marker += 1;
             }
@@ -516,9 +512,9 @@ impl Inline {
             let body = &rest[1..close];
             // `<url|텍스트>` 는 슬랙 레거시 링크다. 슬랙에서 긁어 온 글에 그대로 남는다 —
             // 한 표본의 124건이 전부 이 모양이었다. 주소와 텍스트를 가른다.
-            let (url, label) = match body.iter().position(|&c| c == '|') {
-                Some(bar) => (&body[..bar], &body[bar + 1..]),
-                None => (body, body),
+            let (url, label, bare) = match body.iter().position(|&c| c == '|') {
+                Some(bar) => (&body[..bar], &body[bar + 1..], false),
+                None => (body, body, true),
             };
             if url.iter().any(|c| c.is_whitespace()) {
                 return None;
@@ -529,8 +525,14 @@ impl Inline {
             href.extend(url.iter());
             let mut text = std::mem::take(&mut self.scratch);
             text.clear();
+            // 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 탈출(GitHub 의 `\~`)을 하면
+            // 주소와 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
             for &c in label {
-                v.escape_char(c, &mut text);
+                if bare {
+                    v.code_char(c, &mut text);
+                } else {
+                    v.escape_char(c, &mut text);
+                }
             }
             v.link(&text, &href, out);
             self.scratch = text;
@@ -572,6 +574,18 @@ impl Inline {
         v.link(&scratch, &href, out);
 
         self.scratch = scratch;
+    }
+}
+
+/// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
+/// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
+fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab) {
+    let escaped = v.escapes(c);
+    for _ in 0..run {
+        out.insert(at, c);
+        if escaped {
+            out.insert(at, '\\');
+        }
     }
 }
 

@@ -684,6 +684,29 @@ fn known_html_tags_are_stripped_and_unknown_angles_kept() {
     assert_eq!(one("<a href=\"u\">t</a>", Channel::SlackMarkdown), "<a href=\"u\">t</a>");
 }
 
+/// **GitHub 은 홑 `~` 를 취소선으로, `<T>` 를 태그로 읽는다**(실측 2026-09-30, `POST /markdown`).
+/// 글자로 남은 둘은 탈출해 낸다 — `약 ~40km, 5~6월` 이 그어지고 `Vec<T>` 의 `T` 가 지워지던
+/// 것이다. 코드 안은 탈출이 글자로 보이니 그대로 두고, 진짜 취소선 `~~` 도 그대로다.
+#[test]
+fn github_escapes_tilde_and_angle_outside_code() {
+    let g = |s| one(s, Channel::GithubMarkdown);
+    assert_eq!(g("약 ~40km, 5~6월 이동"), r"약 \~40km, 5\~6월 이동");
+    assert_eq!(g("Vec<T> 와 1 < 2"), r"Vec\<T> 와 1 \< 2");
+    assert_eq!(g("~~취소~~가 `a~b <T>`"), "~~취소~~가 `a~b <T>`");
+    assert_eq!(g("```\nx ~ <y>\n```"), "```\nx ~ <y>\n```");
+    // 저자가 탈출해 둔 것은 한 번만 탈출한다.
+    assert_eq!(g(r"5\~6월 \<T>"), r"5\~6월 \<T>");
+    // 표 칸도 본문이다.
+    assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
+    // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 탈출한다.
+    let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn });
+    assert_eq!(out.parts.join(""), r"\~40km 전");
+    // 오토링크·링크 주소는 건드리지 않는다.
+    assert_eq!(g("<https://a.com/~me>"), "<https://a.com/~me>");
+    // 헤딩은 여섯 단계를 다 그린다.
+    assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
+}
+
 /// **`** 띄운 굵게 **` 는 글자다.** 열 수도 닫을 수도 없는 마커 둘이라 CommonMark 도
 /// 슬랙도 글자로 둔다. 전에는 닫는 쪽만 삼켜 `** 띄운 굵게  는` 이 됐다 — 내용 손실이다.
 #[test]
@@ -723,7 +746,9 @@ fn slack_parts_close_and_reopen_spans() {
 /// 있으면 예산을 "열린 것 없음"으로 재서, 한도까지 채운 뒤 닫는 마커를 붙여 넘겼다.
 #[test]
 fn a_long_space_free_span_is_cut_within_the_limit() {
-    let input = format!("**{}**", "a".repeat(20_000));
+    // 가장 큰 한도보다 길어야 모든 채널이 나눈다.
+    let longest = Channel::all().iter().map(|c| c.limit()).max().expect("채널이 있다");
+    let input = format!("**{}**", "a".repeat(longest + longest / 2));
     for channel in Channel::all() {
         let parts = render(&input, channel);
         assert!(parts.len() > 1, "{}: 나뉘어야 한다", channel.name());

@@ -23,8 +23,11 @@ type vocab struct {
 }
 
 // tablesNative 는 채널이 표를 직접 그리는가다. 그리면 고정폭으로 내리는 것이 손해다 —
-// 슬랙 markdown_text 는 표준 마크다운 표를 네이티브로 그린다.
-func (v vocab) tablesNative() bool { return v.channel == SlackMarkdown }
+// 슬랙 markdown_text 는 표준 마크다운 표를 네이티브로 그린다. GitHub 은 GFM 표가 원래 문법이다.
+func (v vocab) tablesNative() bool { return v.isMarkdown() }
+
+// isMarkdown 은 마크다운을 그대로 내보내는 채널인가다.
+func (v vocab) isMarkdown() bool { return v.channel == SlackMarkdown || v.channel == GithubMarkdown }
 
 // isPlain 은 마크업 문법 자체가 없는 채널인가다. 강조도 표도 글자로 내려앉는다.
 func (v vocab) isPlain() bool { return v.channel == Plain }
@@ -77,7 +80,14 @@ func (v vocab) close(e emph) string {
 }
 
 // escapeChar 는 글자 하나를 본문으로 적는다.
+//
+// GitHub 에서는 `~` 와 `<` 를 탈출한다(실측 2026-09-30, POST /markdown gfm). GFM 은 홑 `~` 도
+// 취소선으로 읽어서 `약 ~40km, 5~6월` 의 `40km, 5` 가 그어지고, `Vec<T>` 의 `<T>` 는 HTML
+// 태그로 읽혀 새니타이저가 지운다. 슬랙 markdown_text 는 둘 다 글자로 그려서 손대지 않는다.
 func (v vocab) escapeChar(c rune, out *[]byte) {
+	if v.escapes(c) {
+		*out = append(*out, '\\')
+	}
 	if v.channel == TelegramHTML {
 		switch c {
 		case '&':
@@ -94,6 +104,22 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 	*out = appendRune(*out, c)
 }
 
+// escapes 는 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가다.
+func (v vocab) escapes(c rune) bool {
+	return v.channel == GithubMarkdown && (c == '~' || c == '<')
+}
+
+// codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 탈출이 글자로 보인다 —
+// 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
+func (v vocab) codeChar(c rune, out *[]byte) {
+	if v.channel == TelegramHTML {
+		v.escapeChar(c, out)
+		return
+	}
+	*out = appendRune(*out, c)
+}
+
+// escape 는 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 escapeChar 다.
 func (v vocab) escape(s string, out *[]byte) {
 	// 대부분의 줄에는 이스케이프할 글자가 없다. 있을 때만 한 글자씩 간다.
 	if v.channel != TelegramHTML || !strings.ContainsAny(s, "&<>") {
@@ -178,13 +204,15 @@ func (v vocab) literal(c rune, out *[]byte) {
 	// 되고 `\[x\](url)` 이 링크가 된다.
 	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) {
 		*out = append(*out, '\\')
+		*out = appendRune(*out, c)
+		return
 	}
 	v.escapeChar(c, out)
 }
 
 // bullet 은 불릿 마커다. SPEC 8절의 표.
 func (v vocab) bullet() string {
-	if v.channel == SlackMarkdown {
+	if v.isMarkdown() {
 		return "- "
 	}
 	return "• "
@@ -213,7 +241,7 @@ func (v vocab) quoteClose() string {
 
 // rule 은 구분선이다. 텔레그램에도 Plain 에도 구문이 없어 글자로 그린다.
 func (v vocab) rule() string {
-	if v.channel == SlackMarkdown {
+	if v.isMarkdown() {
 		return "---"
 	}
 	return "──────────"
@@ -224,6 +252,10 @@ func (v vocab) maxHeading() int {
 	if v.channel == SlackMarkdown {
 		// 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다. 셋에서 끊는다.
 		return 3
+	}
+	if v.channel == GithubMarkdown {
+		// GitHub 은 여섯 단계를 크기를 달리해 그린다.
+		return 6
 	}
 	return 0
 }

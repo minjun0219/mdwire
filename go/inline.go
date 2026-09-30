@@ -1,6 +1,9 @@
 package mdwire
 
-import "unicode"
+import (
+	"strings"
+	"unicode"
+)
 
 // 인라인 파서 — 강조의 짝을 맞춘다. 이 파일이 이 라이브러리의 이유다.
 //
@@ -111,7 +114,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 					step = 1
 				}
 				for k := 0; k < step; k++ {
-					v.escapeChar(line[i+k], out)
+					v.codeChar(line[i+k], out)
 					in.codeSrc = append(in.codeSrc, line[i+k])
 				}
 				i += step
@@ -310,7 +313,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
 	if old.run == 1 || (old.guess && old.afterSpace) {
-		insertRun(out, old.at, old.ch, old.run)
+		insertMarker(out, old.at, old.ch, old.run, v)
 	} else {
 		in.repairs.DroppedMarker++
 	}
@@ -370,7 +373,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		if o.afterSpace || o.run == 1 {
-			insertRun(out, o.at, o.ch, o.run)
+			insertMarker(out, o.at, o.ch, o.run, v)
 		} else {
 			in.repairs.DroppedMarker++
 		}
@@ -430,9 +433,9 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	if startsWith(rest[1:], "http://") || startsWith(rest[1:], "https://") {
 		body := rest[1:closeAt]
 		// `<url|텍스트>` 는 슬랙 레거시 링크다. 주소와 텍스트를 가른다.
-		url, label := body, body
+		url, label, bare := body, body, true
 		if bar := indexRune(body, '|'); bar >= 0 {
-			url, label = body[:bar], body[bar+1:]
+			url, label, bare = body[:bar], body[bar+1:], false
 		}
 		for _, c := range url {
 			if unicode.IsSpace(c) {
@@ -440,9 +443,15 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			}
 		}
 		// 오토링크의 텍스트는 인라인으로 다시 읽지 않는다 — 주소 안의 `_` 가 기울임이 되면 안 된다.
+		// 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 탈출(GitHub 의 `\~`)을 하면 주소와
+		// 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
 		text := in.scratch[:0]
 		for _, c := range label {
-			v.escapeChar(c, &text)
+			if bare {
+				v.codeChar(c, &text)
+			} else {
+				v.escapeChar(c, &text)
+			}
 		}
 		v.link(string(text), string(url), out)
 		in.scratch = text
@@ -591,4 +600,14 @@ func repeatRune(c rune, n int) []rune {
 		r[i] = c
 	}
 	return r
+}
+
+// insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 탈출을
+// 따른다 — GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
+func insertMarker(out *[]byte, at int, c rune, n int, v vocab) {
+	if !v.escapes(c) {
+		insertRun(out, at, c, n)
+		return
+	}
+	insertAt(out, at, strings.Repeat("\\"+string(c), n))
 }

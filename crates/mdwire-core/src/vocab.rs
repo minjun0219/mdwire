@@ -29,9 +29,10 @@ impl Vocab {
     /// 채널이 표를 직접 그리는가. 그리면 고정폭으로 내리는 것이 손해다.
     ///
     /// 슬랙 `markdown_text` 는 표준 마크다운 표를 네이티브로 그린다(Slack markdown block
-    /// 문서). 고정폭 코드블록으로 바꾸면 화면에서 표가 아니라 코드로 보인다.
+    /// 문서). 고정폭 코드블록으로 바꾸면 화면에서 표가 아니라 코드로 보인다. GitHub 은
+    /// GFM 표가 원래 문법이다.
     pub fn tables_native(&self) -> bool {
-        matches!(self.channel, Channel::SlackMarkdown)
+        matches!(self.channel, Channel::SlackMarkdown | Channel::GithubMarkdown)
     }
 
     /// 마크업 문법 자체가 없는 채널인가. 강조도 표도 글자로 내려앉는다.
@@ -67,15 +68,40 @@ impl Vocab {
     }
 
     /// 글자 하나를 본문으로 적는다.
+    ///
+    /// **GitHub 에서는 `~` 와 `<` 를 탈출한다**(실측 2026-09-30, `POST /markdown` gfm).
+    /// GFM 은 홑 `~` 도 취소선으로 읽어서 `약 ~40km, 5~6월` 의 `40km, 5` 가 그어지고,
+    /// `Vec<T>` 의 `<T>` 는 HTML 태그로 읽혀 새니타이저가 지운다. 둘 다 저자가 글자로
+    /// 쓴 것이고, `\~` · `\<` 는 화면에 `~` · `<` 로 보인다. 슬랙 `markdown_text` 는
+    /// 둘 다 글자로 그려서 손대지 않는다.
     pub fn escape_char(&self, c: char, out: &mut String) {
         match (self.channel, c) {
             (Channel::TelegramHtml, '&') => out.push_str("&amp;"),
             (Channel::TelegramHtml, '<') => out.push_str("&lt;"),
             (Channel::TelegramHtml, '>') => out.push_str("&gt;"),
+            _ if self.escapes(c) => {
+                out.push('\\');
+                out.push(c);
+            }
             _ => out.push(c),
         }
     }
 
+    /// 본문에 글자로 적을 때 역슬래시를 앞에 붙이는 글자인가.
+    pub fn escapes(&self, c: char) -> bool {
+        self.channel == Channel::GithubMarkdown && matches!(c, '~' | '<')
+    }
+
+    /// 코드 안의 글자 하나를 적는다. **코드 안에서는 마크다운 탈출이 글자로 보인다** —
+    /// 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
+    pub fn code_char(&self, c: char, out: &mut String) {
+        match self.channel {
+            Channel::TelegramHtml => self.escape_char(c, out),
+            _ => out.push(c),
+        }
+    }
+
+    /// 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 [`Vocab::escape_char`] 다.
     pub fn escape(&self, s: &str, out: &mut String) {
         if self.channel != Channel::TelegramHtml {
             out.push_str(s);
@@ -175,7 +201,7 @@ impl Vocab {
     /// 불릿 마커. `SPEC.md` 8절의 표.
     pub fn bullet(&self) -> &'static str {
         match self.channel {
-            Channel::SlackMarkdown => "- ",
+            Channel::SlackMarkdown | Channel::GithubMarkdown => "- ",
             _ => "• ",
         }
     }
@@ -215,6 +241,8 @@ impl Vocab {
             // 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다.
             // 그러니 더 깊이 적을 값이 없다 — 셋에서 끊는다.
             Channel::SlackMarkdown => 3,
+            // GitHub 은 여섯 단계를 크기를 달리해 그린다.
+            Channel::GithubMarkdown => 6,
             Channel::TelegramHtml | Channel::Plain => 0,
         }
     }
