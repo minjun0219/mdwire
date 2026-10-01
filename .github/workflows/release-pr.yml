@@ -2,7 +2,9 @@
 #
 # 1. main 에 커밋이 들어올 때마다 `release/next` 브랜치에 다음 판(버전 · Cargo.lock ·
 #    CHANGELOG · README 설치 줄)을 만들고 `release: X.Y.Z` PR 을 열거나 갱신한다.
-#    머지하기 전까지 main 의 버전은 그대로다.
+#    머지하기 전까지 main 의 버전은 그대로다. **배포물을 바꾼 커밋이 없으면 판을 안 낸다** —
+#    사이트·예제·문서·시험·CI 만 바뀌었으면 열려 있던 release PR 도 닫는다(경로 목록은
+#    `scripts/prepare-release.sh`).
 # 2. 그 PR 이 squash 로 들어오면(커밋 제목이 `release: ` 로 시작) `vX.Y.Z` 와 Go 모듈용
 #    `go/vX.Y.Z` 태그를 찍고 `release.yml` 을 부른다.
 #

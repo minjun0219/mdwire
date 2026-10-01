@@ -38,6 +38,10 @@ commit_preprocessors = [
 ]
 # 묶음 이름 앞의 주석은 순서를 잡으려고 둔다. 템플릿이 `striptags` 로 걷어낸다.
 commit_parsers = [
+  # 사이트는 배포물이 아니다 — 패키지의 변경 기록에 섞지 않는다. 사이트만 바꾼 커밋은 판도
+  # 내지 않는다(`scripts/prepare-release.sh`). **맨 앞에 둔다** — 처음 맞는 규칙이 이겨서, 뒤에
+  # 두면 `^feat` 에 먼저 걸린다.
+  { message = "^\\w+\\(site\\)", skip = true },
   { message = "^feat", group = "<!-- 0 -->새로 할 수 있는 것" },
   { message = "^fix", group = "<!-- 1 -->고친 것" },
   { message = "^perf", group = "<!-- 2 -->성능" },
