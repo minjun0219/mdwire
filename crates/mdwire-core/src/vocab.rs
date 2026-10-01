@@ -135,6 +135,12 @@ impl Vocab {
         }
     }
 
+    /// 원문의 `<br>` 을 그대로 두는가(칸 안이든 밖이든). 노션만 — 한 블록 안의 줄바꿈으로 그린다.
+    /// `\n` 으로 바꾸면 인용이 둘로 갈리고 강조가 줄을 넘는다(실측 2026-10-01).
+    pub fn keeps_br(&self) -> bool {
+        self.channel == Channel::NotionMarkdown
+    }
+
     /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 —
     /// 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
     pub fn html_emphasis(&self) -> bool {

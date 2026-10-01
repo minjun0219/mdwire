@@ -730,8 +730,10 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
     // `<br>` 은 그린다(칸 안에서도) — `\n` 으로 바꾸면 인용이 갈린다.
     assert_eq!(n("> **a<br>b** 끝"), "> **a<br>b** 끝");
     assert_eq!(n("| a |\n|---|\n| 줄<br>바꿈 |"), "| a |\n| --- |\n| 줄<br>바꿈 |");
-    // 줄 끝 역슬래시(하드 브레이크)는 노션에 없어 뺀다 — 줄바꿈은 남는다.
-    assert_eq!(n("foo\\\nbar"), "foo\nbar");
+    // 줄 끝 역슬래시는 글자로 둔다(탈출한다) — 노션에 하드 브레이크 문법이 없고, 지우면 문단 끝의
+    // `C:\` 같은 글자까지 사라진다.
+    assert_eq!(n("foo\\\nbar"), "foo\\\\\nbar");
+    assert_eq!(n(r"path C:\"), r"path C:\\");
     // `\$` 는 지킨다 — 벗기면 `$x$` 가 수식이 된다.
     assert_eq!(n(r"\$x\$ 와 $5"), r"\$x\$ 와 $5");
     // 오토링크 라벨의 마커 글자는 탈출하고, 주소의 괄호는 퍼센트로.

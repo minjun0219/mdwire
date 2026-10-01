@@ -19,7 +19,7 @@
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
 use crate::vocab::{Emph, Vocab, INLINE_TAGS};
-use crate::{Channel, Dialect, Repairs};
+use crate::{Dialect, Repairs};
 
 #[derive(Clone)]
 struct Open {
@@ -208,11 +208,6 @@ impl Inline {
                         i += 2;
                         continue;
                     }
-                } else if v.channel == Channel::NotionMarkdown {
-                    // **줄 끝 역슬래시(하드 브레이크)는 노션에서 뺀다.** 노션은 그 문법이 없어
-                    // 역슬래시가 글자로 보인다(실측). 줄바꿈은 뒤따르는 `\n` 이 그대로 남긴다.
-                    i += 1;
-                    continue;
                 }
             }
 
@@ -699,7 +694,7 @@ impl Inline {
             //
             // **노션은 칸 안이든 밖이든 `<br>` 을 그린다**(실측 2026-10-01) — 한 블록 안의 줄바꿈이라
             // `\n` 으로 바꾸면 인용은 둘로 갈리고 강조는 줄을 넘는다. 그대로 둔다.
-            if v.channel == Channel::NotionMarkdown {
+            if v.keeps_br() {
                 out.push_str("<br>");
                 self.prev = Some(' ');
             } else if self.in_cell {
