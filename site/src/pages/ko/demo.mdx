@@ -1,15 +1,20 @@
 ---
 layout: ../../layouts/Doc.astro
-title: 텔레그램 대 슬랙
-description: 에이전트 답 하나를 브라우저에서 텔레그램 HTML 과 슬랙 markdown_text 로 옮겨 본다.
+title: 데모
+description: 에이전트 답 하나를 텔레그램과 슬랙으로 옮기고, 토큰 단위로 렌더러 다섯에 흘려 본다 — 브라우저에서.
 ---
 import ChannelCompare from "../../components/ChannelCompare.tsx";
+import StreamCompare from "../../components/StreamCompare.tsx";
 
-# 텔레그램 대 슬랙
+# 데모
+
+여기 있는 것은 전부 npm 패키지의 WASM 빌드가 브라우저에서 돌린다. 두 가지를 해 볼 수 있다 —
+[답 하나를 두 채널로 옮기기](#channels), [답 하나를 렌더러 다섯에 흘리기](#streaming).
+
+<h2 id="channels">텔레그램 대 슬랙</h2>
 
 에이전트 답 하나를 두 채널로 옮긴다. 보이는 것이 채널로 나가는 글자 그대로다 — 텔레그램에
-`parse_mode: "HTML"` 로 넘길 본문, 슬랙에 `markdown_text` 로 넘길 본문. 변환은 npm 패키지의
-WASM 빌드가 브라우저에서 한다.
+`parse_mode: "HTML"` 로 넘길 본문, 슬랙에 `markdown_text` 로 넘길 본문.
 
 예시는 [코퍼스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔다 —
 전부 실제로 겪은 고장이다. 입력을 고쳐 직접 넣어 봐도 된다.
@@ -24,3 +29,79 @@ WASM 빌드가 브라우저에서 한다.
 슬랙 `markdown_text` 는 표준 마크다운을 읽으니 출력도 마크다운이다, 고쳐진 채로. 두 채널
 모두 닫히지 않은 강조와 코드펜스는 보내기 전에 닫고, 출력 아래의 숫자가 정규화가 몇 번
 끼어들었는지 말해 준다.
+
+<details class="code">
+<summary>이 데모의 코드</summary>
+
+```ts
+import { renderWithReport } from "@minjun0219/mdwire";
+
+for (const channel of ["telegram-html", "slack-markdown"]) {
+  const out = renderWithReport(input, channel, { from: "markdown" }); // 슬랙 레거시면 "slack-mrkdwn"
+  out.parts;   // 보낼 것 — 한도에 걸리지 않으면 문자열 하나
+  out.repairs; // closedEmphasis · closedFence · revertedCodeSpan · droppedMarker
+  out.free();  // 결과는 WASM 메모리에 있다. 다 쓰면 놓는다
+}
+```
+
+전체 컴포넌트: [`site/src/components/ChannelCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/ChannelCompare.tsx).
+
+</details>
+
+<h2 id="streaming">스트리밍</h2>
+
+같은 답변을 같은 토큰으로 잘라 렌더러 다섯에 동시에 흘린다. 이 절이 화면에 들어오면 시작한다.
+세 가지를 본다 — 반쪽 마커(`**굵`, 여는 백틱)가 글자로 비쳤다 사라지는지, 조사 앞에서 끝나는
+굵게(`**설정(config)**을`)가 끝까지 그려지는지, 강조나 표가 닫힐 때까지 멈춰 보이는지.
+
+<div class="wide">
+  <StreamCompare client:only="react" lang="ko">
+    <p slot="fallback">WASM 빌드를 불러오는 중…</p>
+  </StreamCompare>
+</div>
+
+- **react-markdown** 은 토큰마다 누적본을 통째로 다시 그린다. 반쯤 쓴 마크업이 비쳤다 사라진다.
+- **Streamdown** 도 다시 그리지만, 안 닫힌 구문을 먼저 보정한다.
+- **mdwire → Streamdown** 은 mdwire 스트리머를 앞에 둔다. Streamdown 은 정규화한 누적본에
+  `preview()` 를 붙인 것을 받는다 — 브릿지다.
+- **mdwire** `useMarkdownStream()` 은 붙들고 있는 것(열린 굵게, 표 행)도 입력이 여기서 끝난 것처럼
+  먼저 그린다.
+- **mdwire** `useMarkdownStream({ eager: false })` 는 확정된 것만 보인다. 한 번 보인 것은 바뀌지
+  않는 대신 강조·표에서 멈춰 보인다.
+
+`DESIGN.md` 는 에이전트가 쓴 한국어 문서 347건으로 이걸 쟀다(Streamdown 2.6.0, react-markdown
+10.1.0 + remark-gfm). mdwire 스트리머를 Streamdown 앞에 두면 이미 보인 글이 바뀌는 횟수가 60%쯤
+줄고 마커가 글자로 비치는 일이 사라졌다. 확정분만 보이는 mdwire `html` 스트리머는 둘 다 없었다.
+다만 확정분만 보이면 멈춘다 — 이 샘플을 토큰 간격 60ms 로 흘리면 가장 긴 멈춤이 1,389ms,
+미리보기는 302ms 였다. 미리보기가 기본인 이유다. 자세한 것은
+[DESIGN.md 의 브릿지 절](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md).
+샘플 답변은 합성이지만, 그 안의 모양은 모두 실제 에이전트 출력에서 깨졌던 것이다.
+
+<details class="code">
+<summary>이 데모의 코드</summary>
+
+```tsx
+import { Streamer } from "@minjun0219/mdwire";
+import { useMarkdownStream } from "@minjun0219/mdwire/react";
+import { Streamdown } from "streamdown";
+
+// 브릿지 — 정규화는 mdwire, 그리기는 Streamdown
+const s = new Streamer("github-markdown");
+let done = "";
+for (const token of tokens) {
+  done += s.push(token);              // 확정분. 다시 고쳐지지 않는다
+  setText(done + s.preview());        // + 붙든 것을 입력이 여기서 끝난 것처럼 그린 꼬리
+}
+done += s.finish();
+setText(done);
+// <Streamdown>{text}</Streamdown>
+
+// 또는 React 에서 바로 그린다 — innerHTML 없이
+const live = useMarkdownStream();                     // 붙든 것도 먼저 그린다(기본)
+const settled = useMarkdownStream({ eager: false });  // 확정된 것만
+// tokens → live.push(token) … live.finish();  render {live.elements}
+```
+
+전체 컴포넌트: [`site/src/components/StreamCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/StreamCompare.tsx). 같은 비교를 독립 Vite 앱으로, WASM 을 싣는 번들러 설정까지: [`examples/react-streaming`](https://github.com/minjun0219/mdwire/tree/main/examples/react-streaming).
+
+</details>

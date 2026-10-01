@@ -38,7 +38,7 @@ Things that are easy to get wrong:
 ## Site
 
 - [Overview](https://mdwire.minjun.dev/): what mdwire does
-- [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, in the browser
+- [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, and streamed token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook — in the browser
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
 
 ## Optional

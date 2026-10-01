@@ -9,6 +9,8 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   배포 빌드(Workers Builds)에는 Rust·wasm-pack 이 없다. 새 버전이 나오면 `package.json` 의
   버전을 올린다.
 - 데모 예시(`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다.
+- 데모 페이지의 스트리밍 비교(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
+  을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
 - `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
 
@@ -44,10 +46,11 @@ Workers Builds 설정(대시보드):
 | Root directory | `site` |
 | Build command | `pnpm run build` |
 | Deploy command | `npx wrangler deploy` (기본값) |
-| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview` |
-| Build watch paths | 포함 `site/**` — `*` 는 `/` 를 넘지 않아 최상위 파일만 잡는다 |
+| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview`. 프리뷰는 따로 기본 설정(Previews Base configuration)을 쓰니 거기에도 빌드 명령을 넣는다 |
+| Build watch paths | 포함 `site/**` (저장소 루트 기준) |
 | Production branch | `main` |
 
-의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
+빌드 명령은 대시보드에 꼭 넣는다 — `wrangler.jsonc` 의 `build.command` 는 로컬 `wrangler deploy` · `wrangler dev` 용이고,
+Workers Builds 는 문서상 그 설정을 따르지 않는다. 의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
 Worker Previews 는 Preview command 가 `npx wrangler preview` 를 부르기를 요구하고, `npx` 는 pnpm 이
 깐 `node_modules/.bin/wrangler`(`package.json` 의 버전)를 그대로 쓴다.
