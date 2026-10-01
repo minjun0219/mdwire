@@ -53,9 +53,24 @@ jobs:
         id: next
         run: echo "version=$(./scripts/prepare-release.sh)" >> "$GITHUB_OUTPUT"
 
+      # **그새 main 이 움직였으면 손대지 않는다.** 판을 만드는 데 몇 분이 걸리는 사이에 release PR
+      # 이 머지되면, 이 실행은 새 태그를 못 본 채 "다음 판"을 다시 연다 — 0.1.9 를 낸 뒤 늦게 끝난
+      # 실행이 `release: 0.1.9` 를 또 열었다(#78). 동시 실행 취소로는 못 막는다: release 커밋의 실행은
+      # 이 잡을 건너뛰어 앞 실행을 취소하지 않고, 범위를 워크플로로 넓히면 태그를 찍는 실행까지
+      # 취소될 수 있다. main 이 앞서 있으면 그 커밋의 실행이 판단을 이어받는다.
+      - name: 아직 최신인가
+        id: fresh
+        run: |
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" = "$GITHUB_SHA" ]; then
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::main 이 그새 $(git rev-parse --short origin/main) 로 움직였다 — 그 실행에 맡긴다"
+          fi
+
       # 낼 것이 없으면(방금 릴리스했으면) 열려 있던 release PR 을 닫는다.
       - name: 낼 것 없음
-        if: steps.next.outputs.version == ''
+        if: steps.fresh.outputs.ok == '1' && steps.next.outputs.version == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -63,7 +78,7 @@ jobs:
           [ -z "$pr" ] || gh pr close "$pr" --delete-branch --comment "낼 커밋이 없어 닫는다."
 
       - name: release PR 열기·갱신
-        if: steps.next.outputs.version != ''
+        if: steps.fresh.outputs.ok == '1' && steps.next.outputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.next.outputs.version }}
