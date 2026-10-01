@@ -29,6 +29,8 @@ function toMarkdown(source, { lang, site, url }) {
     if (line.startsWith("```")) inFence = !inFence;
     if (!inFence) {
       if (/^import\s/.test(line)) continue;
+      // 글꼴만 바꾸는 감싸개(`<div class="hangul-mono">`)는 사본에서 뺀다.
+      if (/^<\/?div\b[^>]*>$/.test(line)) continue;
       // 배지 줄은 이미지 링크뿐이라 사본에서 뺀다 — 패키지 주소는 본문에 있다.
       if (/^<Badges\b.*\/>$/.test(line)) continue;
       lines.push(
