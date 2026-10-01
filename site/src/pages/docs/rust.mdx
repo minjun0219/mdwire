@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Rust
-description: The mdwire-core crate — render, render_with, Options, Streamer, Channel, Dialect and Repairs.
+description: The mdwire-core crate — render, render_with, Options, Streamer, Channel and Repairs.
 ---
 
 
@@ -29,10 +29,10 @@ it splits where no markup is open — chosen from the structure, never by cuttin
 ## `render_with`
 
 ```rust
-use mdwire::{render_with, Channel, Dialect, Options};
+use mdwire::{render_with, Channel, Options};
 
-let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
-let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
+let options = Options { limit: Some(4096), ..Default::default() };
+let out = render_with("**굵게** 는 **영향 범위", Channel::SlackMarkdown, options);
 assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
 assert_eq!(out.repairs.closed_emphasis, 1);
 ```
@@ -44,7 +44,6 @@ assert_eq!(out.repairs.closed_emphasis, 1);
 
 ```rust
 pub struct Options {
-    pub from: Dialect,          // default Dialect::Markdown
     pub limit: Option<usize>,   // None = channel.limit(); below MIN_LIMIT (256) is raised
     pub html: HtmlOptions,      // Channel::Html only
 }
@@ -56,7 +55,7 @@ pub struct HtmlOptions {
 }
 ```
 
-Fields may be added — build it as `Options { from, ..Default::default() }`. `MIN_LIMIT` is `256`.
+Fields may be added — build it as `Options { limit, ..Default::default() }`. `MIN_LIMIT` is `256`.
 
 ## `Streamer`
 
@@ -90,11 +89,10 @@ assert!(!s.revised());                                       // the last frame w
 The contract — `push` output is final, pieces concatenated equal `render` — is on
 [Concepts](/docs/#the-streaming-contract).
 
-## `Channel` and `Dialect`
+## `Channel`
 
 ```rust
 pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, Html }
-pub enum Dialect { Markdown, SlackMrkdwn }
 ```
 
 | | |
@@ -102,7 +100,6 @@ pub enum Dialect { Markdown, SlackMrkdwn }
 | `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | The string names (`"telegram-html"`, …). |
 | `Channel::all()` | Every channel. |
 | `Channel::limit(self) -> usize` | The part limit; `usize::MAX` for `Html`. |
-| `Dialect::name` · `Dialect::parse` | `"markdown"`, `"slack-mrkdwn"`. |
 
 ## `Repairs`
 

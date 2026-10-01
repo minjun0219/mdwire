@@ -3,7 +3,6 @@
 //! 두 모드가 있다.
 //!
 //! - **코퍼스 모드** — `cases/<이름>/input.md` 를 돌려 `<채널>.txt` 와 대조한다.
-//!   입력이 표준 마크다운이 아니면 `from` 파일에 입력 표기 이름(`slack-mrkdwn`)을 적는다.
 //!   기대 출력 파일이 없는 채널은 그 케이스에서 대조하지 않는다(불변식은 그래도 잰다).
 //!   **한도를 넘겨 조각으로 나뉘는 케이스는 기대 출력을 두지 않는다** — 조각 구분자가
 //!   NUL 이라 파일이 바이너리가 되고, 그러면 정본이 읽히지 않는다. 그런 케이스의 고장은
@@ -13,8 +12,8 @@
 //!   공개 저장소이고 남의 글이다.
 
 use crate::adapter::Renderer;
-use crate::check::{self, Finding, Rule};
-use mdwire::{Channel, Dialect};
+use crate::check::{self, Finding};
+use mdwire::Channel;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -25,8 +24,6 @@ use std::path::{Path, PathBuf};
 pub struct Case {
     pub name: String,
     pub input: String,
-    /// 입력 표기. `from` 파일이 없으면 표준 마크다운.
-    pub from: Dialect,
     /// 채널 이름 → 기대 출력.
     pub expected: BTreeMap<String, String>,
 }
@@ -41,8 +38,6 @@ pub struct Outcome {
     pub findings: Vec<Finding>,
     /// 구현이 에러를 냈다면.
     pub error: Option<String>,
-    /// 구현이 이 케이스의 입력 표기를 받지 않아 돌리지 않았다.
-    pub skipped: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -84,14 +79,7 @@ pub fn load_cases(dir: &Path) -> io::Result<Vec<Case>> {
                 expected.insert(channel, fs::read_to_string(&p)?);
             }
         }
-        let from = match fs::read_to_string(path.join("from")) {
-            Ok(name) => Dialect::parse(name.trim()).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, format!("{name:?}: 모르는 입력 표기 ({})", path.display()))
-            })?,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Dialect::Markdown,
-            Err(e) => return Err(e),
-        };
-        cases.push(Case { name, input: fs::read_to_string(&input_path)?, from, expected });
+        cases.push(Case { name, input: fs::read_to_string(&input_path)?, expected });
     }
     Ok(cases)
 }
@@ -102,13 +90,6 @@ fn normalize(s: &str) -> &str {
     s.trim_end_matches('\n')
 }
 
-/// 입력을 **표준 마크다운으로 읽어야** 재는 규칙인가. 다른 입력 표기로 쓴 입력에는 이 규칙들이
-/// 틀린 답을 낸다 — mrkdwn 의 `*굵게*` 를 기울임으로 읽고 범위가 다르다고 한다. 그런 케이스는
-/// 기대 출력 대조와 입력을 안 보는 규칙만으로 잰다(퍼즈와 같은 선택).
-fn reads_input_as_markdown(rule: Rule) -> bool {
-    matches!(rule, Rule::EmphasisRange | Rule::StrayMarker | Rule::TextLoss | Rule::TableMisaligned)
-}
-
 pub fn run_case(case: &Case, renderer: &dyn Renderer, channel: Channel) -> Outcome {
     let mut outcome = Outcome {
         source: case.name.clone(),
@@ -116,19 +97,11 @@ pub fn run_case(case: &Case, renderer: &dyn Renderer, channel: Channel) -> Outco
         compared: None,
         findings: Vec::new(),
         error: None,
-        skipped: false,
     };
-    if !renderer.supports(case.from) {
-        outcome.skipped = true;
-        return outcome;
-    }
-    match renderer.render(&case.input, channel, case.from) {
+    match renderer.render(&case.input, channel) {
         Ok(actual) => {
             outcome.findings = check::check(&case.input, &actual, channel);
-            if case.from != Dialect::Markdown {
-                outcome.findings.retain(|f| !reads_input_as_markdown(f.rule));
-            }
-            stream_findings(renderer, &case.input, channel, case.from, &actual, &mut outcome.findings);
+            stream_findings(renderer, &case.input, channel, &actual, &mut outcome.findings);
             if let Some(expected) = case.expected.get(channel.name()) {
                 outcome.compared = Some(Compare {
                     matched: normalize(expected) == normalize(&actual),
@@ -174,12 +147,11 @@ pub fn scan_dir(dir: &Path, renderer: &dyn Renderer, channels: &[Channel]) -> io
                 compared: None,
                 findings: Vec::new(),
                 error: None,
-                skipped: false,
             };
-            match renderer.render(&input, channel, Dialect::Markdown) {
+            match renderer.render(&input, channel) {
                 Ok(actual) => {
                     outcome.findings = check::check(&input, &actual, channel);
-                    stream_findings(renderer, &input, channel, Dialect::Markdown, &actual, &mut outcome.findings);
+                    stream_findings(renderer, &input, channel, &actual, &mut outcome.findings);
                 }
                 Err(e) => outcome.error = Some(e),
             }
@@ -198,7 +170,6 @@ fn stream_findings(
     renderer: &dyn Renderer,
     input: &str,
     channel: Channel,
-    from: Dialect,
     batch: &str,
     findings: &mut Vec<check::Finding>,
 ) {
@@ -206,7 +177,7 @@ fn stream_findings(
         return;
     }
     for chunk in [1, 64] {
-        let Some(streamed) = renderer.stream(input, channel, from, chunk) else { return };
+        let Some(streamed) = renderer.stream(input, channel, chunk) else { return };
         if streamed != batch {
             let at = streamed.chars().zip(batch.chars()).take_while(|(a, b)| a == b).count();
             let around = |s: &str| s.chars().skip(at.saturating_sub(15)).take(40).collect::<String>();
@@ -243,8 +214,6 @@ pub struct Summary {
     pub mismatched: usize,
     pub findings: usize,
     pub errors: usize,
-    /// 입력 표기를 못 받아 건너뛴 실행.
-    pub skipped: usize,
 }
 
 impl Summary {
@@ -257,7 +226,6 @@ pub fn summarize(outcomes: &[Outcome]) -> Summary {
     let mut s = Summary::default();
     for o in outcomes {
         s.runs += 1;
-        s.skipped += usize::from(o.skipped);
         s.errors += usize::from(o.error.is_some());
         s.findings += o.findings.len();
         if let Some(c) = &o.compared {
@@ -271,10 +239,6 @@ pub fn summarize(outcomes: &[Outcome]) -> Summary {
 /// 사람이 읽을 보고서. 통과면 `true`.
 pub fn report(outcomes: &[Outcome], verbose: bool) -> bool {
     for o in outcomes {
-        if o.skipped && verbose {
-            println!("\n[건너뜀] {} · {} — 입력 표기를 받지 않는 구현이다(`--cmd` 에 `{{from}}` 이 없다)", o.source, o.channel.name());
-            continue;
-        }
         if o.ok() && !verbose {
             continue;
         }
@@ -295,13 +259,12 @@ pub fn report(outcomes: &[Outcome], verbose: bool) -> bool {
     }
     let s = summarize(outcomes);
     println!(
-        "\n{} 회 실행 · 대조 {} (불일치 {}) · 불변식 위반 {} · 에러 {}{}",
+        "\n{} 회 실행 · 대조 {} (불일치 {}) · 불변식 위반 {} · 에러 {}",
         s.runs,
         s.compared,
         s.mismatched,
         s.findings,
         s.errors,
-        if s.skipped > 0 { format!(" · 입력 표기 때문에 건너뜀 {}", s.skipped) } else { String::new() }
     );
     s.ok()
 }

@@ -34,9 +34,7 @@ LLM 마크다운  →  정규화  →  채널용 렌더  →  안전한 분할  
 3. **분할.** 채널 한도를 지키되 마크업 한가운데를 자르지 않는다. 스트리밍도 같다 —
    조각 경계가 `**굵게**` 안에 떨어지면 안 된다.
 
-이 흐름에 옵션이 둘 붙는다. **입력 표기:** 슬랙 문서로 슬랙을 배운 에이전트는 레거시
-`mrkdwn`(`*굵게*`, `~취소~`, `<url|텍스트>`)으로 쓴다. `--from slack-mrkdwn` 을 주면 표준
-마크다운이 아니라 그 표기로 읽는다. **정규화 보고:** 정규화가 대신 고친 횟수(안 닫힌 강조,
+이 흐름에 옵션이 하나 붙는다. **정규화 보고:** 정규화가 대신 고친 횟수(안 닫힌 강조,
 안 닫힌 펜스, 짝 없는 백틱, 버린 마커)와 채널에 맞춰 바꿔 쓴 횟수(이스케이프한 글자, 태그로
 낸 강조, 벗긴 HTML, 불릿, 표, 바꾼 마커)를 센다. 모델이 제 서식을 얼마나 자주 깨는지 로그로
 재고, 채널을 들이기 전에 그 채널이 무엇을 바꾸는지 볼 수 있다.
@@ -48,10 +46,9 @@ cat agent-output.md | mdwire --channel telegram-html          # 조각은 NUL �
 cat agent-output.md | mdwire --channel slack-markdown --stream # 들어오는 대로 내보낸다
 cat agent-output.md | mdwire --channel plain --limit 4096      # 텔레그램으로 보내는 평문 폴백
 
-# 에이전트가 슬랙 레거시 mrkdwn(*굵게*, ~취소~)으로 썼다면 그렇다고 알려 준다. --report 는
-# 정규화가 고치고 바꾼 것(안 닫힌 강조, 이스케이프한 `~`, 벗긴 태그, …)을 stderr 에
-# JSON 한 줄로 낸다.
-cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+# --report 는 정규화가 고치고 바꾼 것(안 닫힌 강조, 이스케이프한 `~`, 벗긴 태그, …)을
+# stderr 에 JSON 한 줄로 낸다.
+cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
 ```rust
@@ -66,7 +63,7 @@ s.finish_into(&mut out);       // 남은 것을 내보내고 열린 것을 닫�
 import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — 번들러, Node, Bun
 
 const parts = render(markdown, "telegram-html");
-const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+const { repairs } = renderWithReport(markdown, "slack-markdown");
 
 // 메시지 전체를 고쳐 쓰는 채널(텔레그램 edit): acc 에 미리보기를 붙여 보낸다 — 붙들고 있는
 // 것(열린 굵게·표 행·코드 스팬)을 입력이 여기서 끝난 것처럼 그린다. acc 자체는 건드리지
@@ -182,7 +179,7 @@ s := mdwire.NewStreamer(mdwire.SlackMarkdown)
 s.PushTo(chunk, &out)   // 조각마다 할당 없음
 s.FinishTo(&out)
 
-out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{})
 log.Printf("%+v", out.Repairs)
 ```
 

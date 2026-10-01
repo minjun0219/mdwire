@@ -19,7 +19,7 @@ ESM 번들러 빌드. **번들러에서는** WASM 을 ES 모듈로 import 하므
 `build.target: "esnext"`(top-level `await`)가 필요하다.
 [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js) 참고.
 
-채널과 입력 표기의 이름은 [개념](/ko/docs/)에 있는 문자열을 쓴다.
+채널 이름은 [개념](/ko/docs/)에 있는 문자열을 쓴다.
 
 ## `render(input, channel, options?)`
 
@@ -36,7 +36,7 @@ const parts: string[] = render(markdown, "telegram-html");
 ```ts
 import { renderWithReport } from "@minjun0219/mdwire";
 
-const out = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+const out = renderWithReport(markdown, "slack-markdown");
 out.parts;                   // string[]
 out.repairs.closedEmphasis;  // 아래 "Repairs"
 out.free();                  // 결과는 WASM 메모리에 있다
@@ -82,7 +82,6 @@ s.free();
 
 ```ts
 interface RenderOptions {
-  from?: "markdown" | "slack-mrkdwn";
   limit?: number;                       // 1 이상의 정수. 256 보다 작으면 256 으로 올린다
   html?: {                              // "html" 채널에만
     lineBreaks?: "br" | "space";        // 기본 "br"
@@ -92,7 +91,7 @@ interface RenderOptions {
 }
 ```
 
-모르는 채널·입력 표기 이름, 모르는 `html` 값, 1 이상의 정수가 아닌 `limit` 은 `Error` 를 던진다.
+모르는 채널 이름, 모르는 `html` 값, 1 이상의 정수가 아닌 `limit` 은 `Error` 를 던진다.
 
 ## `Repairs`
 
@@ -119,8 +118,8 @@ const settled = useMarkdownStream({ eager: false });        // 확정된 것만
 
 | | |
 |---|---|
-| `<Markdown text from? components? options? />` | 완성된 답. `components` 는 태그(`a`, `code` …)를 내 컴포넌트에 잇는다. |
-| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | 스트리밍. `{ elements, push, finish }` 를 돌려준다. `eager`(기본 `true`)는 붙든 것도 먼저 그리고, `false` 는 확정된 것만. `onSettled(html, revised)` 는 `finish` 뒤에 불린다. 옵션은 `onSettled` 말고는 처음 한 번만 읽는다. |
+| `<Markdown text components? options? />` | 완성된 답. `components` 는 태그(`a`, `code` …)를 내 컴포넌트에 잇는다. |
+| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | 스트리밍. `{ elements, push, finish }` 를 돌려준다. `eager`(기본 `true`)는 붙든 것도 먼저 그리고, `false` 는 확정된 것만. `onSettled(html, revised)` 는 `finish` 뒤에 불린다. 옵션은 `onSettled` 말고는 처음 한 번만 읽는다. |
 | `toElements(html, components?, schemes?)` | `html` 채널 출력(스트리밍이면 누적본 + `preview()`)을 React 노드로. `schemes` 는 코어에 준 것과 같게 준다. |
 
 ## 이벤트 — `@minjun0219/mdwire/events`

@@ -22,7 +22,7 @@ go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest  # Go — 플래그
 cat agent-output.md | mdwire --channel telegram-html            # 조각은 NUL 로 구분
 cat agent-output.md | mdwire --channel slack-markdown --stream  # 받는 대로 내보낸다
 cat agent-output.md | mdwire --channel plain --limit 4096       # 평문 폴백을 텔레그램으로
-cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
 ## 플래그
@@ -30,7 +30,6 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 | 플래그 | |
 |---|---|
 | `--channel <이름>` | 필수. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` |
-| `--from <표기>` | 입력 표기: `markdown`(기본) · `slack-mrkdwn` |
 | `--limit <글자 수>` | 조각 한도. 기본은 채널의 한도. |
 | `--html-line-breaks <br\|space>` | `html` 만. 기본 `br`. |
 | `--html-images <link\|load>` | `html` 만. 기본 `link`. |
@@ -42,7 +41,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 
 값을 받는 플래그는 `--이름=값` 으로도 쓸 수 있다(`--channel=slack-markdown`).
 
-채널·입력 표기·옵션은 [개념](/ko/docs/)에 있다.
+채널과 옵션은 [개념](/ko/docs/)에 있다.
 
 ## 출력
 

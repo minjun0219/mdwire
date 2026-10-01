@@ -28,7 +28,7 @@ Converts a finished document; over the limit it splits where no markup is open.
 ## `RenderWith`
 
 ```go
-out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{Limit: 4096})
 out.Parts                  // []string
 out.Repairs.ClosedEmphasis // see Repairs below
 ```
@@ -39,7 +39,6 @@ The zero value is the default.
 
 ```go
 type Options struct {
-	From  Dialect     // Markdown (zero) | SlackMrkdwn
 	Limit int         // 0 = the channel's Limit(); below MinLimit (256) is raised
 	HTML  HTMLOptions // the HTML channel only
 }
@@ -74,11 +73,10 @@ s.FinishTo(&out)
 
 The contract is on [Concepts](/docs/#the-streaming-contract).
 
-## `Channel` and `Dialect`
+## `Channel`
 
 ```go
 const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown )
-const ( Markdown Dialect = iota; SlackMrkdwn )
 ```
 
 The numeric values are not the order of `Channels()`; use names to
@@ -89,7 +87,6 @@ store or send a channel.
 | `Channels() []Channel` | Every channel. |
 | `(Channel) Name() string` · `ParseChannel(string) (Channel, bool)` | The string names. |
 | `(Channel) Limit() int` | The part limit. |
-| `(Dialect) Name() string` · `ParseDialect(string) (Dialect, bool)` | `"markdown"`, `"slack-mrkdwn"`. |
 
 ## `Repairs`
 

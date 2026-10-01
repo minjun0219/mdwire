@@ -11,17 +11,14 @@ bin=${MDWIRE:-"$here/../../target/release/mdwire"}
 channels=(telegram-html slack-markdown github-markdown notion-markdown plain html)
 # `<이름>-input.txt` 마다 `<이름>.<채널>.txt` 를 만든다. inline 은 한 문단(인라인 파서만),
 # block 은 문서(완성본 파이프라인)다 — 둘 다 러스트 CLI 로 뽑는다.
-for set in inline block mrkdwn; do
-  # mrkdwn 은 입력 표기를 바꿔 뽑는다 — 레거시 mrkdwn 으로 쓴 에이전트 출력.
-  flags=()
-  [ "$set" = mrkdwn ] && flags=(--from slack-mrkdwn)
+for set in inline block; do
   for ch in "${channels[@]}"; do : > "$here/$set.$ch.txt"; done
   n=0
   emit() {
     local input=${1%$'\n'}   # 마지막 개행은 구분자 몫이다
     for ch in "${channels[@]}"; do
       if [ "$n" -gt 0 ]; then printf '\n----\n' >> "$here/$set.$ch.txt"; fi
-      printf '%s' "$input" | "$bin" --channel "$ch" "${flags[@]+"${flags[@]}"}" >> "$here/$set.$ch.txt"
+      printf '%s' "$input" | "$bin" --channel "$ch" >> "$here/$set.$ch.txt"
     done
     n=$((n + 1))
   }

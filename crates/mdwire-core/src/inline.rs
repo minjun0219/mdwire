@@ -19,7 +19,7 @@
 //! 그래서 조각 경계에 걸린 강조가 반쪽으로 나가는 일이 없다.
 
 use crate::vocab::{Emph, Vocab, INLINE_TAGS};
-use crate::{Dialect, Repairs};
+use crate::Repairs;
 
 #[derive(Clone)]
 struct Open {
@@ -37,9 +37,6 @@ struct Open {
     /// 공백이면 원래 글자였으므로 되돌리고, `…온다*` 처럼 앞이 글자면 짝 잃은 닫는
     /// 마커이므로 버린다 — 되돌려 놓으면 출력에 마커가 남는다.
     after_space: bool,
-    /// 짝이 오면 닫지만, 안 오면 닫아 주지 않고 글자로 되돌린다. mrkdwn 의 홑 `~` 다 —
-    /// 한국어에서 물결표는 근사값·범위로 흔해서(`약 ~40km`), 블록 끝까지 그어 버리면 안 된다.
-    soft: bool,
     /// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
     before: Option<char>,
     /// 더 긴 런(`***`)을 쪼갠 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한
@@ -64,8 +61,6 @@ pub(crate) struct Inline {
     /// `Vec<char>` 인 것은 다시 읽을 때 `render` 에 그대로 넘기기 위해서다 — `String`
     /// 으로 두면 되돌릴 때마다 글자 벡터를 새로 만들어야 한다.
     code_src: Vec<char>,
-    /// 입력 표기. 마커를 무엇으로 읽을지가 여기서 갈린다.
-    dialect: Dialect,
     /// 정규화가 고친 것. 블록이 끝날 때 닫은 강조, 글자로 되돌린 코드 스팬, 버린 마커.
     pub repairs: Repairs,
     /// 지금 닫는 마커 바로 뒤의 원문 글자. 짝이 맞아 닫을 때만 뜻이 있다.
@@ -83,13 +78,12 @@ pub(crate) struct Inline {
 }
 
 impl Inline {
-    pub fn new(dialect: Dialect) -> Self {
+    pub fn new() -> Self {
         Self {
             open: Vec::new(),
             prev: None,
             scratch: String::new(),
             code_src: Vec::new(),
-            dialect,
             repairs: Repairs::default(),
             after_close: None,
             in_cell: false,
@@ -233,7 +227,6 @@ impl Inline {
                     ch: '`',
                     guess: false,
                     after_space: prev.is_none_or(char::is_whitespace),
-                    soft: false,
                     before: prev,
                     split: false,
                 });
@@ -251,15 +244,11 @@ impl Inline {
             // 출력에 남고, 남은 마커는 곧 실패다. 중첩 강조를 살리는 것보다
             // 마커를 안 남기는 것이 먼저다 — 실측에서 중첩 강조는 나오지 않았다.
             let take = run_len(line, i, c);
-            // **레거시 mrkdwn 입력 표기.** `*굵게*` · `_기울임_` · `~취소~` — 별표는 몇 개든 굵게,
-            // 물결은 하나든 둘이든 취소선이다. 에이전트가 슬랙용으로 쓰면 흔히 이 표기가
-            // 표준 마크다운과 섞여 나온다(`**굵게**` 도 굵게로 읽는다).
-            let mrkdwn = self.dialect == Dialect::SlackMrkdwn;
             // **`***` 는 `**` 와 `*` 다** — 굵게 안에 기울임. 통째로 굵게로 읽으면 기울임을
             // 잃고, `_**x**_` 처럼 따로 적은 것과 답이 달라진다. 열 때는 굵게를 먼저
             // 열고(바깥), 닫을 때는 기울임이 열려 있으면 그것부터 닫는다(안쪽). 나머지
             // 마커는 다음 바퀴에서 자기 자리로 읽힌다.
-            let take = if c != '~' && take == 3 && !mrkdwn {
+            let take = if c != '~' && take == 3 {
                 if self.open.iter().any(|o| o.emph == Emph::Italic) {
                     1
                 } else if self.open.iter().any(|o| o.emph == Emph::Bold) {
@@ -274,7 +263,6 @@ impl Inline {
             };
             let emph = match (c, take) {
                 ('~', _) => Emph::Strike,
-                ('*', _) if mrkdwn => Emph::Bold,
                 (_, 1) => Emph::Italic,
                 _ => Emph::Bold,
             };
@@ -286,7 +274,7 @@ impl Inline {
             // GFM 도 슬랙 `markdown_text` 도 취소선을 `~~` 로 적는다. 홀로 선 `~` 를
             // 취소선으로 읽는 것은 레거시 `mrkdwn` 과 MarkdownV2 의 *출력* 규칙이지
             // 입력 문법이 아니다.
-            if c == '~' && take < 2 && !mrkdwn {
+            if c == '~' && take < 2 {
                 self.text_char(c, out, v);
                 i += 1;
                 continue;
@@ -320,14 +308,7 @@ impl Inline {
                 continue;
             }
 
-            // mrkdwn 의 홑 `~` 는 한국어에서 근사값·범위로 흔하다(`약 ~40km`, `5~6월`). 그래서
-            // 글자 뒤나 숫자 앞에서는 열지 않고, 영숫자 앞에서는 닫지 않으며(슬랙 mrkdwn 도 단어
-            // 경계를 요구한다), 안 닫히면 글자로 되돌린다. 조사 앞에서는 닫는다(`~취소~가`).
-            let soft = mrkdwn && c == '~' && take == 1;
-            let soft_blocked_open =
-                soft && (prev.is_some_and(is_word_char) || next.is_some_and(|n| n.is_ascii_digit()));
-            let soft_blocked_close = soft && next.is_some_and(|n| n.is_ascii_alphanumeric());
-            let left = can_open(prev, next) && !intraword && !soft_blocked_open;
+            let left = can_open(prev, next) && !intraword;
 
             match same {
                 // **추측으로 연 것은 닫지 않는다.** 추측은 확정되지 않는다 — 닫아 주면
@@ -345,9 +326,7 @@ impl Inline {
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
                 // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
-                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev, split)),
-                // mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
-                Some(_) if !after_space && soft_blocked_close => self.text_char(c, out, v),
+                Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, prev, split)),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
                 Some(at) if !after_space => {
                     self.after_close = next;
@@ -359,7 +338,7 @@ impl Inline {
                 // 열린 마커는 앞이 공백이었으면 글자로 되돌리고, 글자였으면 버린다. 여기서
                 // "닫기"로 읽으면 강조 범위가 뒤집힌다 — 그 고장이 원본이다. 규칙 2.
                 Some(at) if left && at + 1 == self.open.len() => {
-                    self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev, split))
+                    self.reopen_at(at, out, v, (emph, take, c, after_space, prev, split))
                 }
                 // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
                 Some(_) if left => {}
@@ -374,7 +353,6 @@ impl Inline {
                     ch: c,
                     guess: false,
                     after_space,
-                    soft,
                     before: prev,
                     split,
                 }),
@@ -386,7 +364,6 @@ impl Inline {
                     ch: c,
                     guess: true,
                     after_space,
-                    soft,
                     before: prev,
                     split,
                 }),
@@ -445,15 +422,15 @@ impl Inline {
     /// 되돌린다(`2 ** 3`) — 진짜 여는 마커였다가 진 `**` 는 짝 잃은 마커라 버린다. 되돌리면
     /// 텔레그램 화면에 `**` 가 글자로 남는다.
     ///
-    /// `fresh` 는 새로 열 마커 — (종류, 런 길이, 글자, 앞이 공백이었는가, 부드러운가, 앞 글자).
+    /// `fresh` 는 새로 열 마커 — (종류, 런 길이, 글자, 앞이 공백이었는가, 앞 글자, 쪼갠 조각인가).
     fn reopen_at(
         &mut self,
         at: usize,
         out: &mut String,
         v: &Vocab,
-        fresh: (Emph, usize, char, bool, bool, Option<char>, bool),
+        fresh: (Emph, usize, char, bool, Option<char>, bool),
     ) {
-        let (emph, take, c, after_space, soft, before, split) = fresh;
+        let (emph, take, c, after_space, before, split) = fresh;
         // `at` 위에 열린 것들은 먼저 정리한다 — `a*** **x` 처럼 추측 둘이 겹쳐 있을 때
         // 아래쪽이 물러난다. 위쪽을 두고 아래만 빼면 열린 것들의 순서가 깨진다.
         while self.open.len() > at + 1 {
@@ -465,7 +442,7 @@ impl Inline {
         } else {
             self.repairs.dropped_marker += 1;
         }
-        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, soft, before, split });
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, before, split });
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
@@ -505,7 +482,7 @@ impl Inline {
 
         // 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
         let empty = out.len() == open.at;
-        if open.guess || empty || (open.soft && !matched) {
+        if open.guess || empty {
             // 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주(`참고*`), 글롭
             // (`underfront.*`), 곱셈(`2 * 3`)으로 쓰이는 글자라 버리면 내용 손실이다.
             // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
@@ -584,7 +561,7 @@ impl Inline {
             out.push_str(v.close_html(open.emph));
             return;
         }
-        // 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — mrkdwn `*굵게*` → `**`, `_` → `*`.
+        // 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — `_기울임_` → `*`, `__굵게__` → `**`.
         if !v.html_out() && !v.is_plain() && open.emph != Emph::Code {
             let written = v.open(open.emph);
             if written.chars().count() != open.run || !written.chars().all(|c| c == open.ch) {
@@ -724,8 +701,7 @@ impl Inline {
                         ch: '<',
                         guess: false,
                         after_space: false,
-                        soft: false,
-                        before: self.prev_char(line, i),
+                            before: self.prev_char(line, i),
                         split: false,
                     }),
                 }
@@ -774,7 +750,7 @@ impl Inline {
         let mut scratch = std::mem::take(&mut self.scratch);
         scratch.clear();
         // 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
-        let mut nested = Inline::new(self.dialect);
+        let mut nested = Inline::new();
         nested.render(text, &mut scratch, v);
         nested.finish_block(&mut scratch, v);
         self.repairs.add(nested.repairs);

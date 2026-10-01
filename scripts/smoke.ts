@@ -8,8 +8,8 @@ const s = new Streamer("slack-markdown");
 const out: string = s.push("조각") + s.closeOpen() + s.preview() + s.finish();
 const revised: boolean = s.revised();
 
-// 옵션은 좁은 타입이다 — 입력 표기 이름을 틀리면 컴파일에서 걸린다.
-const opts: RenderOptions = { from: "slack-mrkdwn" };
+// 옵션은 좁은 타입이다 — 값을 틀리면 컴파일에서 걸린다.
+const opts: RenderOptions = { limit: 4096 };
 const withOpts: string[] = render("*굵게*", "slack-markdown", opts);
 const report = renderWithReport("**열림", "telegram-html", opts);
 const closed: number = report.repairs.closedEmphasis + s.repairs().closedFence;
@@ -22,7 +22,7 @@ import type { MdEvent } from "@minjun0219/mdwire/events";
 import { Markdown, toElements } from "@minjun0219/mdwire/react";
 import type { MarkdownProps } from "@minjun0219/mdwire/react";
 const events: MdEvent[] = toEvents("<p>x</p>");
-const props: MarkdownProps = { text: "**x**", from: "slack-mrkdwn", components: { a: "span" } };
+const props: MarkdownProps = { text: "**x**", components: { a: "span" } };
 void [events, Markdown(props), toElements("<p>x</p>")];
 const htmlOpts: RenderOptions = { html: { lineBreaks: "space", images: "load", schemes: ["https"] } };
 void render("x", "html", htmlOpts);
