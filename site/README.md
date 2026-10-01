@@ -43,7 +43,7 @@ Workers Builds 설정(대시보드):
 | Build command | `pnpm run build` |
 | Deploy command | `npx wrangler deploy` (기본값) |
 | Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview` |
-| Build watch paths | `site/` 아래 변경만 포함 |
+| Build watch paths | 포함 `site/**` — `*` 는 `/` 를 넘지 않아 최상위 파일만 잡는다 |
 | Production branch | `main` |
 
 의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
