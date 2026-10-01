@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { limit, renderWithReport, type RenderOptions } from "@minjun0219/mdwire";
 import type { Locale } from "../i18n";
 import { samples } from "./samples";
-import "./channel-compare.css";
+import styles from "./ChannelCompare.module.css";
 
 type From = NonNullable<RenderOptions["from"]>;
 
@@ -95,8 +95,8 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
   }
 
   return (
-    <div className="cc">
-      <div className="cc-controls">
+    <div className={styles.root}>
+      <div className={styles.controls}>
         <label>
           <span>{t.sample}</span>
           <select value={sampleId} onChange={(e) => pick(e.target.value)}>
@@ -115,25 +115,25 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
           </select>
         </label>
       </div>
-      {sample && sample.input === input && <p className="cc-note">{sample.note[lang]}</p>}
+      {sample && sample.input === input && <p className={styles.note}>{sample.note[lang]}</p>}
 
-      <label className="cc-input">
+      <label>
         <span>{t.input}</span>
         <textarea value={input} onChange={(e) => setInput(e.target.value)} spellCheck={false} rows={10} />
       </label>
 
-      <div className="cc-outputs">
+      <div className={styles.outputs}>
         {outputs.map(({ id, name, via, out }) => (
-          <section key={id} className="cc-output">
+          <section key={id} className={styles.output}>
             <header>
               <h3>{name}</h3>
               <code>{via}</code>
             </header>
             {"error" in out ? (
-              <p className="cc-error">{out.error}</p>
+              <p className={styles.error}>{out.error}</p>
             ) : (
               <>
-                <p className="cc-meta">{t.parts(out.parts.length, out.limit)}</p>
+                <p className={styles.meta}>{t.parts(out.parts.length, out.limit)}</p>
                 {out.parts.map((part, i) => (
                   <pre key={i}>{part || t.empty}</pre>
                 ))}
@@ -150,9 +150,9 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
 function RepairList({ repairs, lang }: { repairs: Repairs; lang: Locale }) {
   const t = text[lang];
   const fixed = (Object.keys(t.repairs) as (keyof Repairs)[]).filter((k) => repairs[k] > 0);
-  if (fixed.length === 0) return <p className="cc-repairs">{t.noRepairs}</p>;
+  if (fixed.length === 0) return <p className={styles.repairs}>{t.noRepairs}</p>;
   return (
-    <ul className="cc-repairs">
+    <ul className={styles.repairs}>
       {fixed.map((k) => (
         <li key={k}>
           {t.repairs[k]} <b>×{repairs[k]}</b>

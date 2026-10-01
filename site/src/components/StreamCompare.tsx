@@ -13,7 +13,7 @@ import { Streamer } from "@minjun0219/mdwire";
 import { useMarkdownStream } from "@minjun0219/mdwire/react";
 import type { Locale } from "../i18n";
 import { streamSample, tokenize } from "./streamSample";
-import "./stream-compare.css";
+import styles from "./StreamCompare.module.css";
 
 const TOKENS = tokenize(streamSample);
 
@@ -64,8 +64,8 @@ export default function StreamCompare({ lang }: { lang: Locale }) {
     return () => io.disconnect();
   }, []);
   return (
-    <div className="sc" ref={root}>
-      <div className="sc-controls">
+    <div className={styles.root} ref={root}>
+      <div className={styles.controls}>
         <label>
           <span>{t.delay(delay)}</span>
           <input type="range" min={10} max={300} value={delay} onChange={(e) => setDelay(Number(e.target.value))} />
@@ -73,7 +73,7 @@ export default function StreamCompare({ lang }: { lang: Locale }) {
         <button type="button" onClick={() => setRun((n) => n + 1)}>
           {t.restart}
         </button>
-        <span className="sc-meta">{t.tokens(TOKENS.length)}</span>
+        <span className={styles.meta}>{t.tokens(TOKENS.length)}</span>
       </div>
       {visible && <Panes key={run} delay={delay} lang={lang} />}
     </div>
@@ -129,13 +129,13 @@ function Panes({ delay, lang }: { delay: number; lang: Locale }) {
   ];
 
   return (
-    <div className="sc-panes">
+    <div className={styles.panes}>
       {panes.map((p, i) => (
-        <section key={i} className="sc-pane">
+        <section key={i} className={styles.pane}>
           <h3>
             {p.title} <small>{p.note}</small>
           </h3>
-          <div className="sc-body">{bodies[i]}</div>
+          <div className={styles.body}>{bodies[i]}</div>
         </section>
       ))}
     </div>

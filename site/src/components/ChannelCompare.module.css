@@ -1,24 +1,25 @@
-.cc {
+/* ChannelCompare 의 스타일 — CSS Module 이라 클래스 이름이 이 컴포넌트 안에 갇힌다. */
+.root {
   display: grid;
   gap: 1rem;
   margin: 1.5rem 0;
 }
 
-.cc label > span {
+.root label > span {
   display: block;
   font-size: 0.8rem;
   color: var(--muted);
   margin-bottom: 0.25rem;
 }
 
-.cc-controls {
+.controls {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.cc select,
-.cc textarea {
+.root select,
+.root textarea {
   font: inherit;
   color: var(--fg);
   background: var(--panel);
@@ -27,7 +28,7 @@
   padding: 0.4rem 0.6rem;
 }
 
-.cc textarea {
+.root textarea {
   width: 100%;
   font-family: var(--mono);
   font-size: 0.9rem;
@@ -35,19 +36,19 @@
   resize: vertical;
 }
 
-.cc-note {
+.note {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
 
-.cc-outputs {
+.outputs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
   gap: 1rem;
 }
 
-.cc-output {
+.output {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -55,7 +56,7 @@
   min-width: 0;
 }
 
-.cc-output header {
+.output header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -63,41 +64,37 @@
   flex-wrap: wrap;
 }
 
-.cc-output h3 {
+.output h3 {
   margin: 0;
   font-size: 1rem;
 }
 
-.cc-output header code {
+.output header code {
   font-size: 0.75rem;
   color: var(--muted);
 }
 
-.cc-output pre {
+.output pre {
   margin: 0.5rem 0;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.cc-meta,
-.cc-repairs {
+.meta,
+.repairs {
   margin: 0.5rem 0 0;
   font-size: 0.8rem;
   color: var(--muted);
 }
 
-.cc-repairs {
+ul.repairs {
   padding-left: 1.1rem;
 }
 
-p.cc-repairs {
-  padding-left: 0;
-}
-
-.cc-repairs b {
+.repairs b {
   color: var(--warn);
 }
 
-.cc-error {
+.error {
   color: var(--warn);
 }
