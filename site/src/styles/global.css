@@ -206,3 +206,27 @@ pre {
   text-align: left;
   vertical-align: top;
 }
+
+/* 데모 아래의 "이 데모의 코드" 접기 블록. */
+details.code {
+  margin: 1.25rem 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+}
+
+details.code > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+details.code[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+details.code p {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
