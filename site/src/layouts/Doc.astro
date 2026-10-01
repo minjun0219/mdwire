@@ -23,8 +23,8 @@ const other = lang === "en" ? "ko" : "en";
 // 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
 const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const href = (page: string) => getRelativeLocaleUrl(lang, page);
-// 404 는 언어별 페이지가 없다 — 다른 언어의 개요로 보낸다.
-const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
+// 언어 전환 — 같은 문서의 각 언어 주소. 404 는 언어별 페이지가 없다 — 각 언어의 개요로 보낸다.
+const langHref = (l: "en" | "ko") => getRelativeLocaleUrl(l, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
   { page: "why", label: t.nav.why },
@@ -129,7 +129,15 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         }
       </nav>
       <div class="header-end">
-        <a href={switchHref} hreflang={other} lang={other}>{t.switchTo}</a>
+        <nav class="lang-switch" aria-label={t.langSwitch}>
+          {
+            (["en", "ko"] as const).map((l) => (
+              <a href={langHref(l)} hreflang={l} lang={l} aria-current={l === lang ? "true" : undefined}>
+                {l.toUpperCase()}
+              </a>
+            ))
+          }
+        </nav>
         <a class="header-github" href="https://github.com/minjun0219/mdwire" aria-label="GitHub" title="GitHub">
           {/* GitHub 마크(Octicons mark-github, MIT). 색은 글자색을 따른다. */}
           <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" fill="currentColor">

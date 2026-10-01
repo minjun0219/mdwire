@@ -130,7 +130,7 @@ pre {
   font-family: var(--mono);
 }
 
-.site-header nav,
+.site-header > nav,
 .header-end {
   display: flex;
   gap: 1rem;
@@ -143,13 +143,47 @@ pre {
 }
 
 /* 머리글의 GitHub 는 글자 대신 아이콘. */
-.header-github {
+.site-header .header-github {
   display: inline-flex;
+  color: var(--muted);
+}
+
+.site-header .header-github:hover {
+  color: var(--fg);
+}
+
+/* 언어 전환 — EN · KO 두 칸짜리 알약. 지금 언어 칸이 채워진다. */
+.lang-switch {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.site-header .lang-switch a {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.site-header .lang-switch a:hover {
+  color: var(--fg);
+}
+
+.site-header .lang-switch a[aria-current] {
+  background: var(--fg);
+  color: var(--bg);
 }
 
 /* 좁은 화면에서도 한 줄 — 줄바꿈되면 고정 머리글이 화면을 너무 먹는다. 영문 메뉴가 더 길어서 375px 에서
-   `한국어` 가 세로로 꺾였다. GitHub 은 푸터에도 있으니 머리글에서 빼고, 그래도 모자란 폭(320px)에서는
-   메뉴만 가로로 민다 — 페이지 전체가 옆으로 밀리지 않게. */
+   `한국어` 가 세로로 꺾였다. 로고가 개요로 가니 개요 메뉴를 빼고 언어 알약을 좁힌다 — 320px 영문에서도
+   GitHub 아이콘까지 한 줄에 든다. 그래도 모자라면 메뉴만 가로로 민다 — 페이지 전체가 옆으로 밀리지 않게. */
 @media (max-width: 40rem) {
   .site-header {
     gap: 0.9rem;
@@ -157,12 +191,12 @@ pre {
     font-size: 0.9rem;
   }
 
-  .site-header nav,
+  .site-header > nav,
   .header-end {
     gap: 0.7rem;
   }
 
-  .site-header nav {
+  .site-header > nav {
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -172,8 +206,13 @@ pre {
     font-size: inherit;
   }
 
-  .header-github {
+  /* 개요는 로고(mdwire)가 이미 링크한다. */
+  .site-header > nav > a:first-child {
     display: none;
+  }
+
+  .site-header .lang-switch a {
+    padding: 0.15rem 0.4rem;
   }
 }
 
@@ -185,7 +224,7 @@ pre {
     font-size: 0.85rem;
   }
 
-  .site-header nav {
+  .site-header > nav {
     gap: 0.55rem;
   }
 }
