@@ -1,0 +1,3 @@
+<b>배포 전에 <code>cache.clear()</code> 를 꼭 부른다</b> — 안 부르면 <b><code>stale</code> 값이 남는다</b>.
+
+<b>설정은 <code>config.yml</code> 에</b> 있고 <s>예전 경로</s> 는 지웠다.
