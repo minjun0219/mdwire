@@ -6,10 +6,10 @@ description: Real failures from sending agent-written Markdown to chat channels,
 
 # Cases
 
-Real failures we hit sending agent-written Markdown to chat channels. Each one is in the
+These are real failures we hit while sending agent-written Markdown to chat channels. Each one is in the
 [test cases](https://github.com/minjun0219/mdwire/tree/main/corpus/cases) with its input and the expected
 output per channel, and the Rust core, the npm package, the Go implementation and the CLI all produce the
-same result. More cases live there than are shown here.
+same result. The test cases hold more than are shown here.
 
 ## Emphasis spanning lines
 
@@ -36,7 +36,7 @@ Test cases: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/t
 ## Bold ending in a symbol, before a Korean particle
 
 Korean attaches a particle right after the emphasis. When the bold ends in a parenthesis, quote, backtick or
-period, CommonMark's rules do not let the closing `**` close. On GitHub the asterisks stay as text, and with
+period, CommonMark's rules keep the closing `**` from closing. On GitHub the asterisks stay as text, and with
 several on one line the pairs cross and the ranges invert.
 
 ```text
@@ -77,7 +77,7 @@ GitHub
   결제 수단: 신한카드 1\*\*\*-\*\*\*\*-\*\*\*\*-001\* (본인 명의)
 ```
 
-An asterisk where emphasis cannot open is judged to be a character, and it is escaped for GitHub and Notion,
+An asterisk where emphasis cannot open is treated as a literal character, and it is escaped for GitHub and Notion,
 which would read it as syntax. Test case: [`masked-number-asterisks`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/masked-number-asterisks)
 
 ## An unpaired backtick run

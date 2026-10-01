@@ -25,14 +25,14 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 
 ## Why another one
 
-We found three gaps in existing tools: emphasis spanning lines is common, common Korean notation collides
-with Markdown, and chat-channel converters ignore streaming. [Why another one](/why/) goes into each, and
+We found three gaps in existing tools: emphasis that spans lines, Korean notation that collides with
+Markdown, and chat-channel converters that ignore streaming. [Why another one](/why/) goes into each, and
 [Cases](/why/cases/) shows the real failures.
 
 ## Targets
 
 Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain
-text, and HTML for the browser — from a Rust core, a CLI, an npm package (WASM), and a Go implementation held to
+text, and HTML for the browser. A Rust core, a CLI, an npm package (WASM) and a Go implementation, all held to
 the same test cases.
 
 ## Try it

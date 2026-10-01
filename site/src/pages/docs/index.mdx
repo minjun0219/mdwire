@@ -30,7 +30,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 | `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
 
 The limit is a character count on the rendered output. The sender can set its own (see
-[options](#options)) — `plain` sent to Telegram has to fit 4,096.
+[options](#options)). For example, `plain` sent to Telegram has to fit 4,096.
 
 ## Options
 
@@ -63,7 +63,7 @@ The other six are **channel rewrites** — what the channel needed changed befor
 | tag emphasis | Emphasis written as a tag instead of markers — GitHub's `<strong>`. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
-| rewritten table | Tables rewritten (separator and cell spacing, or down to monospace). |
+| rewritten table | Tables rewritten (separator and cell spacing, or turned into a monospace block). |
 | converted marker | Emphasis and links respelled — `_italic_` → `*italic*`, `__bold__` → `**bold**`, `<url\|text>` → `[text](url)`. Markdown channels only. |
 
 ## The streaming contract
