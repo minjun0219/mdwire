@@ -1122,7 +1122,7 @@ impl Table {
             return Vec::new();
         }
         if v.xml_tables() {
-            return write_notion_table(out, &cells, v.limit);
+            return write_notion_table(out, &mut cells, v.limit);
         }
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);
@@ -1207,28 +1207,23 @@ fn write_html_table(out: &mut String, cells: &[Vec<String>], align: &[Align]) {
 /// **GFM 파이프 표로 내면 칸 안의 `|` 가 칸을 가른다**(실측 2026-10-01). 노션은 코드 스팬 안의
 /// `` `a|b` `` 도, 탈출한 `a \| b` 도 칸 경계로 읽어 뒤의 내용을 버렸다. `<table>` 로 쓰면 `|` 는
 /// 그냥 글자다. 정렬은 노션 표에 없어 버린다. 칸에 글자로 적힌 태그 모양(`</td>`)은 표를 깨므로
-/// 탈출한다([`push_notion_cell`]).
+/// 탈출한다([`push_notion_cell`]) — 칸은 그 자리에서 바꾼다(`<` 가 든 칸만 새로 만든다).
 ///
 /// **한도를 넘으면 머리글을 되풀이한 표 여럿으로 낸다.** 분할기는 태그를 모르고 줄로 끊어서, 한
 /// 표를 가르면 앞 조각은 `</table>` 없이 끝나고 뒤 조각은 `<tr>` 로 시작한다. 머리글과 함께 한도에
-/// 안 드는 행은 표 밖의 글(칸을 ` | ` 로 이은 줄)로 내린다 — 표는 깨지지 않고 내용은 남는다. 머리글
-/// 하나가 한도를 넘으면 표 전체를 그렇게 내린다. 나눈 자리(다음 조각을 여는 빈 줄의 위치)를
-/// 돌려주면 엔진이 그 사이를 블록 경계로 내보낸다.
-fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> Vec<usize> {
+/// 안 드는 행은 표 밖의 글(칸을 ` | ` 로 이은 줄)로 내린다 — 표는 깨지지 않고 내용은 남는다. 그 전에
+/// 머리글이 아직 안 나갔으면 머리글도 글로 먼저 낸다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게
+/// 내린다. 나눈 자리(다음 조각을 여는 빈 줄의 위치)를 돌려주면 엔진이 그 사이를 블록 경계로 내보낸다.
+fn write_notion_table(out: &mut String, cells: &mut [Vec<String>], limit: usize) -> Vec<usize> {
     const OPEN: &str = "<table header-row=\"true\">";
     const CLOSE: &str = "\n</table>";
-    let cells: Vec<Vec<String>> = cells
-        .iter()
-        .map(|row| {
-            row.iter()
-                .map(|c| {
-                    let mut e = String::with_capacity(c.len());
-                    push_notion_cell(c, &mut e);
-                    e
-                })
-                .collect()
-        })
-        .collect();
+    for cell in cells.iter_mut().flatten() {
+        if cell.contains('<') {
+            let mut e = String::with_capacity(cell.len() + 8);
+            push_notion_cell(cell, &mut e);
+            *cell = e;
+        }
+    }
     let row_len = |row: &[String]| -> usize {
         "\n<tr>\n</tr>".len() + row.iter().map(|c| "\n<td></td>".len() + c.chars().count()).sum::<usize>()
     };
@@ -1241,14 +1236,6 @@ fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> 
         }
         out.push_str("\n</tr>");
     };
-    let write_text = |out: &mut String, row: &[String]| {
-        for (k, cell) in row.iter().enumerate() {
-            if k > 0 {
-                out.push_str(" | ");
-            }
-            out.push_str(cell);
-        }
-    };
     let Some((head, body)) = cells.split_first() else { return Vec::new() };
     let base = OPEN.len() + CLOSE.len() + row_len(head);
     if base > limit {
@@ -1256,13 +1243,15 @@ fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> 
             if r > 0 {
                 out.push('\n');
             }
-            write_text(out, row);
+            write_text_row(out, row);
         }
         return Vec::new();
     }
     let mut breaks = Vec::new();
     // 이 표 블록에 무엇이든 썼는가 — 다음 조각 앞에 경계와 빈 줄을 둔다.
     let mut wrote = false;
+    // 머리글이 표로든 글로든 한 번은 나갔는가 — 행이 전부 글로 내려가도 머리글을 잃지 않는다.
+    let mut head_shown = false;
     let mut open = false;
     let mut used = 0;
     let mut piece = |out: &mut String, wrote: &mut bool| {
@@ -1280,7 +1269,12 @@ fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> 
                 open = false;
             }
             piece(out, &mut wrote);
-            write_text(out, row);
+            if !head_shown {
+                write_text_row(out, head);
+                out.push('\n');
+                head_shown = true;
+            }
+            write_text_row(out, row);
             continue;
         }
         if open && used + n > limit {
@@ -1292,6 +1286,7 @@ fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> 
             out.push_str(OPEN);
             write_row(out, head);
             open = true;
+            head_shown = true;
             used = base;
         }
         write_row(out, row);
@@ -1308,45 +1303,80 @@ fn write_notion_table(out: &mut String, cells: &[Vec<String>], limit: usize) -> 
     breaks
 }
 
-/// 노션 표 칸 하나를 적는다. **글자로 적힌 태그 모양은 탈출한다** — 칸 안의 `</td>` 는 노션이 칸을
-/// 닫는 태그로 읽어 뒤의 내용을 버렸다(실측). `\<` 만으로는 안 되고 `\<\/td\>` 로 `/` 와 `>` 까지
-/// 막아야 글자로 남았다. `<br>` 은 노션이 그리는 줄바꿈이라 둔다.
-fn push_notion_cell(cell: &str, out: &mut String) {
-    let b = cell.as_bytes();
-    let mut i = 0;
-    let mut in_tag = false;
-    while i < b.len() {
-        let c = b[i];
-        if in_tag && c == b'>' {
-            out.push_str("\\>");
-            in_tag = false;
-            i += 1;
-            continue;
-        }
-        if c == b'<' && !in_tag {
-            let slash = b.get(i + 1) == Some(&b'/');
-            let name_at = i + 1 + usize::from(slash);
-            let is_br = !slash && cell[i..].get(..4).is_some_and(|t| t.eq_ignore_ascii_case("<br>"));
-            if !is_br && b.get(name_at).is_some_and(u8::is_ascii_alphabetic) {
-                out.push_str(if slash { "\\<\\/" } else { "\\<" });
-                in_tag = true;
-                i = name_at;
-                continue;
+/// 표 밖으로 내린 행을 글 한 줄로 적는다 — 칸을 ` | ` 로 잇는다. **줄 첫머리는 탈출한다** — 칸이
+/// `#`·`- `·`> `·`1. ` 로 시작하면 노션이 헤딩·목록·인용으로 읽는다.
+fn write_text_row(out: &mut String, row: &[String]) {
+    for (k, cell) in row.iter().enumerate() {
+        if k > 0 {
+            out.push_str(" | ");
+        } else {
+            let digits = cell.len() - cell.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+            match cell.as_bytes().first() {
+                Some(b'#' | b'>' | b'-' | b'+' | b'*') => out.push('\\'),
+                Some(b'0'..=b'9') if matches!(cell.as_bytes().get(digits), Some(b'.' | b')')) => {
+                    out.push_str(&cell[..digits]);
+                    out.push('\\');
+                    out.push_str(&cell[digits..]);
+                    continue;
+                }
+                _ => {}
             }
         }
-        // 한 바이트씩 옮기되 글자를 가르지 않는다 — 여러 바이트 글자는 통째로.
-        let len = utf8_len(c);
-        out.push_str(&cell[i..i + len]);
-        i += len;
+        out.push_str(cell);
     }
 }
 
-fn utf8_len(first: u8) -> usize {
-    match first {
-        0x00..=0x7f => 1,
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        _ => 4,
+/// 노션 표 칸 하나를 적는다. **글자로 적힌 태그 모양은 탈출한다** — 칸 안의 `</td>` 는 노션이 칸을
+/// 닫는 태그로 읽어 뒤의 내용을 버렸다(실측). `\<` 만으로는 안 되고 `\<\/td\>` 로 `/` 와 `>` 까지
+/// 막아야 글자로 남았다. 태그로 보는 것은 `<` 뒤에 글자가 오고, 다음 `<` 보다 앞에 `>` 가 있을 때뿐이다
+/// — `i<n` 처럼 닫히지 않는 꺾쇠는 두어야 뒤의 `<br>` 을 망가뜨리지 않는다. `<br>` 은 노션이 그리는 줄바꿈이라 둔다.
+///
+/// **코드 스팬 안은 표 구조 태그(`td` `tr` `th` `table`)만 막는다.** 코드 안의 탈출은 글자로 보여서
+/// `` `Option<T>` `` 가 `Option\<T\>` 로 보인다 — 칸을 깨는 것만 막고 나머지는 둔다.
+fn push_notion_cell(cell: &str, out: &mut String) {
+    let mut code: Option<usize> = None;
+    let mut close_at: Option<usize> = None;
+    let mut it = cell.char_indices().peekable();
+    while let Some((i, c)) = it.next() {
+        if close_at == Some(i) {
+            out.push_str("\\>");
+            close_at = None;
+            continue;
+        }
+        if c == '`' {
+            let mut run = 1;
+            while it.next_if(|&(_, x)| x == '`').is_some() {
+                run += 1;
+            }
+            code = match code {
+                Some(r) if r == run => None,
+                None => Some(run),
+                keep => keep,
+            };
+            out.extend(std::iter::repeat_n('`', run));
+            continue;
+        }
+        if c == '<' && close_at.is_none() {
+            let rest = &cell[i + 1..];
+            let slash = rest.starts_with('/');
+            let name = &rest[usize::from(slash)..];
+            let name_len = name.len() - name.trim_start_matches(|x: char| x.is_ascii_alphanumeric()).len();
+            let word = &name[..name_len];
+            let tag_like = word.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+                && !(!slash && word.eq_ignore_ascii_case("br") && name[name_len..].starts_with('>'));
+            let structural = ["td", "tr", "th", "table"].iter().any(|t| word.eq_ignore_ascii_case(t));
+            // 태그의 `>` 는 다음 `<` 보다 앞에 있어야 한다 — `i<n 일 때<br>` 의 `>` 는 `<br>` 의 것이다.
+            let gt = rest.find('>').filter(|&g| rest.find('<').is_none_or(|l| g < l));
+            if tag_like && gt.is_some() && (code.is_none() || structural) {
+                out.push_str(if slash { "\\<\\/" } else { "\\<" });
+                close_at = gt.map(|g| i + 1 + g);
+                if slash {
+                    it.next();
+                }
+                continue;
+            }
+        }
+        out.push(c);
     }
 }
 

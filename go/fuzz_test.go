@@ -340,3 +340,16 @@ func TestNotionTableLongRowAndTagLikeCell(t *testing.T) {
 		t.Fatalf("\n  got  %q\n  want %q", got, want)
 	}
 }
+
+// 두 번째 자체 리뷰 — 러스트 쪽 notion_splits_long_tables_into_whole_tables 의 뒷부분과 같다.
+func TestNotionTableCellAnglesAndHeaderKept(t *testing.T) {
+	cells := strings.Join(Render("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", NotionMarkdown), "")
+	if !strings.Contains(cells, "<td>i<n 일 때<br>반복</td>") || !strings.Contains(cells, "<td>`Option<T>` 와 `x\\<\\/td\\>y`</td>") {
+		t.Fatalf("칸 탈출이 틀렸다: %q", cells)
+	}
+	only := "| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | " + strings.Repeat("가 ", 200) + " |"
+	out := strings.Join(RenderWith(only, NotionMarkdown, Options{Limit: 256}).Parts, "")
+	if !strings.HasPrefix(out, "이름 | 설명\n\\# 제목처럼 | 가 가") {
+		t.Fatalf("머리글이 사라졌거나 첫머리가 탈출되지 않았다: %q", out)
+	}
+}

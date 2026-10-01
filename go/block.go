@@ -1169,16 +1169,17 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 
 // writeNotionTable 은 표를 노션 <table> 로 낸다 — 러스트 쪽 write_notion_table. 파이프 표로 내면
 // 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버리고, 칸에 글자로 적힌 태그 모양은
-// 탈출한다. 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고, 머리글과 함께 한도에 안 드는 행은
-// 표 밖의 글(칸을 " | " 로 이은 줄)로 내린다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게 내린다.
-// 나눈 자리(다음 조각을 여는 빈 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록 경계로 내보낸다.
-func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
+// 탈출한다(< 가 든 칸만 그 자리에서 바꾼다). 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고,
+// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로 내린다 — 머리글이 아직 안 나갔으면 머리글도 글로
+// 먼저 낸다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게 내린다. 나눈 자리(다음 조각을 여는 빈
+// 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록 경계로 내보낸다.
+func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
 	const open, closeTag = `<table header-row="true">`, "\n</table>"
-	cells := make([][]string, len(raw))
-	for r, row := range raw {
-		cells[r] = make([]string, len(row))
+	for _, row := range cells {
 		for c, cell := range row {
-			cells[r][c] = notionCell(cell)
+			if strings.IndexByte(cell, '<') >= 0 {
+				row[c] = notionCell(cell)
+			}
 		}
 	}
 	rowLen := func(row []string) int {
@@ -1197,14 +1198,6 @@ func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 		}
 		*out = append(*out, "\n</tr>"...)
 	}
-	writeText := func(row []string) {
-		for k, cell := range row {
-			if k > 0 {
-				*out = append(*out, " | "...)
-			}
-			*out = append(*out, cell...)
-		}
-	}
 	if len(cells) == 0 {
 		return nil
 	}
@@ -1215,12 +1208,12 @@ func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 			if r > 0 {
 				*out = append(*out, '\n')
 			}
-			writeText(row)
+			writeTextRow(out, row)
 		}
 		return nil
 	}
 	var breaks []int
-	wrote, opened, used := false, false, 0
+	wrote, headShown, opened, used := false, false, false, 0
 	piece := func() {
 		if wrote {
 			breaks = append(breaks, len(*out))
@@ -1236,7 +1229,12 @@ func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 				opened = false
 			}
 			piece()
-			writeText(row)
+			if !headShown {
+				writeTextRow(out, head)
+				*out = append(*out, '\n')
+				headShown = true
+			}
+			writeTextRow(out, row)
 			continue
 		}
 		if opened && used+n > limit {
@@ -1247,7 +1245,7 @@ func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 			piece()
 			*out = append(*out, open...)
 			writeRow(head)
-			opened, used = true, base
+			opened, headShown, used = true, true, base
 		}
 		writeRow(row)
 		used += n
@@ -1264,39 +1262,101 @@ func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 	return breaks
 }
 
-// notionCell 은 노션 표 칸 하나를 탈출한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
-// 칸을 닫는 태그로 읽는다(실측). \<\/td\> 로 / 와 > 까지 막아야 글자로 남았다. <br> 은 둔다.
-func notionCell(cell string) string {
-	var b strings.Builder
-	inTag := false
-	for i := 0; i < len(cell); i++ {
-		c := cell[i]
-		if inTag && c == '>' {
-			b.WriteString(`\>`)
-			inTag = false
+// writeTextRow 는 표 밖으로 내린 행을 글 한 줄로 적는다 — 러스트 쪽 write_text_row. 줄 첫머리가
+// #·>·-·+·* 나 1. 이면 노션이 블록 구문으로 읽어서 탈출한다.
+func writeTextRow(out *[]byte, row []string) {
+	for k, cell := range row {
+		if k > 0 {
+			*out = append(*out, " | "...)
+			*out = append(*out, cell...)
 			continue
 		}
-		if c == '<' && !inTag {
-			slash := i+1 < len(cell) && cell[i+1] == '/'
-			nameAt := i + 1
-			if slash {
-				nameAt++
+		digits := len(cell) - len(strings.TrimLeft(cell, "0123456789"))
+		switch {
+		case cell != "" && strings.IndexByte("#>-+*", cell[0]) >= 0:
+			*out = append(*out, '\\')
+		case digits > 0 && digits < len(cell) && (cell[digits] == '.' || cell[digits] == ')'):
+			*out = append(*out, cell[:digits]...)
+			*out = append(*out, '\\')
+			*out = append(*out, cell[digits:]...)
+			continue
+		}
+		*out = append(*out, cell...)
+	}
+}
+
+// notionCell 은 노션 표 칸 하나를 탈출한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
+// 칸을 닫는 태그로 읽는다(실측). \<\/td\> 로 / 와 > 까지 막아야 글자로 남았다. 태그로 보는 것은 <
+// 뒤에 글자가 오고 다음 < 보다 앞에 > 가 있을 때뿐이고, <br> 은 둔다. 코드 스팬 안은 표 구조
+// 태그(td tr th table)만 막는다 — 코드 안의 탈출은 글자로 보인다.
+func notionCell(cell string) string {
+	var b strings.Builder
+	code, closeAt := 0, -1
+	for i := 0; i < len(cell); i++ {
+		c := cell[i]
+		if i == closeAt {
+			b.WriteString(`\>`)
+			closeAt = -1
+			continue
+		}
+		if c == '`' {
+			run := 1
+			for i+run < len(cell) && cell[i+run] == '`' {
+				run++
 			}
-			isBr := !slash && len(cell) >= i+4 && strings.EqualFold(cell[i:i+4], "<br>")
-			if !isBr && nameAt < len(cell) && (cell[nameAt]|0x20 >= 'a' && cell[nameAt]|0x20 <= 'z') {
+			switch code {
+			case 0:
+				code = run
+			case run:
+				code = 0
+			}
+			b.WriteString(cell[i : i+run])
+			i += run - 1
+			continue
+		}
+		if c == '<' && closeAt < 0 {
+			rest := cell[i+1:]
+			slash := strings.HasPrefix(rest, "/")
+			name := rest
+			if slash {
+				name = rest[1:]
+			}
+			n := 0
+			for n < len(name) && (name[n]|0x20 >= 'a' && name[n]|0x20 <= 'z' || name[n] >= '0' && name[n] <= '9') {
+				n++
+			}
+			word := name[:n]
+			tagLike := n > 0 && name[0]|0x20 >= 'a' && name[0]|0x20 <= 'z' &&
+				!(!slash && strings.EqualFold(word, "br") && strings.HasPrefix(name[n:], ">"))
+			structural := false
+			for _, t := range []string{"td", "tr", "th", "table"} {
+				structural = structural || strings.EqualFold(word, t)
+			}
+			gt, lt := strings.IndexByte(rest, '>'), strings.IndexByte(rest, '<')
+			if gt >= 0 && lt >= 0 && lt < gt {
+				gt = -1
+			}
+			if tagLike && gt >= 0 && (code == 0 || structural) {
 				if slash {
 					b.WriteString(`\<\/`)
+					i++
 				} else {
 					b.WriteString(`\<`)
 				}
-				inTag = true
-				i = nameAt - 1
+				closeAt = i - boolInt(slash) + 1 + gt
 				continue
 			}
 		}
 		b.WriteByte(c)
 	}
 	return b.String()
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.

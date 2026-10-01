@@ -805,6 +805,16 @@ fn notion_splits_long_tables_into_whole_tables() {
         one("| a |\n|---|\n| x </td> y <br> z |", Channel::NotionMarkdown),
         "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
     );
+    // 두 번째 자체 리뷰: 닫히지 않는 꺾쇠(`i<n`)는 태그가 아니라 뒤의 `<br>` 을 건드리지 않고, 코드
+    // 안의 `<T>` 는 그대로(코드 안의 탈출은 글자로 보인다) — 칸을 깨는 `</td>` 만 막는다.
+    let cells = one("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", Channel::NotionMarkdown);
+    assert!(cells.contains("<td>i<n 일 때<br>반복</td>"), "{cells}");
+    assert!(cells.contains(r"<td>`Option<T>` 와 `x\<\/td\>y`</td>"), "{cells}");
+    // 행이 전부 글로 내려가도 머리글은 남고, 글로 내린 줄의 첫머리는 탈출한다.
+    let only = format!("| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | {} |", "가 ".repeat(200));
+    let opts = mdwire::Options { limit: Some(256), ..Default::default() };
+    let out = mdwire::render_with(&only, Channel::NotionMarkdown, opts).parts.concat();
+    assert!(out.starts_with("이름 | 설명\n\\# 제목처럼 | 가 가"), "{out}");
     // 스트리밍은 채널 한도(65,536)로 재므로 이 크기는 표 하나다.
     let mut s = mdwire::Streamer::new(Channel::NotionMarkdown);
     let mut acc = String::new();
