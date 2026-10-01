@@ -334,3 +334,64 @@ details.code p {
   width: 2ch;
   text-align: center;
 }
+
+/* 코드 블록의 복사 버튼(레이아웃의 스크립트가 단다). 블록에 마우스를 올리거나 버튼에 초점이 가면 보인다. */
+.code-box {
+  position: relative;
+}
+
+.copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 600 0.75rem/1.5 var(--sans);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.code-box:hover .copy,
+.copy:focus-visible,
+.copy[data-done] {
+  opacity: 1;
+}
+
+.copy:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.copy[data-done] {
+  color: var(--accent);
+}
+
+/* 터치 화면엔 마우스를 올릴 일이 없어 늘 보인다. */
+@media (hover: none) {
+  .copy {
+    opacity: 1;
+  }
+}
+
+/* 절 제목 옆의 # 링크(레이아웃의 스크립트가 단다). */
+.doc .anchor {
+  margin-left: 0.4em;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.doc :is(h2, h3):hover .anchor,
+.doc .anchor:focus-visible {
+  opacity: 1;
+}
+
+.doc .anchor:hover {
+  color: var(--accent);
+}

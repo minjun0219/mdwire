@@ -4,6 +4,7 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
 import SectionNav from "../components/SectionNav.astro";
+import Pager from "../components/Pager.astro";
 // 한국어 본문 글꼴. 유니코드 범위로 나뉜 woff2 라 페이지에 쓰인 글자의 조각만 받는다 — 영어 페이지는 받지 않는다.
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "../styles/global.css";
@@ -134,8 +135,9 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
     </header>
     <div class:list={["page", { "with-sidebar": section }]}>
       {section && <SectionNav section={section} headings={Astro.props.headings} />}
-      <main class="doc">
+      <main class="doc" data-copy-label={t.code.copy} data-copied-label={t.code.copied} data-anchor-label={t.code.anchor}>
         <slot />
+        {section && <Pager section={section} />}
       </main>
     </div>
     <footer class="site-footer">
@@ -146,5 +148,55 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
       </p>
       <p class="footer-by">by <a href="https://minjun.kim">minjun.kim</a></p>
     </footer>
+    <script>
+      // 글을 고치지 않는 편의 기능 — 스크립트가 없어도 본문은 그대로 읽힌다. 문구는 `main` 의 data-* 에서 읽는다.
+      const main = document.querySelector<HTMLElement>("main.doc");
+      if (main) {
+        const { copyLabel = "Copy", copiedLabel = "Copied", anchorLabel = "" } = main.dataset;
+
+        const copy = async (button: HTMLButtonElement, text: string) => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            return;
+          }
+          button.textContent = copiedLabel;
+          button.dataset.done = "";
+          setTimeout(() => {
+            button.textContent = copyLabel;
+            delete button.dataset.done;
+          }, 1500);
+        };
+
+        // 코드 블록마다 복사 버튼. 블록이 옆으로 스크롤해도 버튼이 따라가지 않게 바깥을 한 겹 감싼다.
+        for (const pre of main.querySelectorAll<HTMLPreElement>("pre.astro-code")) {
+          const box = document.createElement("div");
+          box.className = "code-box";
+          pre.replaceWith(box);
+          box.append(pre);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "copy";
+          button.textContent = copyLabel;
+          button.addEventListener("click", () => copy(button, pre.querySelector("code")?.textContent ?? pre.textContent ?? ""));
+          box.append(button);
+        }
+
+        // 글을 미리 넣어 둔 버튼(홈의 설치 한 줄).
+        for (const button of main.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+          button.addEventListener("click", () => copy(button, button.dataset.copy ?? ""));
+        }
+
+        // 절 제목 옆의 # 링크 — 주소를 복사해 절을 가리킬 수 있게.
+        for (const h of main.querySelectorAll<HTMLHeadingElement>(":scope > :is(h2, h3)[id]")) {
+          const a = document.createElement("a");
+          a.className = "anchor";
+          a.href = `#${h.id}`;
+          a.textContent = "#";
+          a.setAttribute("aria-label", anchorLabel);
+          h.append(a);
+        }
+      }
+    </script>
   </body>
 </html>

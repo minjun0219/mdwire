@@ -1,0 +1,248 @@
+---
+// 홈의 전후 비교. 입력과 채널별 출력은 `corpus/cases/chat-bot-answer/` 의 `input.md` 와 기대 출력
+// (`telegram-html.txt` …)을 그대로 옮긴 것이다 — 브라우저에서 wasm 을 돌리지 않는 정적 화면이라 홈이
+// 가볍다. 직접 돌려 보는 건 데모 페이지가 맡는다. 그 케이스의 기대 출력이 바뀌면 여기도 고친다.
+import { localeOf, ui } from "../i18n";
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang].home.showcase;
+const caseId = "chat-bot-answer";
+
+const input =
+  "**상품 상세 화면**은 `web-app` 에 있어요.\n**첫 줄 설명이\n둘째 줄까지** 이어져요.\n\n**영향 범위: 세 화면\n예시:\n```ts\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |\n";
+
+const outputs = [
+  {
+    channel: "telegram-html",
+    label: "Telegram",
+    text: '<b>상품 상세 화면</b>은 <code>web-app</code> 에 있어요.\n<b>첫 줄 설명이\n둘째 줄까지</b> 이어져요.\n\n<b>영향 범위: 세 화면\n예시:</b>\n<pre><code class="language-ts">const a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |</code></pre>',
+  },
+  {
+    channel: "slack-markdown",
+    label: "Slack",
+    text: "**상품 상세 화면**은 `web-app` 에 있어요.\n**첫 줄 설명이\n둘째 줄까지** 이어져요.\n\n**영향 범위: 세 화면\n예시:**\n```ts\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |\n```",
+  },
+  {
+    channel: "github-markdown",
+    label: "GitHub",
+    text: "**상품 상세 화면**은 `web-app` 에 있어요.\n**첫 줄 설명이\n둘째 줄까지** 이어져요.\n\n**영향 범위: 세 화면\n예시:**\n```ts\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |\n```",
+  },
+  {
+    channel: "notion-markdown",
+    label: "Notion",
+    text: "**상품 상세 화면**은 `web-app` 에 있어요.\n**첫 줄 설명이**\n**둘째 줄까지** 이어져요.\n\n**영향 범위: 세 화면**\n**예시:**\n```ts\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |\n```\n",
+  },
+  {
+    channel: "plain",
+    label: "Plain",
+    text: "상품 상세 화면은 web-app 에 있어요.\n첫 줄 설명이\n둘째 줄까지 이어져요.\n\n영향 범위: 세 화면\n예시:\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |",
+  },
+];
+---
+
+<section class="showcase wide" data-showcase>
+  <h2 id="showcase">{t.title}</h2>
+  <p class="lead">{t.lead}</p>
+  <div class="panes">
+    <div class="pane">
+      <header>
+        <span class="pane-title">{t.input}</span>
+      </header>
+      <pre>{input}</pre>
+      <ul class="broken">
+        {t.broken.map((b) => <li>{b}</li>)}
+      </ul>
+    </div>
+    <div class="pane">
+      <header>
+        <span class="pane-title">{t.output}</span>
+        <div class="tabs" role="tablist">
+          {
+            outputs.map((o, i) => (
+              <button
+                type="button"
+                role="tab"
+                id={`showcase-tab-${o.channel}`}
+                aria-controls={`showcase-${o.channel}`}
+                aria-selected={i === 0 ? "true" : "false"}
+                tabindex={i === 0 ? 0 : -1}
+              >
+                {o.label}
+              </button>
+            ))
+          }
+        </div>
+      </header>
+      {
+        outputs.map((o, i) => (
+          <div
+            class="output"
+            role="tabpanel"
+            id={`showcase-${o.channel}`}
+            aria-labelledby={`showcase-tab-${o.channel}`}
+            hidden={i !== 0}
+          >
+            <pre>{o.text}</pre>
+            <p class="channel">
+              <code>{o.channel}</code>
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+  <p class="source">
+    {t.source}:{" "}
+    <a href={`https://github.com/minjun0219/mdwire/tree/main/corpus/cases/${caseId}`}><code>{caseId}</code></a>
+  </p>
+</section>
+
+<script>
+  // 탭 전환. 스크립트가 없으면 첫 탭(Telegram)만 보인다.
+  for (const root of document.querySelectorAll<HTMLElement>("[data-showcase]")) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const select = (tab: HTMLButtonElement) => {
+      for (const other of tabs) {
+        const on = other === tab;
+        other.setAttribute("aria-selected", String(on));
+        other.tabIndex = on ? 0 : -1;
+        root.querySelector<HTMLElement>(`#${other.getAttribute("aria-controls")}`)!.hidden = !on;
+      }
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener("click", () => select(tab));
+      tab.addEventListener("keydown", (e) => {
+        const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        const next = tabs[(i + step + tabs.length) % tabs.length];
+        select(next);
+        next.focus();
+      });
+    });
+  }
+</script>
+
+<style>
+  .showcase {
+    margin: 3rem 0;
+  }
+
+  .showcase h2 {
+    margin: 0 0 0.25rem;
+  }
+
+  .lead {
+    margin: 0 0 1.25rem;
+    color: var(--muted);
+  }
+
+  .panes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    gap: 1rem;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .pane header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    min-height: 2.9rem;
+    padding: 0.5rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pane-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .pane pre {
+    flex: 1;
+    margin: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.85rem;
+    min-height: 15rem;
+  }
+
+  .output {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .output[hidden] {
+    display: none;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .tabs button {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .tabs button:hover {
+    color: var(--fg);
+  }
+
+  .tabs button[aria-selected="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .broken,
+  .channel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+    border-top: 1px solid var(--line);
+    list-style: none;
+    font-size: 0.8rem;
+  }
+
+  .broken li {
+    padding: 0.05rem 0.55rem;
+    border-radius: 999px;
+    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+  }
+
+  .channel code {
+    font-size: 0.8rem;
+  }
+
+  .source {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+</style>

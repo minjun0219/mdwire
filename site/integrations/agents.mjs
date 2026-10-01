@@ -29,8 +29,9 @@ function toMarkdown(source, { lang, site, url }) {
     if (line.startsWith("```")) inFence = !inFence;
     if (!inFence) {
       if (/^import\s/.test(line)) continue;
-      // 배지 줄은 이미지 링크뿐이라 사본에서 뺀다 — 패키지 주소는 본문에 있다.
-      if (/^<Badges\b.*\/>$/.test(line)) continue;
+      // 컴포넌트만 있는 줄은 뺀다. `<Badges />` · `<Showcase />` 처럼 화면용 블록은 같은 내용이 본문에 있고,
+      // `<Hero>` · `<Steps>` 처럼 감싸는 것은 여닫는 줄만 걷히고 안의 글은 남는다.
+      if (/^<\/?[A-Z][\w.]*(\s[^>]*)?\/?>$/.test(line.trim())) continue;
       lines.push(
         line
           .replaceAll(/<Next\s*\/>/g, `(${ui[lang].next})`)
