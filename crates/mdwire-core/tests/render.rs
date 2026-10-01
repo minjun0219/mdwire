@@ -841,7 +841,16 @@ fn report_counts_what_the_channel_rewrote() {
     let slack = r("*굵게* _기울임_ ~취소~ <https://a.com|링크>\n• 항목", Channel::SlackMarkdown, mdwire::Dialect::SlackMrkdwn);
     assert_eq!((slack.converted_marker, slack.rewritten_bullet), (4, 1), "{slack:?}");
     // 바꿀 것이 없으면 0 이다 — 이미 채널의 모양인 글.
-    assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown, mdwire::Dialect::Markdown).any());
+    assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown, mdwire::Dialect::Markdown).changed());
+    // `any()` 는 고친 것만 본다 — 탈출 하나로 "모델이 서식을 깼다"가 되지 않는다.
+    let tilde = r("약 ~40km", Channel::GithubMarkdown, mdwire::Dialect::Markdown);
+    assert!(tilde.changed() && !tilde.any(), "{tilde:?}");
+    // 줄 첫머리에서 벗긴 태그는 한 번씩 센다(두 번 세던 것).
+    assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown, mdwire::Dialect::Markdown).stripped_html, 1);
+    // `<url|텍스트>` 라벨의 탈출도 센다.
+    assert_eq!(r("<https://a.com|l~x>", Channel::GithubMarkdown, mdwire::Dialect::SlackMrkdwn).escaped_char, 1);
+    // 번호 목록 기호를 다시 쓴 것도 센다(`1)` → `1.`).
+    assert_eq!(r("1) a\n2) b", Channel::SlackMarkdown, mdwire::Dialect::Markdown).rewritten_bullet, 2);
 }
 
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이

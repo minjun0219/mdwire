@@ -642,7 +642,7 @@ impl Inline {
                 if bare {
                     v.code_char(c, &mut text);
                 } else {
-                    v.escape_char(c, &mut text);
+                    self.text_char(c, &mut text, v);
                 }
             }
             if !bare && !v.html_out() && !v.is_plain() {
@@ -700,12 +700,10 @@ impl Inline {
                 // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. **이름이 맞을 때만**이다 —
                 // `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
                 self.stripped_tags.pop();
-                self.repairs.stripped_html += 1;
             } else if github_start {
                 if let (false, Some(t)) = (closing, tag) {
                     self.stripped_tags.push(t);
                 }
-                self.repairs.stripped_html += 1;
             } else {
                 match tag {
                     None => {

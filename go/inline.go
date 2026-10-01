@@ -660,7 +660,7 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			if bare {
 				v.codeChar(c, &text)
 			} else {
-				v.escapeChar(c, &text)
+				in.textChar(c, &text, v)
 			}
 		}
 		if !bare && !v.htmlOut() && !v.isPlain() {
@@ -717,12 +717,10 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. 이름이 맞을 때만이다 —
 			// `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
 			in.strippedTags = in.strippedTags[:n-1]
-			in.repairs.StrippedHTML++
 		case githubStart:
 			if !closing && tag >= 0 {
 				in.strippedTags = append(in.strippedTags, uint8(tag))
 			}
-			in.repairs.StrippedHTML++
 		default:
 			switch {
 			case tag < 0:

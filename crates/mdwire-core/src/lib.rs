@@ -189,7 +189,9 @@ pub enum Images {
     Load,
 }
 
-/// 정규화가 고친 것의 개수. **모델이 얼마나 자주 서식을 깨는지**를 재는 데 쓴다.
+/// 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수. 앞 넷(고친 것)은 **모델이 얼마나 자주 서식을
+/// 깨는지**를, 뒤 여섯(바꾼 것)은 **붙이기 전에 채널이 무엇을 바꾸는지**를 재는 데 쓴다 — 둘을 따로
+/// 물으려면 [`Repairs::any`]·[`Repairs::changed`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Repairs {
     /// 블록이 끝나도록 안 닫혀서 닫아 준 강조(`**영향 범위` 처럼).
@@ -206,7 +208,7 @@ pub struct Repairs {
     pub tag_emphasis: usize,
     /// 벗긴 원문 HTML — 그 채널이 못 그리는 태그, 주석, 줄바꿈으로 바꾼 `<br>`.
     pub stripped_html: usize,
-    /// 다른 기호로 바꿔 쓴 목록 불릿(`* `·`• ` → `- `, 마크다운 채널의 `- ` → 텔레그램 `• `).
+    /// 다른 기호로 바꿔 쓴 목록 기호 — 불릿(`* `·`• ` → `- `, 텔레그램은 `- ` → `• `)과 번호(`1)` → `1.`).
     pub rewritten_bullet: usize,
     /// 원문과 다른 모양으로 다시 쓴 표(구분선·칸 공백 정규화, 고정폭으로 내림).
     pub rewritten_table: usize,
@@ -229,8 +231,15 @@ impl Repairs {
         self.converted_marker += other.converted_marker;
     }
 
-    /// 하나라도 고쳤는가.
+    /// 정규화가 하나라도 **고쳤는가** — 앞 넷(닫아 준 강조·펜스, 되돌린 백틱, 버린 마커). 모델이 서식을
+    /// 깼는지를 묻는 값이다. 채널에 맞춰 바꾼 것(탈출·불릿·표 …)은 보지 않는다 — 그건 [`Repairs::changed`].
     pub fn any(&self) -> bool {
+        self.closed_emphasis + self.closed_fence + self.reverted_code_span + self.dropped_marker > 0
+    }
+
+    /// 고친 것이든 채널에 맞춰 바꾼 것이든 **하나라도 했는가**. 출력이 원문과 달라질 수 있는지를 묻는다
+    /// (빈 줄 접기 같은 모양 고르기는 세지 않는다 — `SPEC.md` 5.1).
+    pub fn changed(&self) -> bool {
         *self != Repairs::default()
     }
 }

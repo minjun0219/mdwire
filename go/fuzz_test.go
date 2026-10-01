@@ -372,7 +372,19 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 	if slack.ConvertedMarker != 4 || slack.RewrittenBullet != 1 {
 		t.Errorf("slack: %+v", slack)
 	}
-	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r != (Repairs{}) {
+	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r.Changed() {
 		t.Errorf("바꿀 것이 없는데 셌다: %+v", r)
+	}
+	if r := RenderWith("약 ~40km", GithubMarkdown, Options{}).Repairs; !r.Changed() || r.Repaired() {
+		t.Errorf("탈출 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)
+	}
+	if r := RenderWith("<br>\n**x**", GithubMarkdown, Options{}).Repairs; r.StrippedHTML != 1 {
+		t.Errorf("줄 첫머리 태그를 두 번 셌다: %+v", r)
+	}
+	if r := RenderWith("<https://a.com|l~x>", GithubMarkdown, Options{From: SlackMrkdwn}).Repairs; r.EscapedChar != 1 {
+		t.Errorf("라벨 탈출을 안 셌다: %+v", r)
+	}
+	if r := RenderWith("1) a\n2) b", SlackMarkdown, Options{}).Repairs; r.RewrittenBullet != 2 {
+		t.Errorf("번호 기호를 안 셌다: %+v", r)
 	}
 }

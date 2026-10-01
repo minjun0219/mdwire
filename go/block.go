@@ -1,6 +1,7 @@
 package mdwire
 
 import (
+	"bytes"
 	"slices"
 	"strconv"
 	"strings"
@@ -431,8 +432,17 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 				e.out = append(e.out, ' ')
 			}
 			if k.k == lineOrdered {
+				at := len(e.out)
 				e.out = strconv.AppendInt(e.out, int64(k.n), 10)
 				e.out = append(e.out, ". "...)
+				// 원문 기호와 다르게 썼으면 센다(1) → 1., 01. → 1.) — 러스트 쪽과 같다.
+				same := k.indent+len(e.out)-at <= len(e.pending)
+				for j := at; same && j < len(e.out); j++ {
+					same = e.pending[k.indent+j-at] == rune(e.out[j])
+				}
+				if !same {
+					e.inline.repairs.RewrittenBullet++
+				}
 			} else {
 				bullet := e.v.bullet()
 				// 원문 기호와 다르게 썼으면 센다(* ·• ·-\t → - ) — 러스트 쪽과 같다.
@@ -1161,17 +1171,20 @@ func runesEqual(p []rune, at int, s string) bool {
 }
 
 // countRewrite 는 다시 쓴 표가 원문과 다르면 센다 — 러스트 쪽 count_rewrite. 줄마다 앞뒤 공백은 뺀다.
-func (t *table) countRewrite(count bool, written []byte, repairs *Repairs) {
-	if !count {
-		return
-	}
-	a, b := strings.Split(string(written), "\n"), strings.Split(string(t.src), "\n")
-	same := len(a) == len(b)
-	for i := 0; same && i < len(a); i++ {
-		same = strings.TrimSpace(a[i]) == strings.TrimSpace(b[i])
-	}
-	if !same {
-		repairs.RewrittenTable++
+// 줄을 차례로 잘라 견준다 — 문자열을 만들지 않는다.
+func (t *table) countRewrite(written []byte, repairs *Repairs) {
+	a, b := written, t.src
+	for {
+		la, ra, oka := bytes.Cut(a, []byte{'\n'})
+		lb, rb, okb := bytes.Cut(b, []byte{'\n'})
+		if !bytes.Equal(bytes.TrimSpace(la), bytes.TrimSpace(lb)) || oka != okb {
+			repairs.RewrittenTable++
+			return
+		}
+		if !oka {
+			return
+		}
+		a, b = ra, rb
 	}
 }
 
@@ -1215,7 +1228,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 		cells = append(cells, line)
 	}
 	repairs.add(in.repairs)
-	from, count := len(*out), !v.isHTML()
+	from := len(*out)
 
 	if v.isHTML() {
 		writeHTMLTable(out, cells, t.align)
@@ -1226,7 +1239,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	}
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)
-		t.countRewrite(count, (*out)[from:], repairs)
+		t.countRewrite((*out)[from:], repairs)
 		return nil
 	}
 
@@ -1264,7 +1277,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	}
 	v.escape(string(body), out)
 	v.verbatimClose("", out)
-	t.countRewrite(count, (*out)[from:], repairs)
+	t.countRewrite((*out)[from:], repairs)
 	return nil
 }
 

@@ -92,7 +92,9 @@ const (
 	ImagesLoad
 )
 
-// Repairs 는 정규화가 고친 것의 개수다. 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
+// Repairs 는 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수다. 앞 넷(고친 것)은 모델이 얼마나 자주
+// 서식을 깨는지를, 뒤 여섯(바꾼 것)은 붙이기 전에 채널이 무엇을 바꾸는지를 재는 데 쓴다 — 둘을 따로
+// 물으려면 Repaired·Changed.
 type Repairs struct {
 	// ClosedEmphasis 는 블록이 끝나도록 안 닫혀서 닫아 준 강조다.
 	ClosedEmphasis int
@@ -115,6 +117,14 @@ type Repairs struct {
 	// ConvertedMarker 는 다른 표기로 바꿔 쓴 강조 마커와 <url|텍스트> 링크다(마크다운 채널).
 	ConvertedMarker int
 }
+
+// Repaired 는 정규화가 하나라도 고쳤는가다 — 앞 넷만 본다. 러스트 쪽 Repairs::any.
+func (r Repairs) Repaired() bool {
+	return r.ClosedEmphasis+r.ClosedFence+r.RevertedCodeSpan+r.DroppedMarker > 0
+}
+
+// Changed 는 고친 것이든 채널에 맞춰 바꾼 것이든 하나라도 했는가다. 러스트 쪽 Repairs::changed.
+func (r Repairs) Changed() bool { return r != Repairs{} }
 
 func (r *Repairs) add(o Repairs) {
 	r.ClosedEmphasis += o.ClosedEmphasis
