@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: CLI
 description: The mdwire command — flags, output format, the repair report and batch mode.
 ---
-import Next from "../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -30,7 +29,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 
 | Flag | |
 |---|---|
-| `--channel <name>` | Required. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` <Next /> · `plain` · `html` |
+| `--channel <name>` | Required. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` |
 | `--from <dialect>` | Input dialect: `markdown` (default) · `slack-mrkdwn` |
 | `--limit <chars>` | Part limit. Defaults to the channel's. |
 | `--html-line-breaks <br\|space>` | `html` only. Default `br`. |
@@ -41,7 +40,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 | `--batch jsonl` | Read many documents as JSON lines; print one report per document. |
 | `-h`, `--help` · `-V`, `--version` | Help · version (Rust CLI). |
 
-A flag that takes a value also takes `--name=value` (`--channel=slack-markdown`). <Next />
+A flag that takes a value also takes `--name=value` (`--channel=slack-markdown`).
 
 Channels, dialects and options are explained on [Concepts](/docs/).
 
@@ -59,7 +58,7 @@ One JSON line on stderr:
 {"closedEmphasis":1,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":0}
 ```
 
-The first four keys are repairs; the other six <Next /> are channel rewrites. What each counts:
+The first four keys are repairs; the other six are channel rewrites. What each counts:
 [the repair report](/docs/#the-repair-report).
 
 ## `--batch jsonl`

@@ -3,7 +3,6 @@ layout: ../../../layouts/Doc.astro
 title: CLI
 description: mdwire 명령 — 플래그, 출력 형식, 정규화 보고, 배치 모드.
 ---
-import Next from "../../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -30,7 +29,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 
 | 플래그 | |
 |---|---|
-| `--channel <이름>` | 필수. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` <Next /> · `plain` · `html` |
+| `--channel <이름>` | 필수. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` |
 | `--from <표기>` | 입력 표기: `markdown`(기본) · `slack-mrkdwn` |
 | `--limit <글자 수>` | 조각 한도. 기본은 채널의 한도. |
 | `--html-line-breaks <br\|space>` | `html` 만. 기본 `br`. |
@@ -41,7 +40,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 | `--batch jsonl` | 문서 여럿을 JSON lines 로 받아 문서마다 보고를 한 줄씩 낸다. |
 | `-h`, `--help` · `-V`, `--version` | 도움말 · 버전(Rust CLI). |
 
-값을 받는 플래그는 `--이름=값` 으로도 쓸 수 있다(`--channel=slack-markdown`). <Next />
+값을 받는 플래그는 `--이름=값` 으로도 쓸 수 있다(`--channel=slack-markdown`).
 
 채널·입력 표기·옵션은 [개념](/ko/docs/)에 있다.
 
@@ -58,7 +57,7 @@ stderr 에 JSON 한 줄:
 {"closedEmphasis":1,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":0}
 ```
 
-앞의 네 키는 고친 것, 뒤의 여섯 키 <Next /> 는 채널에 맞춰 바꾼 것이다. 각각이 세는 것:
+앞의 네 키는 고친 것, 뒤의 여섯 키는 채널에 맞춰 바꾼 것이다. 각각이 세는 것:
 [정규화 보고](/ko/docs/#정규화-보고).
 
 ## `--batch jsonl`

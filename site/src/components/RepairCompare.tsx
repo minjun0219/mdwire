@@ -6,7 +6,7 @@ import type { Locale } from "../i18n";
 import { samples } from "./samples";
 import styles from "./RepairCompare.module.css";
 
-// 코퍼스 케이스 중 npm 0.1.8 에서 정규화 보고가 0 이 아닌 것.
+// 코퍼스 케이스 중 정규화 보고의 고친 것(앞 넷)이 0 이 아닌 것.
 const ids = [
   "chat-bot-answer",
   "emphasis-across-linebreak",
@@ -20,11 +20,22 @@ const picks = ids.map((id) => samples.find((s) => s.id === id)!);
 const channels = [
   { id: "slack-markdown", name: "Slack markdown_text", diff: true },
   { id: "github-markdown", name: "GitHub (GFM)", diff: true },
+  { id: "notion-markdown", name: "Notion", diff: true },
   { id: "telegram-html", name: "Telegram HTML", diff: false },
 ] as const;
 type ChannelId = (typeof channels)[number]["id"];
 
-const keys = ["closedEmphasis", "closedFence", "revertedCodeSpan", "droppedMarker"] as const;
+// 정규화 보고 — 앞 넷은 고친 것, 뒤 여섯은 채널에 맞춰 바꾼 것.
+const fixed = ["closedEmphasis", "closedFence", "revertedCodeSpan", "droppedMarker"] as const;
+const rewritten = [
+  "escapedChar",
+  "tagEmphasis",
+  "strippedHtml",
+  "rewrittenBullet",
+  "rewrittenTable",
+  "convertedMarker",
+] as const;
+const keys = [...fixed, ...rewritten];
 type Repairs = Record<(typeof keys)[number], number>;
 
 // 고장이 무엇이었고 고치지 않으면 어떻게 되는가 — 각 케이스의 `why.md` 를 줄인 것.
@@ -67,7 +78,14 @@ const text = {
       closedFence: ["closedFence", "code fence left open at the end of the document, closed"],
       revertedCodeSpan: ["revertedCodeSpan", "backtick run with no partner, kept as text"],
       droppedMarker: ["droppedMarker", "stray ** with nothing to pair with, dropped"],
+      escapedChar: ["escapedChar", "characters the channel would read as syntax, escaped"],
+      tagEmphasis: ["tagEmphasis", "emphasis sent as a tag instead of markers (GitHub <strong>)"],
+      strippedHtml: ["strippedHtml", "source HTML the channel cannot draw, stripped"],
+      rewrittenBullet: ["rewrittenBullet", "list markers rewritten for the channel"],
+      rewrittenTable: ["rewrittenTable", "tables rewritten (rows tidied, or a monospace block)"],
+      convertedMarker: ["convertedMarker", "emphasis and links rewritten into another notation"],
     },
+    groups: ["Repaired", "Rewritten for the channel"],
     empty: "(empty)",
   },
   ko: {
@@ -85,7 +103,14 @@ const text = {
       closedFence: ["closedFence", "문서 끝까지 안 닫힌 코드펜스를 닫았다"],
       revertedCodeSpan: ["revertedCodeSpan", "짝 없는 백틱 런을 글자로 되돌렸다"],
       droppedMarker: ["droppedMarker", "짝이 없는 ** 를 버렸다"],
+      escapedChar: ["escapedChar", "채널이 구문으로 읽을 글자를 이스케이프했다"],
+      tagEmphasis: ["tagEmphasis", "강조를 마커 대신 태그로 냈다(GitHub 의 <strong>)"],
+      strippedHtml: ["strippedHtml", "채널이 못 그리는 원문 HTML 을 걷어 냈다"],
+      rewrittenBullet: ["rewrittenBullet", "목록 기호를 채널에 맞게 바꿔 썼다"],
+      rewrittenTable: ["rewrittenTable", "표를 다시 썼다(줄 정리, 또는 고정폭 블록)"],
+      convertedMarker: ["convertedMarker", "강조와 링크를 다른 표기로 바꿔 썼다"],
     },
+    groups: ["고친 것", "채널에 맞춰 바꾼 것"],
     empty: "(비어 있음)",
   },
 } as const;
@@ -240,17 +265,24 @@ export default function RepairCompare({ lang }: { lang: Locale }) {
       {!("error" in out) && (
         <table className={styles.report}>
           <caption>{t.report}</caption>
-          <tbody>
-            {keys.map((k) => (
-              <tr key={k} className={out.repairs[k] > 0 ? styles.hit : undefined}>
-                <th scope="row">
-                  <code>{t.rows[k][0]}</code>
+          {[fixed, rewritten].map((group, g) => (
+            <tbody key={g}>
+              <tr>
+                <th colSpan={3} scope="rowgroup" className={styles.group}>
+                  {t.groups[g]}
                 </th>
-                <td className={styles.count}>{out.repairs[k]}</td>
-                <td>{t.rows[k][1]}</td>
               </tr>
-            ))}
-          </tbody>
+              {group.map((k) => (
+                <tr key={k} className={out.repairs[k] > 0 ? styles.hit : undefined}>
+                  <th scope="row">
+                    <code>{t.rows[k][0]}</code>
+                  </th>
+                  <td className={styles.count}>{out.repairs[k]}</td>
+                  <td>{t.rows[k][1]}</td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       )}
     </div>

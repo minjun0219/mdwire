@@ -176,7 +176,7 @@ pre {
   text-align: center;
 }
 
-/* 0.1.8 에는 없고 main 에만 있는 것. */
+/* 지금 올라간 판에는 없고 main 에만 있는 것. */
 .next {
   display: inline-block;
   margin-left: 0.35em;

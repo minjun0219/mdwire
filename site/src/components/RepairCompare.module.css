@@ -101,6 +101,12 @@
   font-weight: normal;
 }
 
+.report th.group {
+  color: var(--fg);
+  font-weight: 600;
+  background: var(--code-bg);
+}
+
 .count {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -111,7 +117,13 @@
   color: var(--fg);
 }
 
-.report tr.hit .count {
+.report tr.hit .report th.group {
+  color: var(--fg);
+  font-weight: 600;
+  background: var(--code-bg);
+}
+
+.count {
   color: var(--warn);
   font-weight: 700;
 }
