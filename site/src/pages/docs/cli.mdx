@@ -3,6 +3,7 @@ layout: ../../layouts/Doc.astro
 title: CLI
 description: The mdwire command — flags, output format, the repair report and batch mode.
 ---
+import Next from "../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -16,7 +17,8 @@ go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest  # Go — same flag
 ```
 
 Every [release](https://github.com/minjun0219/mdwire/releases) also carries a binary for macOS
-(Apple silicon) and Linux (x86_64), with a SHA-256 for each in the notes.
+(Apple silicon) and Linux (x86_64), with a SHA-256 for each in the notes. Builds for macOS (Intel),
+Linux (arm64) and Windows (x86_64) join them <Next />.
 
 ```sh
 cat agent-output.md | mdwire --channel telegram-html            # parts separated by NUL

@@ -162,9 +162,12 @@ cargo install mdwire-cli           # `mdwire` CLI
 # npm 패키지 (번들러에서도, 번들러 없는 Node 에서도 돈다)
 npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-0.1.9.tgz
 
-# CLI 바이너리 — macOS(Apple silicon) 또는 Linux(x86_64)
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz
+# CLI 바이너리 — 플랫폼에 맞는 것 하나
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-apple-darwin.tar.gz | tar xz         # macOS, Intel
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
+curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-pc-windows-msvc.zip                 # Windows x86_64
 ```
 
 릴리스 본문에 산출물마다 SHA-256 이 있습니다. URL 로 설치할 때는 그 값으로 고정하세요.

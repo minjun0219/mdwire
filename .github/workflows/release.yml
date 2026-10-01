@@ -5,6 +5,9 @@
 #   npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.1/mdwire-0.1.1.tgz
 #   curl -L …/mdwire-v0.1.1-aarch64-apple-darwin.tar.gz | tar xz
 #
+# CLI 바이너리는 macOS(Apple silicon · Intel), Linux(x86_64 · arm64, glibc), Windows(x86_64) 다섯 판이다.
+# 코어가 std 만 써서 C 링커 말고는 걸리는 것이 없다. Windows 만 `.zip` 이다.
+#
 # **태그에서 만든다.** 릴리스는 그 태그의 소스여야 재현이 된다 — `main` 이 앞서 있어도
 # 거기서 만들지 않는다. 그래서 포장이 바뀌면 새 버전을 단다.
 # 이미 있는 릴리스에 다시 붙이려면 `workflow_dispatch` 로 태그를 넘긴다.
@@ -50,30 +53,59 @@ jobs:
     needs: release
     strategy:
       matrix:
+        # `cross` 면 러너와 아키텍처가 달라 만든 바이너리를 그 자리에서 돌려 보지 못한다.
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            cross: true
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: .exe
     runs-on: ${{ matrix.os }}
+    # Windows 도 같은 스크립트로 돈다 — 러너에 Git Bash 가 있다.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
       - name: 툴체인
         run: |
+          # arm64 리눅스 러너 이미지에는 rustup 이 없을 수 있다.
+          if ! command -v rustup >/dev/null; then
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
           rustup update --no-self-update stable
           rustup default stable
           rustup target add ${{ matrix.target }}
       - name: 빌드
         run: cargo build --release --locked -p mdwire-cli --target ${{ matrix.target }}
+      - name: 돌려 보기
+        if: ${{ !matrix.cross }}
+        run: |
+          out=$(printf '**bold**' | target/${{ matrix.target }}/release/mdwire${{ matrix.exe }} --channel telegram-html)
+          test "$out" = "<b>bold</b>" || { echo "::error::바이너리 출력이 다르다: $out"; exit 1; }
       - name: 묶기
         run: |
           NAME=mdwire-$TAG-${{ matrix.target }}
           mkdir -p dist/$NAME
-          cp target/${{ matrix.target }}/release/mdwire README.md LICENSE CHANGELOG.md dist/$NAME/
-          tar -C dist -czf dist/$NAME.tar.gz $NAME
-          echo "ASSET=dist/$NAME.tar.gz" >> "$GITHUB_ENV"
+          cp target/${{ matrix.target }}/release/mdwire${{ matrix.exe }} README.md LICENSE CHANGELOG.md dist/$NAME/
+          if [ -n "${{ matrix.exe }}" ]; then
+            (cd dist && 7z a -tzip -bso0 $NAME.zip $NAME)
+            echo "ASSET=dist/$NAME.zip" >> "$GITHUB_ENV"
+          else
+            tar -C dist -czf dist/$NAME.tar.gz $NAME
+            echo "ASSET=dist/$NAME.tar.gz" >> "$GITHUB_ENV"
+          fi
       - name: 릴리스에 붙이기
         env:
           GH_TOKEN: ${{ github.token }}

@@ -173,9 +173,12 @@ Every release also carries its own artifacts, if you would rather not go through
 # npm package (works under a bundler and in plain Node)
 npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-0.1.9.tgz
 
-# CLI binary — macOS (Apple silicon) or Linux (x86_64)
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz
+# CLI binary — pick your platform
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-apple-darwin.tar.gz | tar xz         # macOS, Intel
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
+curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-pc-windows-msvc.zip                 # Windows x86_64
 ```
 
 The release notes list a SHA-256 for every artifact — verify the download against it when installing by URL.

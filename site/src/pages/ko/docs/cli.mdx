@@ -3,6 +3,7 @@ layout: ../../../layouts/Doc.astro
 title: CLI
 description: mdwire 명령의 플래그, 출력 형식, 정규화 보고, 배치 모드를 설명합니다.
 ---
+import Next from "../../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -16,7 +17,8 @@ go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest  # Go (플래그 �
 ```
 
 [릴리스](https://github.com/minjun0219/mdwire/releases)마다 macOS(Apple silicon)와 Linux(x86_64)
-바이너리도 첨부되며, 릴리스 노트에 각 파일의 SHA-256 이 있습니다.
+바이너리도 첨부되며, 릴리스 노트에 각 파일의 SHA-256 이 있습니다. macOS(Intel),
+Linux(arm64), Windows(x86_64) 바이너리도 첨부됩니다 <Next />.
 
 ```sh
 cat agent-output.md | mdwire --channel telegram-html            # 조각은 NUL 로 구분
