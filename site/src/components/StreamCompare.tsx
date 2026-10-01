@@ -32,12 +32,12 @@ const text = {
   },
   ko: {
     delay: (ms: number) => `토큰 간격 ${ms}ms`,
-    restart: "다시 흘리기",
+    restart: "다시 스트리밍",
     tokens: (n: number) => `토큰 ${n}개`,
     panes: [
-      { title: "react-markdown", note: "누적본을 매번 다시 그림" },
-      { title: "Streamdown", note: "누적본 + 안 닫힌 구문 보정" },
-      { title: "mdwire → Streamdown", note: "정규화한 누적본 + 미리보기" },
+      { title: "react-markdown", note: "누적 텍스트를 매번 다시 렌더링" },
+      { title: "Streamdown", note: "누적 텍스트 + 닫히지 않은 구문 보정" },
+      { title: "mdwire → Streamdown", note: "정규화된 누적 출력 + 미리보기" },
       { title: "mdwire", note: "useMarkdownStream()" },
       { title: "mdwire", note: "useMarkdownStream({ eager: false })" },
     ],

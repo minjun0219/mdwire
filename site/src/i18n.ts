@@ -14,9 +14,9 @@ export const ui = {
     footer: "MIT licensed.",
   },
   ko: {
-    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 옮기는 브릿지.",
-    nav: { home: "개요", demo: "데모", docs: "문서" },
-    docs: { index: "개념", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
+    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환하는 브리지.",
+    nav: { home: "소개", demo: "데모", docs: "문서" },
+    docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
     demo: { index: "데모 목록", channels: "텔레그램 대 슬랙", streaming: "스트리밍", repair: "정규화 전후" },
     next: "다음 릴리스",
     switchTo: "English",

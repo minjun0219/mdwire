@@ -1,25 +1,25 @@
 ---
 layout: ../../../layouts/Doc.astro
 title: npm (JS · React)
-description: "@minjun0219/mdwire 패키지 — render, renderWithReport, Streamer, 그리고 React · events 진입점."
+description: "@minjun0219/mdwire 패키지의 render, renderWithReport, Streamer, 그리고 React · events 진입점을 설명합니다."
 ---
 
 
 # npm — `@minjun0219/mdwire`
 
-Rust 코어를 WASM 으로 컴파일하고, React 와 이벤트 목록용 JS 를 손으로 써서 더했다. Node · Bun ·
-번들러에서 돈다.
+Rust 코어를 WASM 으로 컴파일하고, React 와 이벤트 목록을 위한 JS 를 직접 작성해 더한 패키지입니다.
+Node, Bun, 번들러에서 동작합니다.
 
 ```sh
 npm install @minjun0219/mdwire
 ```
 
-패키지는 `exports` 조건으로 빌드를 고른다 — Node 는 WASM 을 디스크에서 읽는 CommonJS 빌드, 나머지는
-ESM 번들러 빌드. **번들러에서는** WASM 을 ES 모듈로 import 하므로 Vite 는 `vite-plugin-wasm` 과
-`build.target: "esnext"`(top-level `await`)가 필요하다.
-[`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js) 참고.
+패키지는 `exports` 조건으로 빌드를 고릅니다. Node 에서는 WASM 을 디스크에서 읽는 CommonJS 빌드를,
+그 밖의 환경에서는 ESM 번들러 빌드를 씁니다. **번들러에서는** WASM 을 ES 모듈로 import 하므로, Vite 를
+쓴다면 `vite-plugin-wasm` 과 `build.target: "esnext"`(top-level `await` 용)가 필요합니다.
+[`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js) 를 참고하세요.
 
-채널과 입력 표기의 이름은 [개념](/ko/docs/)에 있는 문자열을 쓴다.
+채널과 입력 표기의 이름은 [Concepts](/ko/docs/)에 나온 문자열을 씁니다.
 
 ## `render(input, channel, options?)`
 
@@ -29,7 +29,8 @@ import { render } from "@minjun0219/mdwire";
 const parts: string[] = render(markdown, "telegram-html");
 ```
 
-완성된 문서를 옮긴다. 보낼 조각들을 돌려준다 — 채널의 한도(또는 `options.limit`)를 넘지 않으면 하나뿐이다.
+완성된 문서를 변환해 보낼 조각 배열을 반환합니다. 채널의 길이 제한(또는 `options.limit`)을 넘지 않으면
+조각은 하나입니다.
 
 ## `renderWithReport(input, channel, options?)`
 
@@ -38,16 +39,16 @@ import { renderWithReport } from "@minjun0219/mdwire";
 
 const out = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 out.parts;                   // string[]
-out.repairs.closedEmphasis;  // 아래 "Repairs"
-out.free();                  // 결과는 WASM 메모리에 있다
+out.repairs.closedEmphasis;  // 아래 "Repairs" 참고
+out.free();                  // 결과는 WASM 메모리에 있음
 ```
 
-`render` 에 [정규화 보고](/ko/docs/#정규화-보고)를 더한 것. 결과와 그 `repairs` 는 WASM 객체라 다 쓰면
-`free()` 를 부르거나 `using`(`Symbol.dispose`)으로 쓴다.
+`render` 에 [정규화 보고](/ko/docs/#정규화-보고)를 더한 함수입니다. 결과와 그 `repairs` 는 WASM 객체이므로,
+다 쓰면 `free()` 로 해제하거나 `using`(`Symbol.dispose`)으로 감싸 쓰세요.
 
 ## `limit(channel)`
 
-채널의 조각 한도(숫자). `html` 은 한도가 없어 `4294967295` 를 돌려준다.
+채널의 조각 길이 제한을 숫자로 반환합니다. `html` 은 제한이 없어서 `4294967295` 를 반환합니다.
 
 ## `new Streamer(channel, options?)`
 
@@ -57,42 +58,42 @@ import { Streamer } from "@minjun0219/mdwire";
 const s = new Streamer("telegram-html");
 let acc = "";
 for await (const token of tokens) {
-  acc += s.push(token);           // 확정분 — 다시 고쳐지지 않는다
-  await edit(acc + s.preview());  // + 붙든 것을 입력이 여기서 끝난 것처럼 그린 꼬리
+  acc += s.push(token);           // 확정된 출력. 다시 바뀌지 않음
+  await edit(acc + s.preview());  // + 보류 중인 내용을 입력이 끝난 것처럼 렌더링한 뒷부분
 }
 acc += s.finish();
-if (s.revised()) await edit(acc); // 마지막 화면이 곧 완성본이면 건너뛴다
+if (s.revised()) await edit(acc); // 마지막 화면이 완성본과 같으면 건너뜀
 s.free();
 ```
 
-| 메서드 | 돌려주는 것 | |
+| 메서드 | 반환 | |
 |---|---|---|
-| `push(chunk)` | `string` | 지금 보내도 안전한 것. 확정분. |
-| `preview()` | `string` | 메시지를 통째로 다시 그릴 때 붙일 꼬리. 상태를 바꾸지 않는다. 조각마다가 아니라 그릴 때 부른다. |
-| `closeOpen()` | `string` | 이미 나간 블록 마크업만 닫는 꼬리. 상태를 바꾸지 않는다. |
-| `finish()` | `string` | 남은 것, 열린 마크업은 닫아서. |
-| `revised()` | `boolean` | `finish` 뒤에: 완성본이 마지막 `preview()` 화면과 다른가. |
-| `repairs()` | `Repairs` | 지금까지 고친 것 — `finish` 뒤엔 문서 전체. |
-| `free()` | | WASM 메모리를 놓는다. |
+| `push(chunk)` | `string` | 지금 보내도 안전한 출력. 확정입니다. |
+| `preview()` | `string` | 메시지 전체를 다시 렌더링할 때 붙이는 뒷부분. 상태를 바꾸지 않습니다. 청크마다가 아니라 화면을 그릴 때만 호출하세요. |
+| `closeOpen()` | `string` | 이미 보낸 블록 마크업만 닫는 뒷부분. 상태를 바꾸지 않습니다. |
+| `finish()` | `string` | 남은 출력. 열린 마크업은 닫아서 반환합니다. |
+| `revised()` | `boolean` | `finish` 다음에 호출합니다. 완성본이 마지막 `preview()` 화면과 다른지 알려 줍니다. |
+| `repairs()` | `Repairs` | 지금까지 고친 것. `finish` 다음에는 문서 전체에 대한 값입니다. |
+| `free()` | | WASM 메모리를 해제합니다. |
 
-덧붙이기만 하는 채널(슬랙 `appendStream`)은 `push` 조각을 그대로 보내고 `preview()` 는 부르지 않는다.
-[스트리밍 계약](/ko/docs/#스트리밍-계약) 참고.
+덧붙이기만 하는 채널(슬랙 `appendStream`)에는 `push` 결과를 그대로 보내고 `preview()` 는 호출하지
+않습니다. [스트리밍 계약](/ko/docs/#스트리밍-계약)을 참고하세요.
 
 ## `RenderOptions`
 
 ```ts
 interface RenderOptions {
   from?: "markdown" | "slack-mrkdwn";
-  limit?: number;                       // 1 이상의 정수. 256 보다 작으면 256 으로 올린다
-  html?: {                              // "html" 채널에만
+  limit?: number;                       // 1 이상의 정수. 256 보다 작으면 256 으로 올림
+  html?: {                              // "html" 채널에서만
     lineBreaks?: "br" | "space";        // 기본 "br"
     images?: "link" | "load";           // 기본 "link"
-    schemes?: string[];                 // 기본 ["http", "https", "mailto"]. 바꾸는 것이지 더하는 것이 아니다
+    schemes?: string[];                 // 기본 ["http", "https", "mailto"]. 더하지 않고 바꿈
   };
 }
 ```
 
-모르는 채널·입력 표기 이름, 모르는 `html` 값, 1 이상의 정수가 아닌 `limit` 은 `Error` 를 던진다.
+모르는 채널이나 입력 표기 이름, 모르는 `html` 값, 1 이상의 정수가 아닌 `limit` 을 주면 `Error` 를 던집니다.
 
 ## `Repairs`
 
@@ -101,12 +102,12 @@ interface RenderOptions {
 | `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` | 고친 것 |
 | `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | 채널에 맞춰 바꾼 것 |
 
-각각이 세는 것: [개념](/ko/docs/#정규화-보고).
+각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.
 
 ## React — `@minjun0219/mdwire/react`
 
-React 요소를 `createElement` 로 만든다 — `innerHTML` 을 쓰지 않는다. 이스케이프, 태그 집합, 링크 스킴은 코어의
-`html` 채널이 정하고, 태그마다 어떤 컴포넌트로 그릴지만 고른다.
+React 요소를 `createElement` 로 만들며 `innerHTML` 을 쓰지 않습니다. 이스케이프, 허용 태그, 링크 스킴은
+코어의 `html` 채널이 정하고, 사용하는 쪽은 태그마다 어떤 컴포넌트로 렌더링할지만 고릅니다.
 
 ```tsx
 import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
@@ -114,14 +115,14 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 <Markdown text={answer} components={{ a: RouterLink }} />
 
 const { elements, push, finish } = useMarkdownStream();      // push(token) … finish()
-const settled = useMarkdownStream({ eager: false });        // 확정된 것만
+const settled = useMarkdownStream({ eager: false });        // 확정된 출력만
 ```
 
 | | |
 |---|---|
-| `<Markdown text from? components? options? />` | 완성된 답. `components` 는 태그(`a`, `code` …)를 내 컴포넌트에 잇는다. |
-| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | 스트리밍. `{ elements, push, finish }` 를 돌려준다. `eager`(기본 `true`)는 붙든 것도 먼저 그리고, `false` 는 확정된 것만. `onSettled(html, revised)` 는 `finish` 뒤에 불린다. 옵션은 `onSettled` 말고는 처음 한 번만 읽는다. |
-| `toElements(html, components?, schemes?)` | `html` 채널 출력(스트리밍이면 누적본 + `preview()`)을 React 노드로. `schemes` 는 코어에 준 것과 같게 준다. |
+| `<Markdown text from? components? options? />` | 완성된 답을 렌더링합니다. `components` 로 태그(`a`, `code` …)를 직접 만든 컴포넌트에 연결합니다. |
+| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | 스트리밍용 훅. `{ elements, push, finish }` 를 반환합니다. `eager`(기본 `true`)면 보류 중인 내용도 먼저 렌더링하고, `false` 면 확정된 출력만 렌더링합니다. `onSettled(html, revised)` 는 `finish` 다음에 호출됩니다. 옵션은 `onSettled` 를 빼고 처음 한 번만 읽습니다. |
+| `toElements(html, components?, schemes?)` | `html` 채널 출력(스트리밍이라면 누적 출력 + `preview()`)을 React 노드로 바꿉니다. `schemes` 는 코어에 준 값과 같게 주세요. |
 
 ## 이벤트 — `@minjun0219/mdwire/events`
 
@@ -131,6 +132,7 @@ import { toEvents } from "@minjun0219/mdwire/events";
 toEvents(html); // [{ type: "open", tag: "p", attrs: {} }, { type: "text", text: "…" }, { type: "close", tag: "p" }, …]
 ```
 
-같은 `html` 출력을 `open` / `text` / `close` / `void` 의 평평한 목록으로 푼다 — React 가 아닌 프레임워크에서 쓴다. 속성은 코어가
-내는 것만 담긴다: `a` 의 `href`, `code` 의 `class`(`language-…`), `th` · `td` 의 `style`(`text-align:…`),
-`ol` 의 `start`, 이미지를 불러올 때 `img` 의 `src` · `alt`.
+같은 `html` 출력을 `open` / `text` / `close` / `void` 이벤트의 평평한 목록으로 풉니다. React 가 아닌
+프레임워크에서 쓰는 진입점입니다. 속성은 코어가 출력하는 것만 담깁니다. `a` 의 `href`, `code` 의
+`class`(`language-…`), `th` · `td` 의 `style`(`text-align:…`), `ol` 의 `start`, 이미지를 불러올 때
+`img` 의 `src` · `alt` 입니다.
