@@ -1,5 +1,9 @@
 # 릴리스 바이너리를 PR 에서 미리 만들어 돌려 본다 — 릴리스 때 처음 도는 러너가 없게.
 #
+# **플랫폼마다 전체 시험을 그 바이너리 기준으로 돌린다.** 러스트 시험(`cargo test`), 코퍼스 채점(하네스가
+# 만든 바이너리를 `--cmd` 로 프로세스 경계에서 부른다), Go 이식 대조(`MDWIRE_RUST` 가 그 바이너리)다.
+# CI 의 `gate` 는 리눅스 한 곳에서만 돌아서, 줄바꿈·경로·표준 입출력처럼 OS 마다 다른 것을 못 잡는다.
+#
 # 매트릭스와 빌드·돌려 보기·묶기 단계는 `release.yml` 의 `cli` 잡과 같다. 한쪽을 고치면 다른 쪽도 고친다.
 # 바이너리에 닿는 경로가 바뀐 PR 에서 돌고, **릴리스 전에도 돈다** — `release-pr.yml` 이 release PR 에
 # 직접 부르고(봇이 민 브랜치라 저절로 안 뜬다), 태그를 찍기 전에 `workflow_call` 로 불러 통과해야 찍는다.
@@ -15,6 +19,9 @@ on:
       - .github/workflows/binaries.yml
       - crates/mdwire-core/**
       - crates/mdwire-cli/**
+      - crates/mdwire-harness/**
+      - go/**
+      - corpus/**
       - Cargo.toml
       - Cargo.lock
 
@@ -42,7 +49,14 @@ jobs:
       run:
         shell: bash
     steps:
+      # Windows 러너는 체크아웃할 때 LF 를 CRLF 로 바꾼다 — 코퍼스 기대 출력이 바이트 단위라 다 어긋난다.
+      - name: 줄바꿈 그대로
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.mod
       - name: 툴체인
         run: |
           if ! command -v rustup >/dev/null; then
@@ -71,3 +85,16 @@ jobs:
             tar -C dist -czf dist/$NAME.tar.gz $NAME
           fi
           ls -l dist
+      # 바이너리를 부르는 쪽(하네스·Go)은 네이티브 프로세스라 Git Bash 경로(`/d/a/…`)를 못 읽는다 —
+      # Windows 에서는 `cygpath -m` 으로 `D:/a/…` 꼴로 바꿔 넘긴다.
+      - name: 바이너리 경로
+        run: |
+          root=$(cygpath -m "$PWD" 2>/dev/null || pwd)
+          echo "BIN=$root/target/${{ matrix.target }}/release/mdwire${{ matrix.exe }}" >> "$GITHUB_ENV"
+      - name: 러스트 시험
+        run: cargo test --workspace --locked
+      - name: 코퍼스 — 이 바이너리로
+        run: cargo run --locked --release -p mdwire-harness --bin mdwire-check -- --cmd "$BIN --channel {channel}"
+      - name: Go 이식 — 이 바이너리와 대조
+        working-directory: go
+        run: MDWIRE_RUST="$BIN" go test ./...
