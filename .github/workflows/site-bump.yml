@@ -33,7 +33,7 @@ jobs:
         with:
           fetch-depth: 0   # `<Next />` 를 걷을 때 줄의 커밋이 태그의 조상인지 본다
 
-      - name: 올릴 판이 있나
+      - name: 새로운 버전 확인
         id: next
         run: |
           latest=$(npm view "$PKG" version)
@@ -51,7 +51,7 @@ jobs:
           fi
           echo "version=$latest" >> "$GITHUB_OUTPUT"
 
-      - name: 판 올리고 표시 걷기
+      - name: 릴리즈 버전 확인 후 다음 릴리즈 표시 제거
         if: steps.next.outputs.version != ''
         env:
           VERSION: ${{ steps.next.outputs.version }}
