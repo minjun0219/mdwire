@@ -1,0 +1,5 @@
+# 검색 엔진도 에이전트도 다 읽어 가도 된다. 에이전트용 요약은 /llms.txt, 전문은 /llms-full.txt.
+User-agent: *
+Allow: /
+
+Sitemap: https://mdwire.minjun.dev/sitemap.xml

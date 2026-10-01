@@ -13,6 +13,10 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 달고, 릴리스가 나가면 그 표시를 지운다.
 - `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
+- 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
+  마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
+  import · 컴포넌트를 걷어 낸 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
+- 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.
 
 패키지 매니저는 pnpm 이다(버전은 `package.json` 의 `packageManager`).
 

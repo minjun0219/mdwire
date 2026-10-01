@@ -38,11 +38,14 @@ Things that are easy to get wrong:
 
 ## Site
 
-- [Overview](https://mdwire.minjun.dev/): what mdwire does
+Docs pages are Markdown at the page path plus `.md` (`/docs/npm/` → `/docs/npm.md`, `/ko/docs/` → `/ko/docs.md`).
+
+- [Overview](https://mdwire.minjun.dev/index.md): what mdwire does
 - [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, in the browser
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
-- [Docs: concepts](https://mdwire.minjun.dev/docs/): channels, dialects, options, the repair report, the streaming contract
-- [Docs: npm](https://mdwire.minjun.dev/docs/npm/) · [Rust](https://mdwire.minjun.dev/docs/rust/) · [Go](https://mdwire.minjun.dev/docs/go/) · [CLI](https://mdwire.minjun.dev/docs/cli/): the API of each
+- [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, dialects, options, the repair report, the streaming contract
+- [Docs: npm](https://mdwire.minjun.dev/docs/npm.md) · [Rust](https://mdwire.minjun.dev/docs/rust.md) · [Go](https://mdwire.minjun.dev/docs/go.md) · [CLI](https://mdwire.minjun.dev/docs/cli.md): the API of each
+- [Full docs](https://mdwire.minjun.dev/llms-full.txt): every docs page above in one file
 
 ## Optional
 
