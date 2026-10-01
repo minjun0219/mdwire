@@ -21,6 +21,20 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 3. **Split.** Respect the channel's limit and never cut through markup — including while
    streaming, where a chunk boundary must not land inside `**bold**`.
 
+## Why another one
+
+Three gaps in what exists today, each measured rather than assumed:
+
+- **Broken input is the normal case.** In a sample of 60 agent-generated documents,
+  44 contained emphasis spanning a line break. A regex-based converter mispaired those
+  into *inverted* emphasis ranges, and the channel returned HTTP 200, so nothing caught it.
+- **CJK is guessed at.** One converter pads emphasis with U+200B next to Korean text;
+  another does not. Neither measured the channel. We did: Slack `markdown_text` follows
+  CommonMark, so `_italic_` dies next to a Korean particle and `*italic*` lives. mdwire
+  emits `*` and pads nothing.
+- **Streaming has no answer.** Every converter is batch: parse the whole document, build an
+  AST, render. When tokens arrive incrementally, markup splits across chunk boundaries.
+
 ## Targets
 
 Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain
