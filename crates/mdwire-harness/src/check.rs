@@ -162,7 +162,7 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
 fn text_loss(input: &str, output: &str, out: &mut Vec<Finding>) {
     // **출현 횟수까지 센다.** 집합으로 보면 한 번만 남아 있어도 통과라서, 같은 말이
     // 반복되는 문단이나 목록의 뒤쪽만 잘라 내는 구현을 놓친다.
-    // **탈출은 맨 앞에서 푼다.** `\[` 는 대괄호 한 글자지 링크의 시작이 아니다.
+    // **이스케이프는 맨 앞에서 푼다.** `\[` 는 대괄호 한 글자지 링크의 시작이 아니다.
     // 층마다 따로 가리면 `strip_urls` 는 링크로 보고 `bare` 는 글자로 보는 식으로
     // 어긋난다 — 양쪽 글을 같은 모양으로 만들어 놓고 시작한다.
     let input = resolve_escapes(input);
@@ -284,7 +284,7 @@ fn notion_table_count(output: &str) -> usize {
         .count()
 }
 
-/// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.
+/// 역슬래시 이스케이프를 푼 글. `\*` 는 별표 한 글자다.
 fn resolve_escapes(text: &str) -> std::borrow::Cow<'_, str> {
     if !text.contains('\\') {
         // 역슬래시가 없으면 통째로 복사할 이유가 없다. 훑기는 문서 수천 개를 돈다.
@@ -609,7 +609,7 @@ fn strip_urls(text: &str, seam: Seam) -> String {
                 && ch[i].is_ascii()
                 && !"()<>\"".contains(ch[i])
             {
-                // escape 된 형태에서도 같은 자리에서 멈춘다. 텔레그램 HTML 은 `<` 를
+                // 이스케이프된 형태에서도 같은 자리에서 멈춘다. 텔레그램 HTML 은 `<` 를
                 // `&lt;` 로 내보내므로, 엔티티를 안 보면 출력에서만 주소가 더 길어져
                 // 뒤에 붙은 글자를 먹어 버린다.
                 if emphasis::parse_entity(&ch, i).is_some() {
@@ -844,9 +844,9 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
             // 브라우저 채널은 블록도 태그라 `<p>** 배포` 처럼 태그가 마커에 붙는다. 화면에서
             // 태그 자리는 경계이니 공백으로 읽는다 — 안 그러면 글자로 둔 마커를 여는 마커로 본다.
             let text = if channel == Channel::Html { tags_as_space(&text) } else { text };
-            // **저자가 `\*` 로 탈출해 둔 마커는 글자다.** 코어가 탈출을 풀어 내보내므로
+            // **저자가 `\*` 로 이스케이프해 둔 마커는 글자다.** 코어가 이스케이프를 풀어 내보내므로
             // 출력에는 맨몸 `*` 로 남는데, 그건 우리가 변환 못 한 마커가 아니다.
-            // 입력에 탈출된 만큼을 예산으로 두고 그만큼은 넘어간다.
+            // 입력에 이스케이프된 만큼을 예산으로 두고 그만큼은 넘어간다.
             // **런 길이까지 맞춰 센다.** 글자별 총량으로 두면 따로 떨어진 `\*` 두 개가
             // 엉뚱한 자리의 `**` 하나를 면제해 준다.
             let mut escaped: HashMap<(char, usize), usize> = HashMap::new();
@@ -1115,7 +1115,7 @@ fn attr_value(tag: &str, want: &str) -> Option<String> {
     }
 }
 
-/// 태그의 속성 이름들. **따옴표 안은 값이라 보지 않는다** — 값 안에 escape 된 글자로 든
+/// 태그의 속성 이름들. **따옴표 안은 값이라 보지 않는다** — 값 안에 이스케이프된 글자로 든
 /// `onclick=` 은 속성이 아니다. 이름은 공백이나 `/` 뒤에 온다(`<sub/onclick=…>`).
 fn attr_names(tag: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -1661,7 +1661,7 @@ mod tests {
         assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
     }
 
-    /// **저자가 `\*` 로 탈출해 둔 마커는 글자다.** 코어가 탈출을 풀어 내보내므로
+    /// **저자가 `\*` 로 이스케이프해 둔 마커는 글자다.** 코어가 이스케이프를 풀어 내보내므로
     /// 출력에는 맨몸 `*` 로 남는데, 우리가 변환 못 한 마커가 아니다.
     #[test]
     fn an_escaped_marker_is_not_a_stray_marker() {
@@ -1669,7 +1669,7 @@ mod tests {
         assert!(!f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
         assert!(!f.iter().any(|x| x.rule == Rule::TextLoss), "{f:?}");
 
-        // 탈출해 둔 것보다 많이 남으면 그건 우리 것이다.
+        // 이스케이프해 둔 것보다 많이 남으면 그건 우리 것이다.
         let f = check(r"곱하기는 2 \* 3 이고 **굵게** 다", "곱하기는 2 * 3 이고 **굵게 다", Channel::Plain);
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
 

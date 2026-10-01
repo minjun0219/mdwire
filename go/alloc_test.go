@@ -60,7 +60,7 @@ func TestProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
-// GitHub 만 도는 경로도 할당하지 않는다 — `~`·`<` 탈출, 글자로 되돌린 `~~`, 마커 대신 내는
+// GitHub 만 도는 경로도 할당하지 않는다 — `~`·`<` 이스케이프, 글자로 되돌린 `~~`, 마커 대신 내는
 // `<strong>`. 위 게이트의 산문에는 이 셋이 없다. 러스트 쪽 같은 이름의 테스트.
 func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	unit := "주행 거리는 약 ~40km 남았고 5~6월에 충전한다. `Vec<T>` 가 아니라 Vec<T> 다.\n" +
@@ -88,7 +88,7 @@ func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
-// 노션만 도는 경로도 할당하지 않는다 — `*`·`\` 탈출, 줄마다 닫는 강조(인용·목록 안 포함), 살려
+// 노션만 도는 경로도 할당하지 않는다 — `*`·`\` 이스케이프, 줄마다 닫는 강조(인용·목록 안 포함), 살려
 // 둔 `<br>`. 러스트 쪽 같은 이름의 테스트.
 func TestNotionProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	unit := "카드 1***-001* 과 백슬래시 \\ 하나. **배포를 금요일에\n하지 않는다** 이고\n" +

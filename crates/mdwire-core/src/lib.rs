@@ -37,7 +37,7 @@ pub enum Channel {
     /// 변환이 거의 필요 없고, 남는 일은 정규화와 분할뿐이다.
     SlackMarkdown,
     /// GitHub 코멘트·PR 본문(GFM). 표·헤딩·취소선을 다 그린다. 65,536자.
-    /// 슬랙과 같은 마크다운을 내되, GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 탈출한다.
+    /// 슬랙과 같은 마크다운을 내되, GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 이스케이프한다.
     GithubMarkdown,
     /// 노션 페이지 본문(Notion-flavored Markdown — API `markdown` 필드·커넥터). 헤딩은 네 단계.
     /// GitHub 과 같은 마크다운을 내되, 노션이 못 그리는 인라인 HTML 은 벗기고(글자로 보인다),
@@ -48,7 +48,7 @@ pub enum Channel {
     Plain,
     /// 브라우저에 넣을 HTML 조각. 헤딩·목록·표·코드블록을 태그로 그린다. 한도 없음.
     ///
-    /// `innerHTML` 로 바로 넣는 것을 전제로 한다 — 글자는 전부 escape 하고, 원문의 HTML 은
+    /// `innerHTML` 로 바로 넣는 것을 전제로 한다 — 글자는 전부 이스케이프하고, 원문의 HTML 은
     /// 속성을 버린 인라인 태그만 살리며, 링크는 `http(s)`·`mailto` 만 `<a>` 로 낸다.
     /// 스트리밍 누적본에 [`Streamer::close_open`] 을 붙이면 그대로 넣어도 되는 모양이 된다.
     Html,
@@ -100,7 +100,7 @@ impl Channel {
     }
 }
 
-/// 입력 방언 — 에이전트가 무슨 표기로 썼는가.
+/// 입력 표기 — 에이전트가 무슨 표기로 썼는가.
 ///
 /// 기본은 표준 마크다운이다. 슬랙에 답하는 에이전트는 흔히 **레거시 `mrkdwn`** 으로 쓴다
 /// (슬랙 문서가 그렇게 가르친다) — `*굵게*` · `_기울임_` · `~취소~`. 표준으로 읽으면
@@ -124,7 +124,7 @@ impl Dialect {
         }
     }
 
-    /// 이름으로 방언을 찾는다.
+    /// 이름으로 입력 표기를 찾는다.
     pub fn parse(name: &str) -> Option<Dialect> {
         [Dialect::Markdown, Dialect::SlackMrkdwn].into_iter().find(|d| d.name() == name)
     }
@@ -138,7 +138,7 @@ impl Dialect {
 /// 값이다. 실제 쓰임(텔레그램 4096 에서 머리글 몫을 빼는 것)과는 거리가 멀다.
 pub const MIN_LIMIT: usize = 256;
 
-/// 변환 옵션 — 입력 방언, 조각 한도, 브라우저 채널의 정책.
+/// 변환 옵션 — 입력 표기, 조각 한도, 브라우저 채널의 정책.
 ///
 /// 필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -190,7 +190,7 @@ pub enum Images {
 }
 
 /// 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수. 앞 넷(고친 것)은 **모델이 얼마나 자주 서식을
-/// 깨는지**를, 뒤 여섯(바꾼 것)은 **붙이기 전에 채널이 무엇을 바꾸는지**를 재는 데 쓴다 — 둘을 따로
+/// 깨는지**를, 뒤 여섯(바꾼 것)은 **채널을 들이기 전에 그 채널이 무엇을 바꾸는지**를 재는 데 쓴다 — 둘을 따로
 /// 물으려면 [`Repairs::any`]·[`Repairs::changed`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Repairs {
@@ -202,7 +202,7 @@ pub struct Repairs {
     pub reverted_code_span: usize,
     /// 짝 잃은 채 버린 `**` (`꼬리**` 처럼 앞이 글자인 것).
     pub dropped_marker: usize,
-    /// 채널이 구문으로 읽을 글자를 탈출한 수(GitHub 의 `\~`·`\<`·`\*`).
+    /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
     pub escaped_char: usize,
     /// 마커 대신 태그로 낸 강조 — GitHub 이 마커로 못 읽는 자리(`**「설정」**가`)의 `<strong>`.
     pub tag_emphasis: usize,
@@ -232,7 +232,7 @@ impl Repairs {
     }
 
     /// 정규화가 하나라도 **고쳤는가** — 앞 넷(닫아 준 강조·펜스, 되돌린 백틱, 버린 마커). 모델이 서식을
-    /// 깼는지를 묻는 값이다. 채널에 맞춰 바꾼 것(탈출·불릿·표 …)은 보지 않는다 — 그건 [`Repairs::changed`].
+    /// 깼는지를 묻는 값이다. 채널에 맞춰 바꾼 것(이스케이프·불릿·표 …)은 보지 않는다 — 그건 [`Repairs::changed`].
     pub fn any(&self) -> bool {
         self.closed_emphasis + self.closed_fence + self.reverted_code_span + self.dropped_marker > 0
     }
@@ -294,7 +294,7 @@ impl Streamer {
         Self::with_options(channel, Options::default())
     }
 
-    /// 옵션을 주고 만든다 — 입력 방언 따위.
+    /// 옵션을 주고 만든다 — 입력 표기 따위.
     pub fn with_options(channel: Channel, options: Options) -> Self {
         Self {
             engine: Engine::new(channel, &options),

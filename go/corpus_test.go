@@ -22,7 +22,7 @@ func corpusDir(t *testing.T) string {
 type corpusCase struct {
 	name     string
 	input    string
-	opts     Options           // from 파일이 있으면 그 입력 방언
+	opts     Options           // from 파일이 있으면 그 입력 표기
 	expected map[string]string // 채널 이름 → 기대 출력(없는 채널은 대조하지 않는다)
 }
 
@@ -46,7 +46,7 @@ func loadCases(t *testing.T) []corpusCase {
 		if b, err := os.ReadFile(filepath.Join(dir, e.Name(), "from")); err == nil {
 			d, ok := ParseDialect(strings.TrimSpace(string(b)))
 			if !ok {
-				t.Fatalf("%s: 모르는 입력 방언 %q", e.Name(), b)
+				t.Fatalf("%s: 모르는 입력 표기 %q", e.Name(), b)
 			}
 			c.opts.From = d
 		}

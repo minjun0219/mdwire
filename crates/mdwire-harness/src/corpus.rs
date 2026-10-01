@@ -3,7 +3,7 @@
 //! 두 모드가 있다.
 //!
 //! - **코퍼스 모드** — `cases/<이름>/input.md` 를 돌려 `<채널>.txt` 와 대조한다.
-//!   입력이 표준 마크다운이 아니면 `from` 파일에 방언 이름(`slack-mrkdwn`)을 적는다.
+//!   입력이 표준 마크다운이 아니면 `from` 파일에 입력 표기 이름(`slack-mrkdwn`)을 적는다.
 //!   기대 출력 파일이 없는 채널은 그 케이스에서 대조하지 않는다(불변식은 그래도 잰다).
 //!   **한도를 넘겨 조각으로 나뉘는 케이스는 기대 출력을 두지 않는다** — 조각 구분자가
 //!   NUL 이라 파일이 바이너리가 되고, 그러면 정본이 읽히지 않는다. 그런 케이스의 고장은
@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 pub struct Case {
     pub name: String,
     pub input: String,
-    /// 입력 방언. `from` 파일이 없으면 표준 마크다운.
+    /// 입력 표기. `from` 파일이 없으면 표준 마크다운.
     pub from: Dialect,
     /// 채널 이름 → 기대 출력.
     pub expected: BTreeMap<String, String>,
@@ -41,7 +41,7 @@ pub struct Outcome {
     pub findings: Vec<Finding>,
     /// 구현이 에러를 냈다면.
     pub error: Option<String>,
-    /// 구현이 이 케이스의 입력 방언을 받지 않아 돌리지 않았다.
+    /// 구현이 이 케이스의 입력 표기를 받지 않아 돌리지 않았다.
     pub skipped: bool,
 }
 
@@ -86,7 +86,7 @@ pub fn load_cases(dir: &Path) -> io::Result<Vec<Case>> {
         }
         let from = match fs::read_to_string(path.join("from")) {
             Ok(name) => Dialect::parse(name.trim()).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, format!("{name:?}: 모르는 입력 방언 ({})", path.display()))
+                io::Error::new(io::ErrorKind::InvalidData, format!("{name:?}: 모르는 입력 표기 ({})", path.display()))
             })?,
             Err(e) if e.kind() == io::ErrorKind::NotFound => Dialect::Markdown,
             Err(e) => return Err(e),
@@ -102,7 +102,7 @@ fn normalize(s: &str) -> &str {
     s.trim_end_matches('\n')
 }
 
-/// 입력을 **표준 마크다운으로 읽어야** 재는 규칙인가. 다른 방언으로 쓴 입력에는 이 규칙들이
+/// 입력을 **표준 마크다운으로 읽어야** 재는 규칙인가. 다른 입력 표기로 쓴 입력에는 이 규칙들이
 /// 틀린 답을 낸다 — mrkdwn 의 `*굵게*` 를 기울임으로 읽고 범위가 다르다고 한다. 그런 케이스는
 /// 기대 출력 대조와 입력을 안 보는 규칙만으로 잰다(퍼즈와 같은 선택).
 fn reads_input_as_markdown(rule: Rule) -> bool {
@@ -243,7 +243,7 @@ pub struct Summary {
     pub mismatched: usize,
     pub findings: usize,
     pub errors: usize,
-    /// 입력 방언을 못 받아 건너뛴 실행.
+    /// 입력 표기를 못 받아 건너뛴 실행.
     pub skipped: usize,
 }
 
@@ -272,7 +272,7 @@ pub fn summarize(outcomes: &[Outcome]) -> Summary {
 pub fn report(outcomes: &[Outcome], verbose: bool) -> bool {
     for o in outcomes {
         if o.skipped && verbose {
-            println!("\n[건너뜀] {} · {} — 입력 방언을 받지 않는 구현이다(`--cmd` 에 `{{from}}` 이 없다)", o.source, o.channel.name());
+            println!("\n[건너뜀] {} · {} — 입력 표기를 받지 않는 구현이다(`--cmd` 에 `{{from}}` 이 없다)", o.source, o.channel.name());
             continue;
         }
         if o.ok() && !verbose {
@@ -301,7 +301,7 @@ pub fn report(outcomes: &[Outcome], verbose: bool) -> bool {
         s.mismatched,
         s.findings,
         s.errors,
-        if s.skipped > 0 { format!(" · 방언 때문에 건너뜀 {}", s.skipped) } else { String::new() }
+        if s.skipped > 0 { format!(" · 입력 표기 때문에 건너뜀 {}", s.skipped) } else { String::new() }
     );
     s.ok()
 }

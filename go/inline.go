@@ -50,7 +50,7 @@ type inline struct {
 	// 지금 열려 있는 코드 스팬의 날것 내용. 블록이 끝나도록 닫는 런이 안 오면 그 백틱은
 	// 글자였다는 뜻이라, 삼킨 내용을 도로 꺼내 다시 읽는다.
 	codeSrc []rune
-	// 입력 방언. 마커를 무엇으로 읽을지가 여기서 갈린다.
+	// 입력 표기. 마커를 무엇으로 읽을지가 여기서 갈린다.
 	dialect Dialect
 	// 정규화가 고친 것.
 	repairs Repairs
@@ -167,7 +167,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			}
 		}
 
-		// 역슬래시 탈출. `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
+		// 역슬래시 이스케이프. `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
 		if c == '\\' && i+1 < len(line) && isASCIIPunct(line[i+1]) {
 			v.literal(line[i+1], out)
 			in.prev = line[i+1]
@@ -194,7 +194,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 먼저 열고(바깥), 닫을 때는 기울임이 열려 있으면 그것부터 닫는다(안쪽). 굵게만 열려
 		// 있는데 셋이 오면 통째로 닫는 마커다 — 둘만 집으면 별표 하나가 남는다.
 		take := runLen(line, i, c)
-		// 레거시 mrkdwn 방언 — `*굵게*` · `_기울임_` · `~취소~`. 별표는 몇 개든 굵게, 물결은
+		// 레거시 mrkdwn 입력 표기 — `*굵게*` · `_기울임_` · `~취소~`. 별표는 몇 개든 굵게, 물결은
 		// 하나든 둘이든 취소선이다. 표준 표기가 섞여도 같은 뜻으로 읽는다.
 		mrkdwn := in.dialect == SlackMrkdwn
 		if c != '~' && take == 3 && !mrkdwn {
@@ -618,7 +618,7 @@ func rendersEmpty(rest []rune, v vocab) bool {
 	return true
 }
 
-// textChar 는 본문 글자 하나를 적는다. 채널이 탈출하는 글자면 센다(Repairs.EscapedChar).
+// textChar 는 본문 글자 하나를 적는다. 채널이 이스케이프하는 글자면 센다(Repairs.EscapedChar).
 func (in *inline) textChar(c rune, out *[]byte, v vocab) {
 	if v.escapes(c) {
 		in.repairs.EscapedChar++
@@ -653,7 +653,7 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			}
 		}
 		// 오토링크의 텍스트는 인라인으로 다시 읽지 않는다 — 주소 안의 `_` 가 기울임이 되면 안 된다.
-		// 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 탈출(GitHub 의 `\~`)을 하면 주소와
+		// 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 이스케이프(GitHub 의 `\~`)을 하면 주소와
 		// 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
 		text := in.scratch[:0]
 		for _, c := range label {
@@ -914,7 +914,7 @@ func repeatRune(c rune, n int) []rune {
 	return r
 }
 
-// insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 탈출을
+// insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 이스케이프를
 // 따른다 — GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
 func insertMarker(out *[]byte, at int, c rune, n int, v vocab, repairs *Repairs) {
 	if !v.escapes(c) {

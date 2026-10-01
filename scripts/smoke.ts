@@ -8,7 +8,7 @@ const s = new Streamer("slack-markdown");
 const out: string = s.push("조각") + s.closeOpen() + s.preview() + s.finish();
 const revised: boolean = s.revised();
 
-// 옵션은 좁은 타입이다 — 방언 이름을 틀리면 컴파일에서 걸린다.
+// 옵션은 좁은 타입이다 — 입력 표기 이름을 틀리면 컴파일에서 걸린다.
 const opts: RenderOptions = { from: "slack-mrkdwn" };
 const withOpts: string[] = render("*굵게*", "slack-markdown", opts);
 const report = renderWithReport("**열림", "telegram-html", opts);

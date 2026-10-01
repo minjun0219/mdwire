@@ -239,7 +239,7 @@ func (v vocab) close(e emph) string {
 
 // escapeChar 는 글자 하나를 본문으로 적는다.
 //
-// GitHub 에서는 `~` 와 `<` 를 탈출한다(실측 2026-09-30, POST /markdown gfm). GFM 은 홑 `~` 도
+// GitHub 에서는 `~` 와 `<` 를 이스케이프한다(실측 2026-09-30, POST /markdown gfm). GFM 은 홑 `~` 도
 // 취소선으로 읽어서 `약 ~40km, 5~6월` 의 `40km, 5` 가 그어지고, `Vec<T>` 의 `<T>` 는 HTML
 // 태그로 읽혀 새니타이저가 지운다. 슬랙 markdown_text 는 둘 다 글자로 그려서 손대지 않는다.
 func (v vocab) escapeChar(c rune, out *[]byte) {
@@ -274,7 +274,7 @@ func (v vocab) escapes(c rune) bool {
 	return false
 }
 
-// codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 탈출이 글자로 보인다 —
+// codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 이스케이프가 글자로 보인다 —
 // 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
 func (v vocab) codeChar(c rune, out *[]byte) {
 	if v.htmlOut() {
@@ -284,7 +284,7 @@ func (v vocab) codeChar(c rune, out *[]byte) {
 	*out = appendRune(*out, c)
 }
 
-// escape 는 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 escapeChar 다.
+// 이스케이프는 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 escapeChar 다.
 func (v vocab) escape(s string, out *[]byte) {
 	// 대부분의 줄에는 이스케이프할 글자가 없다. 있을 때만 한 글자씩 간다.
 	if !v.htmlOut() || !strings.ContainsAny(s, "&<>") {
@@ -347,7 +347,7 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// 텍스트가 주소 그대로면 오토링크다. `[url](url)` 보다 짧고 같은 뜻이다. 스킴이 있어야
 		// 한다 — `<파일.md>` 는 오토링크가 아니라 꺾쇠 글자다.
 		// 노션은 <url> 의 꺾쇠를 글자로 남긴다(실측) — 링크 문법으로 쓴다. 라벨은 노션이 마커로
-		// 읽을 글자를 탈출하고, 주소의 괄호·공백은 퍼센트로 쓴다 — 러스트 쪽과 같다.
+		// 읽을 글자를 이스케이프하고, 주소의 괄호·공백은 퍼센트로 쓴다 — 러스트 쪽과 같다.
 		if text == url && strings.Contains(url, "://") && v.channel == NotionMarkdown {
 			*out = append(*out, '[')
 			for _, c := range text {
@@ -401,7 +401,7 @@ func (v vocab) image(alt, url string, out *[]byte) {
 		*out = append(*out, `<img src="`...)
 		appendAttr(url, out)
 		*out = append(*out, `" alt="`...)
-		// 대체 글은 이미 escape 된 본문이다. 속성값이라 `"` 만 더 막는다.
+		// 대체 글은 이미 이스케이프된 본문이다. 속성값이라 `"` 만 더 막는다.
 		for i := 0; i < len(alt); i++ {
 			if alt[i] == '"' {
 				*out = append(*out, "&quot;"...)
@@ -418,9 +418,9 @@ func (v vocab) image(alt, url string, out *[]byte) {
 	}
 }
 
-// literal 은 역슬래시로 탈출된 글자를 내보낸다.
+// literal 은 역슬래시로 이스케이프된 글자를 내보낸다.
 //
-// 마크다운을 그대로 내보내는 채널에서는 탈출을 지키고 나간다. 벗겨서 맨몸 `*` 를 내보내면
+// 마크다운을 그대로 내보내는 채널에서는 이스케이프를 지키고 나간다. 벗겨서 맨몸 `*` 를 내보내면
 // 저자가 글자로 쓴 별표가 그 채널에서 강조로 읽힌다. HTML 로 가는 채널은 마커라는 개념이
 // 없으니 그냥 escape 한다.
 func (v vocab) literal(c rune, out *[]byte) {
@@ -428,7 +428,7 @@ func (v vocab) literal(c rune, out *[]byte) {
 		v.escapeChar(c, out)
 		return
 	}
-	// 그 채널의 마크다운이 읽는 글자면 탈출을 지킨다. 강조 마커만 지키면 `\# 제목` 이 제목이
+	// 그 채널의 마크다운이 읽는 글자면 이스케이프를 지킨다. 강조 마커만 지키면 `\# 제목` 이 제목이
 	// 되고 `\[x\](url)` 이 링크가 된다.
 	// 노션은 $…$ 를 수식으로 읽어서 \$ 도 지킨다.
 	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) || (c == '$' && v.channel == NotionMarkdown) {
@@ -582,7 +582,7 @@ func eqFoldASCII(a, b string) bool {
 	return true
 }
 
-// escapedLen 은 escape 하고 나면 몇 글자가 되는가다. 재기만 하고 만들지는 않는다 —
+// escapedLen 은 이스케이프하고 나면 몇 글자가 되는가다. 재기만 하고 만들지는 않는다 —
 // 스트리밍 경로에서 링크마다 문자열을 하나씩 더 만들 수는 없다.
 func escapedLen(url string) int {
 	n := 0
