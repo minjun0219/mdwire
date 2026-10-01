@@ -730,10 +730,9 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
 /// **GitHub 은 인라인 태그를 그리니 살린다.** LLM 이 `<sub>`·`<kbd>` 로 적은 뜻이 거기서는
 /// 산다. **태그뿐인 줄만 벗긴다** — 줄 첫머리 여는 태그 뒤가 줄 끝까지 공백이면 GFM 이 HTML 블록을
 /// 열어 뒤 줄의 마크다운이 글자로 보인다(실측). 봇 꼬리말 `<sub>모델 · 토큰</sub>` 처럼 태그 뒤에 글이
-/// 오면 살린다(실사용 보고). 블록 태그(`div`)와 새니타이저가 지우는 `font` 는 벗기고, GitHub 이
-/// 그리는 `details`·`summary` 는 그대로 둔다.
+/// 오면 살린다(실사용 보고). 블록 태그(`div` `details`)와 새니타이저가 지우는 `font` 는 벗긴다.
 #[test]
-fn github_keeps_inline_html_tags_off_the_line_start() {
+fn github_keeps_inline_tags_unless_the_line_is_only_tags() {
     let g = |s| one(s, Channel::GithubMarkdown);
     assert_eq!(g("H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈"), "H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈");
     assert_eq!(g("앞 <div>블록</div> <font color=red>빨강</font>"), "앞 블록 빨강");
@@ -743,12 +742,12 @@ fn github_keeps_inline_html_tags_off_the_line_start() {
     // 태그뿐인 줄은 벗기고, 짝인 닫는 태그도 벗긴다.
     assert_eq!(g("<sub>\n둘째 줄</sub> 끝"), "둘째 줄 끝");
     assert_eq!(g("앞\n<br>\n**굵게**"), "앞\n\n\n**굵게**");
-    // `ins` 도 살리고, 블록 태그 `details`·`summary` 는 그대로 둔다.
+    // 태그뿐인지는 출력으로 본다 — 뒤에 주석만 있으면 `<br>` 혼자 남아 HTML 블록이 된다.
+    assert_eq!(g("<br><!-- x -->\n**굵게**"), "**굵게**");
+    // `ins` 도 살린다. 블록 태그 `details` 는 벗긴다 — 줄 첫머리 `<details>` 는 HTML 블록을 열어 그
+    // 안의 탈출이 글자로 보인다(내용은 남는다).
     assert_eq!(g("<ins>새</ins> 글"), "<ins>새</ins> 글");
-    assert_eq!(
-        g("<details><summary>더 보기</summary>\n\n내용\n\n</details>"),
-        "<details><summary>더 보기</summary>\n\n내용\n\n</details>"
-    );
+    assert_eq!(g("<details><summary>약 ~40ms</summary>"), r"약 \~40ms");
     // 다른 채널은 그대로 벗긴다.
     assert_eq!(one("H<sub>2</sub>O", Channel::SlackMarkdown), "H2O");
 }

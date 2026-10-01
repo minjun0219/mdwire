@@ -72,7 +72,7 @@ pub(crate) struct Inline {
     after_close: Option<char>,
     /// 표 칸 안을 렌더하는가. 칸 안에서는 줄을 바꿀 수 없다 — 바꾸면 표의 행이 갈린다.
     pub in_cell: bool,
-    /// 줄 첫머리라 벗긴 인라인 여는 태그의 수. 그 짝인 닫는 태그도 벗긴다(GitHub).
+    /// 태그뿐인 줄이라 벗긴 인라인 여는 태그들. 그 짝인 닫는 태그도 벗긴다(GitHub).
     stripped_tags: Vec<u8>,
     /// 미리보기 복제본이다 — 블록이 끝날 때 안 닫힌 코드 스팬을 글자로 되돌리지 않고 닫는다.
     /// 되돌리면 여는 백틱이 비친다. 닫는 백틱을 입력으로 흘려 넣으면 붙들린 꼬리(`` ` ``)와
@@ -639,8 +639,12 @@ impl Inline {
         // GitHub 렌더 API 로 `<p><sub>…</sub></p>` 확인). 줄이 태그뿐인지는 블록 층이 줄 끝이나 다음
         // 글자가 올 때까지 붙들어서 안다(`safe_cut`).
         //
-        // `details`·`summary` 는 GitHub 이 그리는 **블록** 태그라 강조 스택에 올리지 않고 그대로
-        // 둔다 — 스택에 올리면 문단 끝에서 닫혀 `<details>` 와 `</details>` 사이의 문단이 깨진다.
+        // 태그뿐인지는 **출력**으로 본다 — 뒤에 주석이나 이 채널이 벗기는 태그만 있으면 출력에는 이 태그
+        // 하나만 남는다(`<br><!-- x -->`). 공백은 GFM 처럼 스페이스와 탭만 친다.
+        //
+        // `details`·`summary` 는 GitHub 이 그리지만 **블록** 태그라 벗긴다(내용은 남는다). 줄 첫머리
+        // `<details>` 는 HTML 블록을 열어 그 안의 마크다운과 우리 탈출(`\~`)이 글자로 보이고, 안 닫히면
+        // 코멘트 끝까지 접힌다 — 살리려면 블록 층이 HTML 블록을 통째로 통과시켜야 한다(SPEC 4절).
         //
         // **브라우저 채널은 자리와 상관없이 살린다** — 마크다운으로 다시 읽히지 않는다.
         //
@@ -649,21 +653,12 @@ impl Inline {
         // 태그는 짝이 안 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`)
         // 일쑤다(퍼즈가 잡았다). 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 —
         // 짝 없는 닫는 태그는 버리고, 안 닫힌 여는 태그는 블록 끝에서 닫는다.
-        if v.html_emphasis() && (eq_ignore_case(name, "details") || eq_ignore_case(name, "summary")) {
-            out.push_str(if closing { "</" } else { "<" });
-            for c in name {
-                out.push(c.to_ascii_lowercase());
-            }
-            out.push('>');
-            self.prev = Some('>');
-            return Some(close + 1);
-        }
         let tag = inline_tag(name);
         let br = eq_ignore_case(name, "br");
         if (v.is_html() || v.html_emphasis()) && (tag.is_some() || br) {
             // 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
             let at_line_start = !self.in_cell && self.prev_char(line, i).is_none_or(|c| c == '\n');
-            let tag_only_line = rest[close + 1..].iter().all(|c| c.is_whitespace());
+            let tag_only_line = renders_empty(&rest[close + 1..], v);
             let github_start = !v.is_html() && at_line_start && tag_only_line;
             if closing && !v.is_html() && tag.is_some() && self.stripped_tags.last() == tag.as_ref() {
                 // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. **이름이 맞을 때만**이다 —
@@ -824,6 +819,40 @@ fn is_known_tag(name: &[char]) -> bool {
         "div", "p", "small", "mark", "kbd", "font", "center", "details", "ins",
     ];
     KNOWN.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "summary")
+}
+
+/// 이 채널의 출력에서 아무것도 안 남기는가 — 스페이스·탭, 주석, 이 채널이 벗기는 태그뿐인가. 줄
+/// 첫머리 태그 뒤가 이렇다면 출력은 태그뿐인 줄이라 GFM 이 HTML 블록을 연다.
+fn renders_empty(rest: &[char], v: &Vocab) -> bool {
+    let mut i = 0;
+    while i < rest.len() {
+        match rest[i] {
+            ' ' | '\t' => i += 1,
+            '<' if starts_with(&rest[i..], "<!--") => match find_seq(&rest[i + 4..], "-->") {
+                Some(end) => i += 4 + end + 3,
+                None => return false,
+            },
+            '<' => {
+                let closing = rest.get(i + 1) == Some(&'/');
+                let at = i + 1 + usize::from(closing);
+                let mut j = at;
+                while j < rest.len() && rest[j].is_ascii_alphanumeric() {
+                    j += 1;
+                }
+                let name = &rest[at..j];
+                let kept = inline_tag(name).is_some() || eq_ignore_case(name, "br");
+                if name.is_empty() || !is_known_tag(name) || (kept && v.html_emphasis()) {
+                    return false;
+                }
+                match rest[j..].iter().position(|&c| c == '>') {
+                    Some(end) => i = j + end + 1,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
 }
 
 /// 살려 둘 인라인 태그의 번호([`INLINE_TAGS`]). `<br>` 은 짝이 없어 여기 없다.

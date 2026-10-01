@@ -825,7 +825,9 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
     // **주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다.** 긴 주석을 80자에서 놓으면 `<` 가
     // 글자로 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄
     // 안이라 안 닫힌 주석도 줄 끝에서 풀린다. 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
-    let mut i = 0;
+    // 앞 조각에서 닫힌 주석 뒤부터 본다 — 줄을 붙들고 있는 동안(태그뿐인 줄) 처음부터 다시 훑으면
+    // 제곱이 된다.
+    let mut i = memo.comments.min(k);
     while i + 4 <= k {
         if p[i..].starts_with(&['<', '!', '-', '-']) {
             let body = &p[i + 4..k];
@@ -835,7 +837,10 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
                 _ => 0,
             };
             match body[from..].windows(3).position(|w| w == ['-', '-', '>']) {
-                Some(end) => i += 4 + from + end + 3,
+                Some(end) => {
+                    i += 4 + from + end + 3;
+                    memo.comments = i;
+                }
                 None => {
                     // `--` 가 끝에 걸쳤을 수 있다 — 두 글자 앞에서 이어 본다.
                     memo.comment = Some((i, body.len().saturating_sub(2)));
@@ -845,6 +850,8 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
             }
         } else {
             i += 1;
+            // `<!--` 가 끝에 걸쳤을 수 있다 — 세 글자 앞까지만 확정한다.
+            memo.comments = memo.comments.max(i.min(k.saturating_sub(3)));
         }
     }
     if let Some(at) = p[..k].iter().rposition(|&c| c == '<') {
@@ -884,33 +891,42 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
     // **내보낼 것이 태그뿐이면 통째로 붙든다.** GitHub 은 태그뿐인 줄을 HTML 블록으로 읽어서, 줄
     // 첫머리 태그를 살릴지 벗길지는 뒤에 글이 오는지 봐야 갈린다(인라인 `angle`). 맨 끝에서 본다 —
     // 뒤의 마커를 붙든 탓에 내보낼 몫이 태그에서 끝나도 인라인 층은 그 줄을 태그뿐으로 읽는다.
-    if tags_only(&p[..k]) {
+    if tags_only(&p[..k], memo) {
         k = 0;
     }
     k
 }
 
-/// 공백을 빼면 완결된 태그(`<…>`)뿐인가. 태그가 하나는 있어야 한다.
-fn tags_only(p: &[char]) -> bool {
-    let mut i = 0;
-    let mut seen = false;
+/// 스페이스·탭을 빼면 완결된 태그(`<…>`)와 주석뿐인가. 태그가 하나는 있어야 한다.
+///
+/// **이어 훑는다.** 조각마다 불려서, 줄을 처음부터 다시 훑으면 태그가 긴 줄에서 제곱이 된다 — 확인한
+/// 자리(`memo.tags`)에서 잇고, 태그 아닌 글자를 한 번 만나면 그 줄에서는 다시 안 본다.
+fn tags_only(p: &[char], memo: &mut HoldMemo) -> bool {
+    if memo.not_tags {
+        return false;
+    }
+    let mut i = memo.tags.min(p.len());
     loop {
-        while i < p.len() && p[i].is_whitespace() {
+        while i < p.len() && matches!(p[i], ' ' | '\t') {
             i += 1;
         }
         if i == p.len() {
-            return seen;
+            return memo.tags > 0;
         }
-        if p[i] != '<' || !p.get(i + 1).is_some_and(|&c| c.is_ascii_alphabetic() || c == '/') {
+        let comment = p[i..].starts_with(&['<', '!', '-', '-']);
+        if p[i] != '<' || !(comment || p.get(i + 1).is_some_and(|&c| c.is_ascii_alphabetic() || c == '/')) {
+            memo.not_tags = true;
             return false;
         }
-        match p[i..].iter().position(|&c| c == '>') {
-            Some(end) => {
-                i += end + 1;
-                seen = true;
-            }
-            None => return false,
-        }
+        let end = if comment {
+            p[i + 4..].windows(3).position(|w| w == ['-', '-', '>']).map(|e| i + 4 + e + 3)
+        } else {
+            p[i..].iter().position(|&c| c == '>').map(|e| i + e + 1)
+        };
+        // 아직 안 끝난 태그 — 다음 조각을 본다(그 꼬리는 위에서 이미 붙들었다).
+        let Some(end) = end else { return false };
+        i = end;
+        memo.tags = end;
     }
 }
 
@@ -923,6 +939,12 @@ pub(crate) struct HoldMemo {
     link: Option<(usize, LinkScan)>,
     /// 안 닫힌 `<!--` 의 자리와, 그 뒤에서 `-->` 를 이어 찾을 자리.
     comment: Option<(usize, usize)>,
+    /// 여기 앞의 주석은 다 닫혔다. 주석 찾기가 여기서 잇는다.
+    comments: usize,
+    /// 줄 첫머리부터 여기까지는 태그와 주석뿐이다([`tags_only`]).
+    tags: usize,
+    /// 이 줄에 태그 아닌 글자가 나왔다 — 태그뿐인 줄이 아니다.
+    not_tags: bool,
 }
 
 impl HoldMemo {
@@ -931,6 +953,12 @@ impl HoldMemo {
         self.scanned = self.scanned.saturating_sub(n);
         self.link = self.link.and_then(|(at, s)| at.checked_sub(n).map(|at| (at, s)));
         self.comment = self.comment.and_then(|(at, f)| at.checked_sub(n).map(|at| (at, f)));
+        // 무엇이든 나갔으면 이 줄은 이미 글이 있다 — 남은 것이 줄 첫머리가 아니다.
+        if n > 0 {
+            self.not_tags = true;
+        }
+        self.tags = self.tags.saturating_sub(n);
+        self.comments = self.comments.saturating_sub(n);
     }
 }
 

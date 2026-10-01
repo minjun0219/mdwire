@@ -2,7 +2,7 @@
 export type MdTag =
   | "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "ul" | "ol" | "li" | "blockquote" | "pre" | "code"
   | "strong" | "em" | "del" | "a" | "table" | "thead" | "tbody" | "tr" | "th" | "td" | "hr" | "br"
-  | "sub" | "sup" | "b" | "i" | "u" | "s" | "strike" | "span" | "small" | "mark" | "kbd" | "img";
+  | "sub" | "sup" | "b" | "i" | "u" | "s" | "strike" | "span" | "small" | "mark" | "kbd" | "ins" | "img";
 
 /**
  * 이벤트 하나. 속성은 코어가 내는 것만 담긴다 —
