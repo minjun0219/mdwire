@@ -6,16 +6,17 @@ description: Send LLM-generated Markdown to Telegram, Slack and GitHub without i
 
 # Send LLM Markdown to chat channels without it breaking
 
-mdwire is a **bridge, not a renderer.** It takes the Markdown an agent wrote and hands each
-channel the syntax that channel actually accepts — repaired, escaped, and split within its
-length limit. Drawing it is still the channel's job.
+mdwire is **not a general-purpose Markdown converter.** It is a bridge: it takes the Markdown an
+agent wrote and hands each channel the syntax that channel actually accepts — repaired, escaped,
+and split within its length limit. Rendering is still the channel's job.
 
 ```
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
 ```
 
-1. **Normalize.** Agent output is not well-formed: unpaired `**`, emphasis that spans a line
-   break in wrapped prose, unclosed code fences. Repair before rendering.
+1. **Normalize.** Agent-written Markdown may not render correctly through a standard
+   Markdown converter: unpaired `**`, emphasis that spans a line break in wrapped prose, unclosed
+   code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel accepts. Telegram HTML allows nine tags; Slack
    `markdown_text` takes standard Markdown directly.
 3. **Split.** Respect the channel's limit and never cut through markup — including while

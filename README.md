@@ -22,8 +22,9 @@ deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
 ```
 
-1. **Normalize.** Agent output is not well-formed. Unpaired `**`, emphasis that spans a
-   line break in wrapped prose, unclosed code fences. Repair before rendering.
+1. **Normalize.** Agent-written Markdown may not render correctly through a standard
+   Markdown converter. Unpaired `**`, emphasis that spans a line break in wrapped prose,
+   unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
    tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
