@@ -3,6 +3,7 @@ layout: ../../layouts/Doc.astro
 title: Cases
 description: Real failures from sending agent-written Markdown to chat channels, and what mdwire sends instead.
 ---
+import Next from "../../components/Next.astro";
 
 # Cases
 
@@ -36,20 +37,23 @@ Test cases: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/t
 ## Bold ending in a symbol, before a Korean particle
 
 Korean attaches a particle right after the emphasis. When the bold ends in a parenthesis, quote, backtick or
-period, CommonMark's rules keep the closing `**` from closing. On GitHub the asterisks stay as text, and with
-several on one line the pairs cross and the ranges invert.
+period, CommonMark's rules keep the closing `**` from closing. On GitHub and Slack the asterisks stay as text,
+and with several on one line the pairs cross and the ranges invert.
 
 ```text
 input
   마감 전에 **설정(config)**을 바꾸고, **"배포 금지"**는 금요일까지 유지한다.
 GitHub
   마감 전에 <strong>설정(config)</strong>을 바꾸고, <strong>"배포 금지"</strong>는 금요일까지 유지한다.
+Slack
+  마감 전에 **설정(config)⁠**을 바꾸고, **"배포 금지"⁠**는 금요일까지 유지한다.
 Telegram
   마감 전에 <b>설정(config)</b>을 바꾸고, <b>"배포 금지"</b>는 금요일까지 유지한다.
 ```
 
 mdwire closes this bold. For GitHub it writes just those pairs as `<strong>` tags, which render regardless of
-the rule. Test case: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+the rule. Slack has no tags, so mdwire puts an invisible U+2060 (word joiner) right before the closing `**` —
+the line looks the same, but Slack now renders the bold <Next />. Test case: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## Tildes for ranges and approximations
 
