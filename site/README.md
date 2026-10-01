@@ -10,12 +10,14 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   버전을 올린다.
 - 데모 예시(`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다.
 
+패키지 매니저는 pnpm 이다(버전은 `package.json` 의 `packageManager`).
+
 ```sh
-npm install
-npm run dev       # http://localhost:4321
-npm run check     # 타입 검사
-npm run build     # dist/ — 끝에 dist/_version.txt 를 쓴다
-npx wrangler dev  # dist/ 를 Workers 와 같은 방식으로 서빙해 본다
+pnpm install
+pnpm run dev           # http://localhost:4321
+pnpm run check         # 타입 검사
+pnpm run build         # dist/ — 끝에 dist/_version.txt 를 쓴다
+pnpm exec wrangler dev # dist/ 를 Workers 와 같은 방식으로 서빙해 본다
 ```
 
 **번들러에서 mdwire 를 쓸 때** 필요한 설정이 `astro.config.mjs` 에 있다 — `examples/react-streaming`
@@ -38,10 +40,10 @@ Workers Builds 설정(대시보드):
 | 항목 | 값 |
 |---|---|
 | Root directory | `site` |
-| Build command | `npm run build` |
-| Deploy command | `npx wrangler deploy` |
-| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview` |
+| Build command | `pnpm run build` |
+| Deploy command | `pnpm exec wrangler deploy` |
+| Preview builds | 켠다 — Preview command 는 `pnpm exec wrangler preview` |
 | Build watch paths | `site/` 아래 변경만 포함 |
 | Production branch | `main` |
 
-의존성은 Workers Builds 가 `package-lock.json` 을 보고 설치한다.
+의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다.

@@ -106,11 +106,14 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # 패키지 매니저는 pnpm 이다. 버전은 site/package.json 의 `packageManager` 가 정본이고,
+      # pnpm 이 그 버전으로 스스로 갈아탄다. 액션 대신 npm 으로 받는다 — 위의 bun 과 같은 길이다.
       - name: 사이트 빌드
         if: steps.site.outputs.changed == 'true'
         working-directory: site
         run: |
           node --version
-          npm ci --no-audit --no-fund
-          npm run check
-          npm run build
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+          pnpm run check
+          pnpm run build
