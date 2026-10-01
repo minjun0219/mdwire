@@ -22,6 +22,9 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
 - 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.
 
+한국어 페이지의 본문 글꼴은 Pretendard 다(`pretendard` 패키지, OFL-1.1). `layouts/Doc.astro` 가 유니코드 범위로 나뉜
+woff2 를 싣고 `html:lang(ko)` 에만 쓴다 — 영어 페이지는 글꼴을 받지 않는다.
+
 패키지 매니저는 pnpm 이다(버전은 `package.json` 의 `packageManager`).
 
 ```sh

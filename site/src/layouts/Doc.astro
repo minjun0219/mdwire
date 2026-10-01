@@ -4,6 +4,8 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
 import SectionNav from "../components/SectionNav.astro";
+// 한국어 본문 글꼴. 유니코드 범위로 나뉜 woff2 라 페이지에 쓰인 글자의 조각만 받는다 — 영어 페이지는 받지 않는다.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "../styles/global.css";
 
 interface Props {

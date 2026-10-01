@@ -17,7 +17,7 @@ export const ui = {
     tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환하는 브리지.",
     nav: { home: "소개", demo: "데모", docs: "문서" },
     docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
-    demo: { index: "데모 목록", channels: "Telegram vs Slack", streaming: "스트리밍", repair: "정규화 전후" },
+    demo: { index: "데모 목록", channels: "Telegram vs Slack", streaming: "Streaming", repair: "Before and after repair" },
     next: "다음 릴리스",
     switchTo: "English",
     source: "소스",
