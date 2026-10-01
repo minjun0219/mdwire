@@ -784,6 +784,33 @@ func classify(p []rune, eol, canTable bool) decision {
 // 붙든 구문은 이어서 훑는다. 닫히지 않은 `[`·`<!--` 는 줄 끝까지 붙들 수 있는데, 조각마다
 // 처음부터 다시 훑으면 한 줄 안에서 O(n²) 이 된다. 그 줄 안에서 pending 은 뒤에 붙기만 하고
 // 앞은 cut 만큼 빠지므로, 훑던 자리를 holdMemo 에 두고 새로 온 꼬리만 본다.
+// tagsOnly 는 공백을 빼면 완결된 태그(<…>)뿐인가다. 태그가 하나는 있어야 한다.
+func tagsOnly(p []rune) bool {
+	seen := false
+	for i := 0; ; {
+		for i < len(p) && unicode.IsSpace(p[i]) {
+			i++
+		}
+		if i == len(p) {
+			return seen
+		}
+		if p[i] != '<' || i+1 >= len(p) || !(p[i+1] == '/' || p[i+1] < 128 && unicode.IsLetter(p[i+1])) {
+			return false
+		}
+		end := -1
+		for j := i; j < len(p); j++ {
+			if p[j] == '>' {
+				end = j
+				break
+			}
+		}
+		if end < 0 {
+			return false
+		}
+		i, seen = end+1, true
+	}
+}
+
 func safeCut(p []rune, memo *holdMemo) int {
 	k := len(p)
 	// 링크는 `[` 부터 `](…)` 의 `)` 까지 통째로 봐야 한다. 텍스트 안의 `)` 로 놓으면 안 된다 —
@@ -873,6 +900,11 @@ func safeCut(p []rune, memo *holdMemo) int {
 	// 역슬래시와 그 다음 글자 사이에서는 끊지 않는다.
 	for k > 0 && p[k-1] == '\\' {
 		k--
+	}
+	// 내보낼 것이 태그뿐이면 통째로 붙든다 — 러스트 쪽 safe_cut. GitHub 은 태그뿐인 줄을 HTML
+	// 블록으로 읽어서, 줄 첫머리 태그를 살릴지는 뒤에 글이 오는지 봐야 갈린다. 맨 끝에서 본다.
+	if tagsOnly(p[:k]) {
+		k = 0
 	}
 	return k
 }

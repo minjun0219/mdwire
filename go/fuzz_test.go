@@ -239,7 +239,11 @@ func TestGithubKeptTagsSurviveSplitsAndMatchByName(t *testing.T) {
 		}
 	}
 	cases := [][2]string{
-		{"<sub>foo <kbd>x</kbd></sub> 뒤", "foo <kbd>x</kbd> 뒤"},
+		{"<sub>foo <kbd>x</kbd></sub> 뒤", "<sub>foo <kbd>x</kbd></sub> 뒤"},
+		{"<sub>\nfoo <kbd>x</kbd></sub> 뒤", "foo <kbd>x</kbd> 뒤"},
+		{"본문\n\n<sub>모델 · 토큰</sub>", "본문\n\n<sub>모델 · 토큰</sub>"},
+		{"<details><summary>더 보기</summary>\n\n내용\n\n</details>", "<details><summary>더 보기</summary>\n\n내용\n\n</details>"},
+		{"<ins>새</ins> 글", "<ins>새</ins> 글"},
 		{"| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |", "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |"},
 		{`앞 <SPAN style="x">가</SPAN>`, "앞 <span>가</span>"},
 	}

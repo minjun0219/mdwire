@@ -20,7 +20,7 @@ pub(crate) enum Emph {
 
 /// 살려 둘 수 있는 인라인 태그 — (이름, 여는 태그, 닫는 태그). 속성은 버리고 이 모양으로
 /// 다시 쓴다. `<br>` 은 짝이 없어 따로 다룬다. GitHub 이 받는 것만 — `font` 는 새니타이저가 지운다.
-pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
+pub(crate) const INLINE_TAGS: [(&str, &str, &str); 16] = [
     ("sub", "<sub>", "</sub>"),
     ("sup", "<sup>", "</sup>"),
     ("b", "<b>", "</b>"),
@@ -36,6 +36,7 @@ pub(crate) const INLINE_TAGS: [(&str, &str, &str); 15] = [
     ("small", "<small>", "</small>"),
     ("mark", "<mark>", "</mark>"),
     ("kbd", "<kbd>", "</kbd>"),
+    ("ins", "<ins>", "</ins>"),
 ];
 
 /// 채널 하나의 출력 어휘와 정책.

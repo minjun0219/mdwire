@@ -88,7 +88,7 @@ const TELEGRAM_TAGS: &[&str] = &[
 const BROWSER_TAGS: &[&str] = &[
     "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "pre", "a", "blockquote", "span",
     "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr",
-    "th", "td", "hr", "br", "sub", "sup", "small", "mark", "kbd", "img",
+    "th", "td", "hr", "br", "sub", "sup", "small", "mark", "kbd", "img", "ins",
 ];
 
 /// 태그가 끝나면 낱말도 끝나는 블록 태그. 벗길 때 공백을 남긴다 — 표 칸 `<td>` 둘이

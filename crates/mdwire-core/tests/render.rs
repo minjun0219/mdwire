@@ -728,16 +728,27 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
 }
 
 /// **GitHub 은 인라인 태그를 그리니 살린다.** LLM 이 `<sub>`·`<kbd>` 로 적은 뜻이 거기서는
-/// 산다. 줄 첫머리의 태그는 벗긴다 — 그 줄이 태그뿐이면 GFM 이 HTML 블록을 열어 뒤 줄의
-/// 마크다운이 글자로 보인다(실측). 블록 태그(`div`)와 새니타이저가 지우는 `font` 도 벗긴다.
+/// 산다. **태그뿐인 줄만 벗긴다** — 줄 첫머리 여는 태그 뒤가 줄 끝까지 공백이면 GFM 이 HTML 블록을
+/// 열어 뒤 줄의 마크다운이 글자로 보인다(실측). 봇 꼬리말 `<sub>모델 · 토큰</sub>` 처럼 태그 뒤에 글이
+/// 오면 살린다(실사용 보고). 블록 태그(`div`)와 새니타이저가 지우는 `font` 는 벗기고, GitHub 이
+/// 그리는 `details`·`summary` 는 그대로 둔다.
 #[test]
 fn github_keeps_inline_html_tags_off_the_line_start() {
     let g = |s| one(s, Channel::GithubMarkdown);
     assert_eq!(g("H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈"), "H<sub>2</sub>O 와 <kbd>Ctrl</kbd> 줄<br>바꿈");
     assert_eq!(g("앞 <div>블록</div> <font color=red>빨강</font>"), "앞 블록 빨강");
-    // 줄 첫머리에서 벗긴 여는 태그는 짝인 닫는 태그도 벗긴다.
-    assert_eq!(g("<sub>첫머리</sub> 뒤 <sub>둘</sub>"), "첫머리 뒤 <sub>둘</sub>");
+    // 줄 첫머리라도 뒤에 글이 오면 살린다 — 봇 꼬리말.
+    assert_eq!(g("본문\n\n<sub>모델 · 토큰</sub>"), "본문\n\n<sub>모델 · 토큰</sub>");
+    assert_eq!(g("<sub>첫머리</sub> 뒤 <sub>둘</sub>"), "<sub>첫머리</sub> 뒤 <sub>둘</sub>");
+    // 태그뿐인 줄은 벗기고, 짝인 닫는 태그도 벗긴다.
+    assert_eq!(g("<sub>\n둘째 줄</sub> 끝"), "둘째 줄 끝");
     assert_eq!(g("앞\n<br>\n**굵게**"), "앞\n\n\n**굵게**");
+    // `ins` 도 살리고, 블록 태그 `details`·`summary` 는 그대로 둔다.
+    assert_eq!(g("<ins>새</ins> 글"), "<ins>새</ins> 글");
+    assert_eq!(
+        g("<details><summary>더 보기</summary>\n\n내용\n\n</details>"),
+        "<details><summary>더 보기</summary>\n\n내용\n\n</details>"
+    );
     // 다른 채널은 그대로 벗긴다.
     assert_eq!(one("H<sub>2</sub>O", Channel::SlackMarkdown), "H2O");
 }
@@ -1041,7 +1052,8 @@ fn github_kept_tags_survive_splits_and_match_by_name() {
         assert_eq!(p.matches("<sub>").count(), p.matches("</sub>").count(), "조각 안에서 짝이 안 맞는다");
     }
     let g = |s| one(s, Channel::GithubMarkdown);
-    assert_eq!(g("<sub>foo <kbd>x</kbd></sub> 뒤"), "foo <kbd>x</kbd> 뒤");
+    assert_eq!(g("<sub>foo <kbd>x</kbd></sub> 뒤"), "<sub>foo <kbd>x</kbd></sub> 뒤");
+    assert_eq!(g("<sub>\nfoo <kbd>x</kbd></sub> 뒤"), "foo <kbd>x</kbd> 뒤");
     assert_eq!(g("| <sub>h</sub> | b |\n|---|---|\n| 1 | 2 |"), "| <sub>h</sub> | b |\n| --- | --- |\n| 1 | 2 |");
     assert_eq!(g("앞 <SPAN style=\"x\">가</SPAN>"), "앞 <span>가</span>");
 }

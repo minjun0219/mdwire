@@ -565,13 +565,37 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	// 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`) 일쑤다(퍼즈가 잡았다).
 	// 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 — 짝 없는 닫는 태그는 버리고,
 	// 안 닫힌 여는 태그는 블록 끝에서 닫는다.
+	// details·summary 는 GitHub 이 그리는 블록 태그라 강조 스택에 올리지 않고 그대로 둔다 — 러스트
+	// 쪽 angle 과 같다.
+	if v.htmlEmphasis() && (eqIgnoreCase(name, "details") || eqIgnoreCase(name, "summary")) {
+		if closing {
+			*out = append(*out, "</"...)
+		} else {
+			*out = append(*out, '<')
+		}
+		for _, c := range name {
+			*out = appendRune(*out, unicode.ToLower(c))
+		}
+		*out = append(*out, '>')
+		in.prev = '>'
+		return closeAt + 1
+	}
 	tag := inlineTag(name)
 	br := eqIgnoreCase(name, "br")
 	if (v.isHTML() || v.htmlEmphasis()) && (tag >= 0 || br) {
 		p := in.prevChar(line, i)
 		// 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
 		atLineStart := !in.inCell && (p == noChar || p == '\n')
-		githubStart := !v.isHTML() && atLineStart
+		// 태그뿐인 줄만 벗긴다 — 여는 태그 뒤가 줄 끝까지 공백이면 GFM 이 HTML 블록을 연다.
+		// 꼬리말 <sub>모델 · 토큰</sub> 처럼 뒤에 글이 오면 살린다. 러스트 쪽과 같다.
+		tagOnlyLine := true
+		for _, c := range rest[closeAt+1:] {
+			if !unicode.IsSpace(c) {
+				tagOnlyLine = false
+				break
+			}
+		}
+		githubStart := !v.isHTML() && atLineStart && tagOnlyLine
 		n := len(in.strippedTags)
 		switch {
 		case closing && !v.isHTML() && tag >= 0 && n > 0 && in.strippedTags[n-1] == uint8(tag):
@@ -689,7 +713,7 @@ func inlineTag(name []rune) int {
 func isKnownTag(name []rune) bool {
 	for _, t := range [...]string{
 		"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span",
-		"div", "p", "small", "mark", "kbd", "font", "center", "details", "summary",
+		"div", "p", "small", "mark", "kbd", "font", "center", "details", "summary", "ins",
 	} {
 		if eqIgnoreCase(name, t) {
 			return true

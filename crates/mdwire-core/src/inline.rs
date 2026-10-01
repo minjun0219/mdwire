@@ -632,10 +632,15 @@ impl Inline {
             return None;
         }
         // **GitHub 은 인라인 태그를 그린다 — 벗기지 않고 그대로 둔다**(실측 2026-09-30). LLM 이
-        // `<sub>`·`<kbd>` 로 적은 뜻이 거기서는 산다. 둘은 예외다. 줄 첫머리의 태그는 그 줄이
-        // 태그뿐이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽고(`<br>` 한 줄 뒤의
-        // `**굵게**` 가 글자로 보였다), `div`·`details` 같은 블록 태그는 자리와 무관하게 그런다.
-        // 줄이 태그뿐인지는 줄 끝까지 봐야 알아서, 스트리밍이 붙들지 않도록 첫머리면 벗긴다.
+        // `<sub>`·`<kbd>` 로 적은 뜻이 거기서는 산다. 예외는 **태그뿐인 줄**이다 — 줄 첫머리의 여는
+        // 태그 뒤가 줄 끝까지 공백이면 GFM 이 HTML 블록을 열어 빈 줄까지 마크다운을 안 읽는다
+        // (`<br>` 한 줄 뒤의 `**굵게**` 가 글자로 보였다). 그런 줄만 벗긴다. 봇 꼬리말
+        // `<sub>모델 · 토큰</sub>` 처럼 태그 뒤에 글이 오면 HTML 블록이 아니라 살린다(실사용 보고,
+        // GitHub 렌더 API 로 `<p><sub>…</sub></p>` 확인). 줄이 태그뿐인지는 블록 층이 줄 끝이나 다음
+        // 글자가 올 때까지 붙들어서 안다(`safe_cut`).
+        //
+        // `details`·`summary` 는 GitHub 이 그리는 **블록** 태그라 강조 스택에 올리지 않고 그대로
+        // 둔다 — 스택에 올리면 문단 끝에서 닫혀 `<details>` 와 `</details>` 사이의 문단이 깨진다.
         //
         // **브라우저 채널은 자리와 상관없이 살린다** — 마크다운으로 다시 읽히지 않는다.
         //
@@ -644,12 +649,22 @@ impl Inline {
         // 태그는 짝이 안 맞거나(`<sub>` 만 열고 끝) 강조와 엇갈리기(`**a<sub>b**c</sub>`)
         // 일쑤다(퍼즈가 잡았다). 스택에 올리면 강조와 같은 규칙으로 닫히고 중첩이 바르다 —
         // 짝 없는 닫는 태그는 버리고, 안 닫힌 여는 태그는 블록 끝에서 닫는다.
+        if v.html_emphasis() && (eq_ignore_case(name, "details") || eq_ignore_case(name, "summary")) {
+            out.push_str(if closing { "</" } else { "<" });
+            for c in name {
+                out.push(c.to_ascii_lowercase());
+            }
+            out.push('>');
+            self.prev = Some('>');
+            return Some(close + 1);
+        }
         let tag = inline_tag(name);
         let br = eq_ignore_case(name, "br");
         if (v.is_html() || v.html_emphasis()) && (tag.is_some() || br) {
             // 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
             let at_line_start = !self.in_cell && self.prev_char(line, i).is_none_or(|c| c == '\n');
-            let github_start = !v.is_html() && at_line_start;
+            let tag_only_line = rest[close + 1..].iter().all(|c| c.is_whitespace());
+            let github_start = !v.is_html() && at_line_start && tag_only_line;
             if closing && !v.is_html() && tag.is_some() && self.stripped_tags.last() == tag.as_ref() {
                 // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. **이름이 맞을 때만**이다 —
                 // `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
@@ -804,9 +819,9 @@ fn eq_ignore_case(chars: &[char], s: &str) -> bool {
 /// 벗겨도 되는 HTML 태그. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때 쓰는 것들이다.
 /// 링크(`<a>`)는 없다 — 벗기면 주소가 사라진다.
 fn is_known_tag(name: &[char]) -> bool {
-    const KNOWN: [&str; 21] = [
+    const KNOWN: [&str; 22] = [
         "br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span",
-        "div", "p", "small", "mark", "kbd", "font", "center", "details",
+        "div", "p", "small", "mark", "kbd", "font", "center", "details", "ins",
     ];
     KNOWN.iter().any(|t| eq_ignore_case(name, t)) || eq_ignore_case(name, "summary")
 }

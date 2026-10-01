@@ -881,7 +881,37 @@ fn safe_cut(p: &[char], memo: &mut HoldMemo) -> usize {
     while k > 0 && p[k - 1] == '\\' {
         k -= 1;
     }
+    // **내보낼 것이 태그뿐이면 통째로 붙든다.** GitHub 은 태그뿐인 줄을 HTML 블록으로 읽어서, 줄
+    // 첫머리 태그를 살릴지 벗길지는 뒤에 글이 오는지 봐야 갈린다(인라인 `angle`). 맨 끝에서 본다 —
+    // 뒤의 마커를 붙든 탓에 내보낼 몫이 태그에서 끝나도 인라인 층은 그 줄을 태그뿐으로 읽는다.
+    if tags_only(&p[..k]) {
+        k = 0;
+    }
     k
+}
+
+/// 공백을 빼면 완결된 태그(`<…>`)뿐인가. 태그가 하나는 있어야 한다.
+fn tags_only(p: &[char]) -> bool {
+    let mut i = 0;
+    let mut seen = false;
+    loop {
+        while i < p.len() && p[i].is_whitespace() {
+            i += 1;
+        }
+        if i == p.len() {
+            return seen;
+        }
+        if p[i] != '<' || !p.get(i + 1).is_some_and(|&c| c.is_ascii_alphabetic() || c == '/') {
+            return false;
+        }
+        match p[i..].iter().position(|&c| c == '>') {
+            Some(end) => {
+                i += end + 1;
+                seen = true;
+            }
+            None => return false,
+        }
+    }
 }
 
 /// 붙든 구문을 어디까지 훑었나. 자리는 `pending` 기준이고, 앞이 `cut` 만큼 빠지면 당긴다.
