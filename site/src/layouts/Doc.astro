@@ -2,10 +2,14 @@
 // MDX 페이지가 frontmatter 의 `layout` 으로 쓰는 틀. 언어는 경로(`/ko/…`)에서 온다.
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
+import { hasMarkdown, markdownPath } from "../markdownCopies";
+import DocsNav from "../components/DocsNav.astro";
 import "../styles/global.css";
 
 interface Props {
   frontmatter: { title: string; description?: string };
+  // MDX 가 레이아웃에 넘기는 헤딩 목록 — 문서 사이드바의 절 목록이 된다.
+  headings?: { depth: number; slug: string; text: string }[];
 }
 
 const { title, description } = Astro.props.frontmatter;
@@ -16,12 +20,58 @@ const other = lang === "en" ? "ko" : "en";
 // 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
 const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const href = (page: string) => getRelativeLocaleUrl(lang, page);
-const switchHref = getRelativeLocaleUrl(other, rest);
+// 404 는 언어별 페이지가 없다 — 다른 언어의 개요로 보낸다.
+const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
   { page: "demo", label: t.nav.demo },
+  { page: "docs", label: t.nav.docs },
 ];
+// `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
+const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
+const isDocs = isCurrent("docs");
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
+const summary = description ?? t.tagline;
+
+// 검색 엔진과 링크 미리보기에 내보낼 것. 404 는 색인하지 않고 짝도 대지 않는다.
+const notFound = rest === "404";
+const site = Astro.site!;
+const url = new URL(Astro.url.pathname, site).href;
+const urlOf = (l: "en" | "ko") => new URL(getRelativeLocaleUrl(l, rest), site).href;
+const ogLocale = { en: "en_US", ko: "ko_KR" } as const;
+// 개요와 문서는 원문 마크다운 사본이 있다(`/docs/npm.md`) — 에이전트는 HTML 대신 그걸 읽는다.
+const markdown =
+  !notFound && hasMarkdown(rest)
+    ? new URL(markdownPath(Astro.url.pathname.replace(/^\/|\/$/g, "")), site).href
+    : undefined;
+
+// 구조화 데이터(schema.org). 개요는 소프트웨어 자체를, 나머지는 그 소프트웨어를 다루는 글로 밝힌다.
+const software = {
+  "@type": "SoftwareSourceCode",
+  "@id": `${site.href}#software`,
+  name: "mdwire",
+  description: ui.en.tagline,
+  url: site.href,
+  codeRepository: "https://github.com/minjun0219/mdwire",
+  license: "https://opensource.org/licenses/MIT",
+  programmingLanguage: ["Rust", "Go", "JavaScript", "WebAssembly"],
+  keywords: "markdown, llm, telegram, slack, github, notion, streaming, wasm",
+};
+const ld = notFound
+  ? undefined
+  : rest === ""
+    ? { "@context": "https://schema.org", ...software }
+    : {
+        "@context": "https://schema.org",
+        "@type": rest.startsWith("docs") ? "TechArticle" : "WebPage",
+        headline: title,
+        description: summary,
+        inLanguage: lang,
+        url,
+        about: software,
+      };
+// `</script>` 가 본문을 끊지 않게 `<` 를 탈출한다.
+const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
 ---
 
 <!doctype html>
@@ -30,10 +80,36 @@ const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
-    <meta name="description" content={description ?? t.tagline} />
+    <meta name="description" content={summary} />
+    <meta name="theme-color" content="#0f766e" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
-    <link rel="alternate" hreflang={other} href={new URL(switchHref, Astro.site)} />
+    {
+      notFound ? (
+        <meta name="robots" content="noindex" />
+      ) : (
+        <>
+          <link rel="canonical" href={url} />
+          <link rel="alternate" hreflang="en" href={urlOf("en")} />
+          <link rel="alternate" hreflang="ko" href={urlOf("ko")} />
+          <link rel="alternate" hreflang="x-default" href={urlOf("en")} />
+        </>
+      )
+    }
+    {markdown && <link rel="alternate" type="text/markdown" href={markdown} />}
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <meta property="og:type" content={rest === "" ? "website" : "article"} />
+    <meta property="og:site_name" content="mdwire" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={summary} />
+    <meta property="og:url" content={url} />
+    <meta property="og:locale" content={ogLocale[lang]} />
+    <meta property="og:locale:alternate" content={ogLocale[other]} />
+    <meta property="og:image" content={new URL("/og.png", site).href} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`mdwire — ${ui.en.tagline}`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {ldJson && <script type="application/ld+json" set:html={ldJson} />}
   </head>
   <body>
     <header class="site-header">
@@ -41,7 +117,7 @@ const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
       <nav>
         {
           nav.map(({ page, label }) => (
-            <a href={href(page)} aria-current={rest === page ? "page" : undefined}>
+            <a href={href(page)} aria-current={isCurrent(page) ? "page" : undefined}>
               {label}
             </a>
           ))
@@ -52,9 +128,12 @@ const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
         <a href="https://github.com/minjun0219/mdwire">GitHub</a>
       </div>
     </header>
-    <main class="doc">
-      <slot />
-    </main>
+    <div class:list={["page", { "with-sidebar": isDocs }]}>
+      {isDocs && <DocsNav headings={Astro.props.headings} />}
+      <main class="doc">
+        <slot />
+      </main>
+    </div>
     <footer class="site-footer">
       {t.footer} <a href="https://github.com/minjun0219/mdwire">{t.source}</a>
     </footer>

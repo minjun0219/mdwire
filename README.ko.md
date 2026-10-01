@@ -3,6 +3,7 @@
 [English](README.md) | 한국어
 
 LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보낸다.
+문서 · API · 데모: [mdwire.minjun.dev](https://mdwire.minjun.dev).
 
 에이전트는 마크다운을 낸다. 채팅 채널은 그걸 그대로 받지 않는다 — 채널마다 받는 문법이
 다르고, escape 규칙이 다르고, 길이 한도가 다르다. 기존 변환기는 입력이 잘 짜인

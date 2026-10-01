@@ -1,0 +1,146 @@
+---
+// 문서 페이지의 목차. 넓은 화면에선 왼쪽에 붙는 사이드바(지금 페이지의 절까지), 좁은 화면에선 본문
+// 위의 알약 줄(페이지만)이다. 레이아웃이 문서 페이지에만 싣는다. 언어와 현재 페이지는 경로에서 읽는다.
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+
+interface Props {
+  headings?: { depth: number; slug: string; text: string }[];
+}
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang];
+const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const items = [
+  { page: "docs", label: t.docs.index },
+  { page: "docs/npm", label: t.docs.npm },
+  { page: "docs/rust", label: t.docs.rust },
+  { page: "docs/go", label: t.docs.go },
+  { page: "docs/cli", label: t.docs.cli },
+];
+// 절 이름은 ` — ` 앞만 — "React — @minjun0219/mdwire/react" 는 좁은 칸에서 글자 단위로 끊긴다.
+const sections = (Astro.props.headings ?? [])
+  .filter((h) => h.depth === 2)
+  .map((h) => ({ ...h, text: h.text.split(" — ")[0] }));
+---
+
+<nav class="docs-nav" aria-label={t.nav.docs}>
+  <ul>
+    {
+      items.map(({ page, label }) => (
+        <li>
+          <a href={getRelativeLocaleUrl(lang, page)} aria-current={rest === page ? "page" : undefined}>
+            {label}
+          </a>
+          {rest === page && sections.length > 0 && (
+            <ul class="sections">
+              {sections.map((h) => (
+                <li>
+                  <a href={`#${h.slug}`}>{h.text}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))
+    }
+  </ul>
+</nav>
+
+<style>
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  a:hover,
+  a[aria-current="page"] {
+    color: var(--accent);
+  }
+
+  /* 좁은 화면: 본문 위의 알약 줄. 절 목록은 접는다. */
+  .docs-nav {
+    padding: 1.25rem 1.25rem 0;
+  }
+
+  .docs-nav > ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .docs-nav > ul > li > a {
+    display: block;
+    font-size: 0.9rem;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  .docs-nav > ul > li > a[aria-current="page"] {
+    border-color: var(--accent);
+  }
+
+  .sections {
+    display: none;
+  }
+
+  /* 넓은 화면: 머리글 아래에 붙어 따라오는 사이드바. 길면 따로 스크롤한다. */
+  @media (min-width: 60rem) {
+    .docs-nav {
+      position: sticky;
+      top: var(--header-h);
+      align-self: start;
+      max-height: calc(100vh - var(--header-h));
+      overflow-y: auto;
+      padding: 2rem 0 2rem;
+      font-size: 0.92rem;
+    }
+
+    .docs-nav > ul {
+      display: block;
+      padding: 0;
+      border: 0;
+    }
+
+    .docs-nav > ul > li > a {
+      padding: 0.3rem 0.75rem;
+      border: 0;
+      border-left: 2px solid var(--line);
+      border-radius: 0;
+      font-size: inherit;
+    }
+
+    .docs-nav > ul > li > a[aria-current="page"] {
+      border-left-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .sections {
+      display: block;
+      margin: 0.15rem 0 0.5rem;
+      border-left: 2px solid var(--line);
+    }
+
+    .sections a {
+      display: block;
+      padding: 0.2rem 0.75rem 0.2rem 1.4rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .sections a:hover {
+      color: var(--accent);
+    }
+  }
+</style>

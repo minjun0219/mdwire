@@ -4,6 +4,7 @@ import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
 import { defineConfig } from "astro/config";
 import wasm from "vite-plugin-wasm";
+import agents from "./integrations/agents.mjs";
 
 // 서빙 중인 것이 올린 그것인가 — 빌드한 커밋을 `/_version.txt` 에 남긴다.
 // Workers Builds 는 커밋을 WORKERS_CI_COMMIT_SHA 로 준다. 로컬 빌드는 git 에서 읽고, 커밋 안 된
@@ -33,7 +34,7 @@ function versionFile() {
 
 export default defineConfig({
   site: "https://mdwire.minjun.dev",
-  integrations: [react(), mdx(), versionFile()],
+  integrations: [react(), mdx(), versionFile(), agents()],
   i18n: {
     locales: ["en", "ko"],
     defaultLocale: "en",

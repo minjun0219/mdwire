@@ -1,7 +1,7 @@
 ---
 layout: ../layouts/Doc.astro
-title: Markdown for chat channels
-description: Send LLM-generated Markdown to chat channels without it breaking.
+title: LLM Markdown for Telegram, Slack and GitHub
+description: Send LLM-generated Markdown to Telegram, Slack and GitHub without it breaking — repaired, rendered for each channel and split within its limit, streaming included. Rust, npm (WASM), Go and a CLI.
 ---
 
 # Send LLM Markdown to chat channels without it breaking
@@ -23,8 +23,8 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 
 ## Targets
 
-Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), plain text, and HTML for the
-browser — from a Rust core, a CLI, an npm package (WASM), and a Go port held to the same
+Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages (next release), plain
+text, and HTML for the browser — from a Rust core, a CLI, an npm package (WASM), and a Go port held to the same
 corpus.
 
 ## Try it
@@ -41,5 +41,5 @@ cargo install mdwire-cli           # the `mdwire` CLI
 go get github.com/minjun0219/mdwire/go@latest
 ```
 
-API guides for Rust, Go and npm are on the way. Until then, the
-[README](https://github.com/minjun0219/mdwire#readme) is the reference.
+The [docs](/docs/) cover the shared concepts and the API of each: [npm](/docs/npm/),
+[Rust](/docs/rust/), [Go](/docs/go/) and the [CLI](/docs/cli/).

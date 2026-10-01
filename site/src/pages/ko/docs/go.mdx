@@ -1,0 +1,114 @@
+---
+layout: ../../../layouts/Doc.astro
+title: Go
+description: Go 이식 — Render, RenderWith, Options, Streamer, Channel, Repairs. 표준 라이브러리만.
+---
+import Next from "../../../components/Next.astro";
+
+
+# Go — `github.com/minjun0219/mdwire/go`
+
+Rust 코어의 이식, 표준 라이브러리만 쓴다. 같은 코퍼스를 통과하고, 무작위 입력과 실제 문서로 Rust 코어와
+같은 답을 내는지 대조한다. 전체 참고: [pkg.go.dev](https://pkg.go.dev/github.com/minjun0219/mdwire/go).
+
+```sh
+go get github.com/minjun0219/mdwire/go@latest
+```
+
+## `Render`
+
+```go
+import "github.com/minjun0219/mdwire/go"
+
+parts := mdwire.Render(input, mdwire.TelegramHTML) // []string
+```
+
+완성된 문서를 옮긴다. 한도를 넘으면 열린 마크업이 없는 자리에서 나눈다.
+
+## `RenderWith`
+
+```go
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out.Parts                  // []string
+out.Repairs.ClosedEmphasis // 아래 Repairs
+```
+
+## `Options`
+
+영값이 기본값이다.
+
+```go
+type Options struct {
+	From  Dialect     // Markdown(영값) | SlackMrkdwn
+	Limit int         // 0 = 채널의 Limit(). MinLimit(256) 보다 작으면 올린다
+	HTML  HTMLOptions // HTML 채널에만
+}
+
+type HTMLOptions struct {
+	LineBreaks LineBreaks // LineBreaksBR(영값) | LineBreaksSpace
+	Images     Images     // ImagesLink(영값) | ImagesLoad
+	Schemes    []string   // nil = http, https, mailto. 목록은 기본값을 바꾼다. 빈 슬라이스(nil 아님)는 아무 스킴도 받지 않는다
+}
+```
+
+## `Streamer`
+
+```go
+s := mdwire.NewStreamer(mdwire.SlackMarkdown)
+var out []byte
+for _, chunk := range chunks {
+	s.PushTo(chunk, &out) // 조각당 할당 없음
+}
+s.FinishTo(&out)
+```
+
+| | |
+|---|---|
+| `NewStreamer(ch)` · `NewStreamerWith(ch, opts)` | 문서 하나에 스트리머 하나. |
+| `PushTo(chunk, *[]byte)` · `Push(chunk) string` | 지금 보내도 안전한 것. `PushTo` 가 할당 없는 쪽이다. |
+| `FinishTo(*[]byte)` · `Finish() string` | 남은 것, 열린 마크업은 닫아서. |
+| `PreviewTo(*[]byte)` · `Preview() string` | 메시지를 통째로 다시 그릴 때 붙일 꼬리. |
+| `CloseOpenTo(*[]byte)` · `CloseOpen() string` | 이미 나간 블록 마크업만 닫는 꼬리. |
+| `Revised() bool` | `Finish` 뒤에: 완성본이 마지막 미리보기와 다른가. |
+| `Repairs() Repairs` | 지금까지 고친 것. |
+
+계약은 [개념](/ko/docs/#스트리밍-계약)에 있다.
+
+## `Channel` 과 `Dialect`
+
+```go
+const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown )
+const ( Markdown Dialect = iota; SlackMrkdwn )
+```
+
+`NotionMarkdown` <Next />. 숫자 값은 `Channels()` 의 순서와 다르다 — 채널을 저장하거나 주고받을 땐
+이름을 쓴다.
+
+| | |
+|---|---|
+| `Channels() []Channel` | 모든 채널. |
+| `(Channel) Name() string` · `ParseChannel(string) (Channel, bool)` | 문자열 이름. |
+| `(Channel) Limit() int` | 조각 한도. |
+| `(Dialect) Name() string` · `ParseDialect(string) (Dialect, bool)` | `"markdown"`, `"slack-mrkdwn"`. |
+
+## `Repairs`
+
+```go
+type Repairs struct {
+	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker int
+	// 채널에 맞춰 바꾼 것 — 다음 릴리스
+	EscapedChar, TagEmphasis, StrippedHTML, RewrittenBullet, RewrittenTable, ConvertedMarker int
+}
+```
+
+`Repaired()` <Next /> — 하나라도 고쳤는가(앞 넷). `Changed()` <Next /> — 고쳤든 바꿨든 하나라도 했는가.
+각 필드가 세는 것: [개념](/ko/docs/#정규화-보고).
+
+## 표시 폭
+
+`CharWidth(rune) int`, `StrWidth(string) int` — 고정폭 표에 쓰는 표시 폭.
+
+## CLI
+
+`go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest` 는 Rust 와 같은 CLI 를 깐다 — 플래그도 같고,
+`-V`/`--version` 만 없다. [CLI](/ko/docs/cli/) 참고.

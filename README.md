@@ -3,6 +3,7 @@
 English | [한국어](README.ko.md)
 
 Send LLM-generated Markdown to chat channels without it breaking.
+Docs, API reference and a live demo: [mdwire.minjun.dev](https://mdwire.minjun.dev).
 
 Agents emit Markdown. Chat channels don't accept it — each has its own subset, its own
 escaping rules, and its own length limit. Existing converters assume the input is

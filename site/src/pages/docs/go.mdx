@@ -1,0 +1,115 @@
+---
+layout: ../../layouts/Doc.astro
+title: Go
+description: The Go port — Render, RenderWith, Options, Streamer, Channel and Repairs. Standard library only.
+---
+import Next from "../../components/Next.astro";
+
+
+# Go — `github.com/minjun0219/mdwire/go`
+
+A port of the Rust core, standard library only. It passes the same corpus and is checked against
+the Rust core on random inputs and real documents. Full reference:
+[pkg.go.dev](https://pkg.go.dev/github.com/minjun0219/mdwire/go).
+
+```sh
+go get github.com/minjun0219/mdwire/go@latest
+```
+
+## `Render`
+
+```go
+import "github.com/minjun0219/mdwire/go"
+
+parts := mdwire.Render(input, mdwire.TelegramHTML) // []string
+```
+
+Converts a finished document; over the limit it splits where no markup is open.
+
+## `RenderWith`
+
+```go
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out.Parts                  // []string
+out.Repairs.ClosedEmphasis // see Repairs below
+```
+
+## `Options`
+
+The zero value is the default.
+
+```go
+type Options struct {
+	From  Dialect     // Markdown (zero) | SlackMrkdwn
+	Limit int         // 0 = the channel's Limit(); below MinLimit (256) is raised
+	HTML  HTMLOptions // the HTML channel only
+}
+
+type HTMLOptions struct {
+	LineBreaks LineBreaks // LineBreaksBR (zero) | LineBreaksSpace
+	Images     Images     // ImagesLink (zero) | ImagesLoad
+	Schemes    []string   // nil = http, https, mailto; a list replaces the default; empty (non-nil) allows none
+}
+```
+
+## `Streamer`
+
+```go
+s := mdwire.NewStreamer(mdwire.SlackMarkdown)
+var out []byte
+for _, chunk := range chunks {
+	s.PushTo(chunk, &out) // no allocation per chunk
+}
+s.FinishTo(&out)
+```
+
+| | |
+|---|---|
+| `NewStreamer(ch)` · `NewStreamerWith(ch, opts)` | One streamer per document. |
+| `PushTo(chunk, *[]byte)` · `Push(chunk) string` | What is safe to send now. `PushTo` is the allocation-free form. |
+| `FinishTo(*[]byte)` · `Finish() string` | The rest, with open markup closed. |
+| `PreviewTo(*[]byte)` · `Preview() string` | The tail to append when redrawing the whole message. |
+| `CloseOpenTo(*[]byte)` · `CloseOpen() string` | The tail that only closes block markup already sent. |
+| `Revised() bool` | After `Finish`: does the result differ from the last preview? |
+| `Repairs() Repairs` | What was repaired so far. |
+
+The contract is on [Concepts](/docs/#the-streaming-contract).
+
+## `Channel` and `Dialect`
+
+```go
+const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown )
+const ( Markdown Dialect = iota; SlackMrkdwn )
+```
+
+`NotionMarkdown` <Next />. The numeric values are not the order of `Channels()`; use names to
+store or send a channel.
+
+| | |
+|---|---|
+| `Channels() []Channel` | Every channel. |
+| `(Channel) Name() string` · `ParseChannel(string) (Channel, bool)` | The string names. |
+| `(Channel) Limit() int` | The part limit. |
+| `(Dialect) Name() string` · `ParseDialect(string) (Dialect, bool)` | `"markdown"`, `"slack-mrkdwn"`. |
+
+## `Repairs`
+
+```go
+type Repairs struct {
+	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker int
+	// channel rewrites — next release
+	EscapedChar, TagEmphasis, StrippedHTML, RewrittenBullet, RewrittenTable, ConvertedMarker int
+}
+```
+
+`Repaired()` <Next /> — did it repair anything (the first four). `Changed()` <Next /> — did it repair
+or rewrite anything. What each field counts: [Concepts](/docs/#the-repair-report).
+
+## Widths
+
+`CharWidth(rune) int` and `StrWidth(string) int` — the display widths used for monospace tables.
+
+## CLI
+
+`go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest` installs the same CLI as the Rust one,
+with the same flags except `-V`/`--version`. See [CLI](/docs/cli/).

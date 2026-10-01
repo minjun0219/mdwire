@@ -11,6 +11,12 @@
   --warn: #b45309;
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  /* 고정 머리글의 높이 — 문서 사이드바가 그 아래에 붙고, 앵커로 뛸 때 헤딩이 그 밑에 가리지 않는다. */
+  --header-h: 3.5rem;
+}
+
+html {
+  scroll-padding-top: calc(var(--header-h) + 1rem);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -63,13 +69,19 @@ pre {
   line-height: 1.5;
 }
 
+/* 스크롤해도 위에 붙어 있는 머리글. 뒤의 본문이 비치게 반투명. */
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  padding: 0.9rem 1.25rem;
+  min-height: var(--header-h);
+  padding: 0.5rem 1.25rem;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 .site-header a {
@@ -96,6 +108,42 @@ pre {
 .header-end {
   margin-left: auto;
   font-size: 0.9rem;
+}
+
+/* 좁은 화면에서도 한 줄 — 줄바꿈되면 고정 머리글이 화면을 너무 먹는다. */
+@media (max-width: 40rem) {
+  .site-header {
+    gap: 0.9rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .site-header nav,
+  .header-end {
+    gap: 0.7rem;
+  }
+
+  .header-end {
+    font-size: inherit;
+  }
+}
+
+/* 문서 페이지: 넓은 화면에선 왼쪽 사이드바 + 본문 두 칸. */
+@media (min-width: 60rem) {
+  .page.with-sidebar {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    gap: 2.5rem;
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+  }
+
+  .page.with-sidebar .doc {
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .doc {
@@ -126,6 +174,37 @@ pre {
   color: var(--muted);
   font-size: 0.875rem;
   text-align: center;
+}
+
+/* 0.1.8 에는 없고 main 에만 있는 것. */
+.next {
+  display: inline-block;
+  margin-left: 0.35em;
+  padding: 0 0.45em;
+  border-radius: 4px;
+  font-size: 0.72em;
+  font-weight: 600;
+  vertical-align: 0.1em;
+  color: var(--warn);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* 문서 본문의 표 — 본문 바로 아래 것만(데모 패널 안의 표는 건드리지 않는다). */
+.doc > table {
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin: 1rem 0;
+  display: block;
+  overflow-x: auto;
+}
+
+.doc > table th,
+.doc > table td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
 }
 
 /* 데모 아래의 "이 데모의 코드" 접기 블록. */

@@ -1,0 +1,73 @@
+---
+layout: ../../../layouts/Doc.astro
+title: CLI
+description: mdwire 명령 — 플래그, 출력 형식, 정규화 보고, 배치 모드.
+---
+import Next from "../../../components/Next.astro";
+
+
+# CLI — `mdwire`
+
+stdin 으로 마크다운을 받아 stdout 으로 채널 출력을 낸다. 어떤 언어의 에이전트든 바인딩 없이 파이프로
+통과시킬 수 있다.
+
+```sh
+cargo install mdwire-cli                                   # Rust
+go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest  # Go — 플래그 같음, -V/--version 없음
+```
+
+[릴리스](https://github.com/minjun0219/mdwire/releases)마다 macOS(Apple silicon) · Linux(x86_64) 바이너리도
+붙고, 릴리스 노트에 각각의 SHA-256 이 있다.
+
+```sh
+cat agent-output.md | mdwire --channel telegram-html            # 조각은 NUL 로 구분
+cat agent-output.md | mdwire --channel slack-markdown --stream  # 받는 대로 내보낸다
+cat agent-output.md | mdwire --channel plain --limit 4096       # 평문 폴백을 텔레그램으로
+cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+```
+
+## 플래그
+
+| 플래그 | |
+|---|---|
+| `--channel <이름>` | 필수. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` <Next /> · `plain` · `html` |
+| `--from <표기>` | 입력 표기: `markdown`(기본) · `slack-mrkdwn` |
+| `--limit <글자 수>` | 조각 한도. 기본은 채널의 한도. |
+| `--html-line-breaks <br\|space>` | `html` 만. 기본 `br`. |
+| `--html-images <link\|load>` | `html` 만. 기본 `link`. |
+| `--html-schemes <목록>` | `html` 만. 쉼표로 구분, 기본 `http,https,mailto`. |
+| `--stream` | stdin 을 읽는 대로 내보낸다. 한도로 나누지 않는다. |
+| `--report` | 정규화 보고를 stderr 에 JSON 한 줄로 낸다. |
+| `--batch jsonl` | 문서 여럿을 JSON lines 로 받아 문서마다 보고를 한 줄씩 낸다. |
+| `-h`, `--help` · `-V`, `--version` | 도움말 · 버전(Rust CLI). |
+
+값을 받는 플래그는 `--이름=값` 으로도 쓸 수 있다(`--channel=slack-markdown`). <Next />
+
+채널·입력 표기·옵션은 [개념](/ko/docs/)에 있다.
+
+## 출력
+
+- 기본(일괄): 조각들. 여럿이면 NUL(`\0`)로 구분한다.
+- `--stream`: 한 덩어리로 흘린다 — 조각을 이어 붙인 것이고, 일괄 출력이 나뉘지 않았다면 그것과 같다.
+
+## `--report`
+
+stderr 에 JSON 한 줄:
+
+```json
+{"closedEmphasis":1,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":0}
+```
+
+앞 네 키는 고친 것, 뒤 여섯 <Next /> 은 채널에 맞춰 바꾼 것이다. 각각이 세는 것:
+[정규화 보고](/ko/docs/#정규화-보고).
+
+## `--batch jsonl`
+
+문서 여럿을 한 프로세스로 — 답변 수백 개가 얼마나 자주 깨지는지 점검할 때. 렌더 결과가 아니라 문서마다
+보고를 낸다.
+
+```text
+입력   {"id": "a1", "text": "**마크다운"}        id 는 문자열이나 숫자, 없어도 된다
+출력   {"line":1,"id":"a1","closedEmphasis":1,…}
+못 읽음 {"line":2,"error":"…"}                    나머지는 계속 읽고, 하나라도 있으면 종료 코드가 0 이 아니다
+```
