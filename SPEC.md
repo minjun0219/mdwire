@@ -206,7 +206,7 @@ CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--limit N] [--stre
 누적본 다시 그리기는 347건에서 보인 글이 2,158번 바뀌었고 확정분만은 0. `DESIGN.md`). Go·Rust 소비자는 이벤트를
 받지 않는다.
 
-### 5.1 입력 표기과 고친 것
+### 5.1 입력 표기와 고친 것
 
 **입력 표기**(`Options::from`)은 출력 채널과 따로 정한다. 기본은 표준 마크다운이고,
 `slack-mrkdwn` 은 슬랙 레거시 표기로 쓴 에이전트 출력을 받는다 — 슬랙에 답하는
@@ -234,7 +234,7 @@ mrkdwn 의 홑 `~` 는 **한국어의 물결표와 부딪힌다**(`약 ~40km`, `
 
 | 필드 | 뜻 |
 |---|---|
-| `closed_emphasis` | 블록이 끝나도록 안 닫혀서 닫아 준 강조 |
+| `closed_emphasis` | 블록이 끝날 때까지 안 닫혀서 닫아 준 강조 |
 | `closed_fence` | 문서 끝까지 안 닫혀서 닫아 준 코드펜스 |
 | `reverted_code_span` | 짝이 없어 글자로 되돌린 백틱 런 |
 | `dropped_marker` | 짝 잃은 채 버린 `**` |

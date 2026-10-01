@@ -108,8 +108,9 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
 앞에 둔 mdwire, mdwire 로 나란히 흘려 본다. 잰 수치는 `DESIGN.md` 에 있다.
 
 **append-only 계약.** `push` 가 돌려준 것은 확정이다 — 뒤 조각이 그걸 고쳐 쓰지 않는다 —
-그리고 `finish` 는 꼬리만 덧붙인다. 그래서 조각을 이어 붙인 것은 조각 크기와 상관없이 한
-번에 `render` 한 결과와 같다(문서가 길어 여러 조각으로 나뉘는 경우는 빼고). 코퍼스와
+그리고 `finish` 는 꼬리만 덧붙인다. 그래서 `push` 결과를 이어 붙인 것은 입력을 어떤 크기로
+끊어 넣었든 한 번에 `render` 한 결과와 같다(문서가 길어 `render` 가 한도에 맞춰 여러 조각으로 나누는
+경우는 빼고). 코퍼스와
 퍼즈, 그리고 `mdwire-check --scan <dir>` 이 이것을 본다 — 디렉터리의 파일을 전부 한
 글자씩, 64자씩 흘려 보고 어긋나면 알린다. `SPEC.md` 8.2절.
 
