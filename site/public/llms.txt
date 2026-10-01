@@ -1,6 +1,6 @@
 # mdwire
 
-> Send LLM-generated Markdown to chat channels without it breaking. mdwire is not a general-purpose Markdown converter but a bridge: it repairs the Markdown an agent wrote, renders it into the syntax each channel accepts, and splits it within the channel's length limit — in one shot or while tokens stream in.
+> Send LLM-generated Markdown to chat channels without it breaking. mdwire does not render Markdown into finished output; it tailors the Markdown an agent wrote to each channel: it repairs it, rewrites it into the syntax each channel accepts, and splits it within the channel's length limit, in one shot or while tokens stream in.
 
 Pipeline: normalize → render for channel → split safely → send.
 

@@ -6,9 +6,9 @@ description: Send LLM-generated Markdown to Telegram, Slack and GitHub without i
 
 # Send LLM Markdown to chat channels without it breaking
 
-mdwire is **not a general-purpose Markdown converter.** It is a bridge: it takes the Markdown an
-agent wrote and hands each channel the syntax that channel actually accepts — repaired, escaped,
-and split within its length limit. Rendering is still the channel's job.
+mdwire does not turn Markdown into finished output. It **tailors the Markdown an agent wrote to
+each channel**: repaired, rewritten into the syntax that channel accepts, and split within its
+length limit. Rendering is still the channel's job.
 
 ```
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
@@ -29,12 +29,20 @@ Three gaps in what exists today, each measured rather than assumed:
 - **Broken input is the normal case.** In a sample of 60 agent-generated documents,
   44 contained emphasis spanning a line break. A regex-based converter mispaired those
   into *inverted* emphasis ranges, and the channel returned HTTP 200, so nothing caught it.
-- **CJK is guessed at.** One converter pads emphasis with U+200B next to Korean text;
-  another does not. Neither measured the channel. We did: Slack `markdown_text` follows
-  CommonMark, so `_italic_` dies next to a Korean particle and `*italic*` lives. mdwire
-  emits `*` and pads nothing.
-- **Streaming has no answer.** Every converter is batch: parse the whole document, build an
-  AST, render. When tokens arrive incrementally, markup splits across chunk boundaries.
+- **Emphasis before Korean particles breaks.** Korean attaches a particle right after the
+  emphasis, and that is exactly where CommonMark's rules trip:
+  - `_기울임_은`: `_` cannot close inside a word, so the markers stay as text. `*기울임*은`
+    renders.
+  - `**설정(config)**을`: when the closing `**` follows punctuation and precedes a letter,
+    GitHub (GFM) does not close the emphasis.
+
+  Existing converters guess at this spot (one pads it with U+200B, another leaves it alone)
+  and neither checked the channel. mdwire measured each channel: it emits `*` for italics and,
+  on GitHub only, `<strong>` at that spot.
+- **Chat-channel converters ignore streaming.** Some browser renderers, like Streamdown, patch
+  unclosed syntax while tokens stream in. The Telegram and Slack converters we looked at all
+  take the whole document and convert it in one pass. When tokens arrive incrementally,
+  markup splits across chunk boundaries.
 
 ## Targets
 
