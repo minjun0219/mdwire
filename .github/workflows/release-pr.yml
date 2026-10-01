@@ -110,9 +110,16 @@ jobs:
 
           # 봇이 민 커밋에는 CI 가 저절로 안 돈다 — 직접 부른다. 결과는 PR 의 체크에 붙는다.
           gh workflow run ci.yml --ref "$BRANCH"
+          gh workflow run binaries.yml --ref "$BRANCH"
+
+  # **바이너리가 다 만들어지고 돌아야 태그를 찍는다.** 태그부터 찍으면 실패한 판이 초안 릴리스로
+  # 남고 버전 번호도 써 버린다. release PR 에서 본 결과와 별개로 머지된 커밋에서 다시 확인한다.
+  binaries:
+    if: "${{ startsWith(github.event.head_commit.message, 'release: ') }}"
+    uses: ./.github/workflows/binaries.yml
 
   tag:
-    if: "${{ startsWith(github.event.head_commit.message, 'release: ') }}"
+    needs: binaries
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

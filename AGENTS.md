@@ -53,7 +53,8 @@ Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — �
 버전·`CHANGELOG.md`·README 설치 줄의 버전(릴리스 URL · 상태 줄)은 손으로 고치지 않는다. main 에 **배포물을 바꾼**
 커밋(코어·CLI·wasm·Go 이식의 소스, 매니페스트·잠금, npm 패키징 — 시험 제외)이 들어오면
 `release-pr.yml` 이 `release: X.Y.Z` PR 을 열어 두고(사이트·예제·문서·시험·CI 만 바꾼 커밋으로는 안 연다), 그걸 squash 로 머지하는 것이
-릴리스다 — `vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
+릴리스다 — 머지된 커밋에서 바이너리 검증(`binaries.yml`, 네 플랫폼 빌드·실행·묶기)이 통과하면
+`vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
 자동으로 오른다. 다른 버전은 main 의 `[workspace.package] version` 으로 정한다.
 crates.io(`mdwire-core` · `mdwire-cli`)와 npm(`@minjun0219/mdwire`)도 `release.yml` 이 Trusted
 Publishing 으로 올린다 — 저장소에 토큰을 두지 않는다. 레지스트리에 아직 없는 이름의 첫 판만
