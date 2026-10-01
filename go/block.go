@@ -1,6 +1,7 @@
 package mdwire
 
 import (
+	"bytes"
 	"slices"
 	"strconv"
 	"strings"
@@ -431,10 +432,24 @@ func (e *engine) openLine(k lineKind, prefix int, s sink) {
 				e.out = append(e.out, ' ')
 			}
 			if k.k == lineOrdered {
+				at := len(e.out)
 				e.out = strconv.AppendInt(e.out, int64(k.n), 10)
 				e.out = append(e.out, ". "...)
+				// 원문 기호와 다르게 썼으면 센다(1) → 1., 01. → 1.) — 러스트 쪽과 같다.
+				same := k.indent+len(e.out)-at <= len(e.pending)
+				for j := at; same && j < len(e.out); j++ {
+					same = e.pending[k.indent+j-at] == rune(e.out[j])
+				}
+				if !same {
+					e.inline.repairs.RewrittenBullet++
+				}
 			} else {
-				e.out = append(e.out, e.v.bullet()...)
+				bullet := e.v.bullet()
+				// 원문 기호와 다르게 썼으면 센다(* ·• ·-\t → - ) — 러스트 쪽과 같다.
+				if !runesEqual(e.pending, k.indent, bullet) {
+					e.inline.repairs.RewrittenBullet++
+				}
+				e.out = append(e.out, bullet...)
 			}
 		}
 		e.inline.setPrev(noChar)
@@ -1105,10 +1120,13 @@ const (
 type table struct {
 	rows  [][]string
 	align []align
+	// src 는 원문 줄들이다. 다시 쓴 모양이 원문과 다른지 세는 데만 쓴다(Repairs.RewrittenTable).
+	src []byte
 }
 
 // begin 은 머리글과 구분선으로 표를 시작한다. 모양이 안 맞으면 표가 아니다.
 func (t *table) begin(header, delim string) bool {
+	t.src = append(append(append(t.src[:0], header...), '\n'), delim...)
 	head := splitCells(header)
 	d := splitCells(delim)
 	if len(head) == 0 || len(head) != len(d) {
@@ -1130,11 +1148,44 @@ func (t *table) begin(header, delim string) bool {
 	return true
 }
 
-func (t *table) push(line string) { t.rows = append(t.rows, splitCells(line)) }
+func (t *table) push(line string) {
+	t.rows = append(t.rows, splitCells(line))
+	t.src = append(append(t.src, '\n'), line...)
+}
 
 func (t *table) clear() {
 	t.rows = t.rows[:0]
 	t.align = t.align[:0]
+	t.src = t.src[:0]
+}
+
+// runesEqual 은 p[at:] 가 s 로 시작하는가다 — 문자열을 만들지 않고 견준다(목록 항목마다 불린다).
+func runesEqual(p []rune, at int, s string) bool {
+	for _, c := range s {
+		if at >= len(p) || p[at] != c {
+			return false
+		}
+		at++
+	}
+	return true
+}
+
+// countRewrite 는 다시 쓴 표가 원문과 다르면 센다 — 러스트 쪽 count_rewrite. 줄마다 앞뒤 공백은 뺀다.
+// 줄을 차례로 잘라 견준다 — 문자열을 만들지 않는다.
+func (t *table) countRewrite(written []byte, repairs *Repairs) {
+	a, b := written, t.src
+	for {
+		la, ra, oka := bytes.Cut(a, []byte{'\n'})
+		lb, rb, okb := bytes.Cut(b, []byte{'\n'})
+		if !bytes.Equal(bytes.TrimSpace(la), bytes.TrimSpace(lb)) || oka != okb {
+			repairs.RewrittenTable++
+			return
+		}
+		if !oka {
+			return
+		}
+		a, b = ra, rb
+	}
 }
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
@@ -1177,6 +1228,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 		cells = append(cells, line)
 	}
 	repairs.add(in.repairs)
+	from := len(*out)
 
 	if v.isHTML() {
 		writeHTMLTable(out, cells, t.align)
@@ -1187,6 +1239,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	}
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)
+		t.countRewrite((*out)[from:], repairs)
 		return nil
 	}
 
@@ -1224,6 +1277,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	}
 	v.escape(string(body), out)
 	v.verbatimClose("", out)
+	t.countRewrite((*out)[from:], repairs)
 	return nil
 }
 

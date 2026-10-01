@@ -39,9 +39,11 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 
 Two options around that pipeline. **Input dialect:** an agent that learned Slack from its
 docs writes legacy `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`); `--from slack-mrkdwn`
-reads it as such instead of as standard Markdown. **Repair report:** how many times the
+reads it as such instead of as standard Markdown. **Change report:** how many times the
 normalizer stepped in — unclosed emphasis, unclosed fence, unpaired backticks, dropped
-markers — so you can log how often the model breaks its own formatting.
+markers — and what it rewrote for the channel — escaped characters, tags for emphasis,
+stripped HTML, bullets, tables, converted markers — so you can log how often the model
+breaks its own formatting and see what a channel changes before you adopt it.
 
 ## Use it
 
@@ -51,7 +53,8 @@ cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arri
 cat agent-output.md | mdwire --channel plain --limit 4096      # plain fallback into Telegram
 
 # The agent wrote Slack's legacy mrkdwn (*bold*, ~strike~)? Say so. --report prints what
-# the normalizer fixed (unclosed emphasis, unclosed fence, …) as one JSON line on stderr.
+# the normalizer fixed and rewrote (unclosed emphasis, escaped `~`, stripped tags, …) as one
+# JSON line on stderr.
 cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
 ```
 

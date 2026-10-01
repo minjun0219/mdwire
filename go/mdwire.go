@@ -92,7 +92,9 @@ const (
 	ImagesLoad
 )
 
-// Repairs 는 정규화가 고친 것의 개수다. 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
+// Repairs 는 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수다. 앞 넷(고친 것)은 모델이 얼마나 자주
+// 서식을 깨는지를, 뒤 여섯(바꾼 것)은 붙이기 전에 채널이 무엇을 바꾸는지를 재는 데 쓴다 — 둘을 따로
+// 물으려면 Repaired·Changed.
 type Repairs struct {
 	// ClosedEmphasis 는 블록이 끝나도록 안 닫혀서 닫아 준 강조다.
 	ClosedEmphasis int
@@ -102,13 +104,39 @@ type Repairs struct {
 	RevertedCodeSpan int
 	// DroppedMarker 는 짝 잃은 채 버린 `**` 다.
 	DroppedMarker int
+	// EscapedChar 는 채널이 구문으로 읽을 글자를 탈출한 수다(GitHub 의 \~·\<·\*).
+	EscapedChar int
+	// TagEmphasis 는 마커 대신 태그로 낸 강조다(GitHub 의 <strong>).
+	TagEmphasis int
+	// StrippedHTML 은 벗긴 원문 HTML 이다 — 태그, 주석, 줄바꿈으로 바꾼 <br>.
+	StrippedHTML int
+	// RewrittenBullet 은 다른 기호로 바꿔 쓴 목록 불릿이다.
+	RewrittenBullet int
+	// RewrittenTable 은 원문과 다른 모양으로 다시 쓴 표다.
+	RewrittenTable int
+	// ConvertedMarker 는 다른 표기로 바꿔 쓴 강조 마커와 <url|텍스트> 링크다(마크다운 채널).
+	ConvertedMarker int
 }
+
+// Repaired 는 정규화가 하나라도 고쳤는가다 — 앞 넷만 본다. 러스트 쪽 Repairs::any.
+func (r Repairs) Repaired() bool {
+	return r.ClosedEmphasis+r.ClosedFence+r.RevertedCodeSpan+r.DroppedMarker > 0
+}
+
+// Changed 는 고친 것이든 채널에 맞춰 바꾼 것이든 하나라도 했는가다. 러스트 쪽 Repairs::changed.
+func (r Repairs) Changed() bool { return r != Repairs{} }
 
 func (r *Repairs) add(o Repairs) {
 	r.ClosedEmphasis += o.ClosedEmphasis
 	r.ClosedFence += o.ClosedFence
 	r.RevertedCodeSpan += o.RevertedCodeSpan
 	r.DroppedMarker += o.DroppedMarker
+	r.EscapedChar += o.EscapedChar
+	r.TagEmphasis += o.TagEmphasis
+	r.StrippedHTML += o.StrippedHTML
+	r.RewrittenBullet += o.RewrittenBullet
+	r.RewrittenTable += o.RewrittenTable
+	r.ConvertedMarker += o.ConvertedMarker
 }
 
 // Rendered 는 RenderWith 의 결과 — 조각과 고친 것이다.

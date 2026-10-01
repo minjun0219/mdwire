@@ -222,8 +222,11 @@ func writeReport(w io.Writer, r mdwire.Repairs) error {
 }
 
 func repairsFields(r mdwire.Repairs) string {
-	return fmt.Sprintf("\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d",
-		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+	return fmt.Sprintf("\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d,"+
+		"\"escapedChar\":%d,\"tagEmphasis\":%d,\"strippedHtml\":%d,\"rewrittenBullet\":%d,"+
+		"\"rewrittenTable\":%d,\"convertedMarker\":%d",
+		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
+		r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 }
 
 // batchJSONL 은 줄마다 문서 하나를 읽어 고친 것을 한 줄씩 낸다. 못 읽은 줄 수를 돌려준다.

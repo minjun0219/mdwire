@@ -191,8 +191,10 @@ func TestParityWithRustCore(t *testing.T) {
 				failures++
 			}
 			r := rendered.Repairs
-			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d}`,
-				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker)
+			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d,`+
+				`"escapedChar":%d,"tagEmphasis":%d,"strippedHtml":%d,"rewrittenBullet":%d,"rewrittenTable":%d,"convertedMarker":%d}`,
+				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
+				r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 			if report != strings.TrimSpace(stderr.String()) {
 				t.Errorf("#%d %s %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, c.ch.Name(), c.from.Name(), input, report, stderr.String())
 				failures++
@@ -356,5 +358,33 @@ func TestNotionTableCellAnglesAndHeaderKept(t *testing.T) {
 	out := strings.Join(RenderWith(only, NotionMarkdown, Options{Limit: 256}).Parts, "")
 	if !strings.HasPrefix(out, "이름 | 설명\n\\# 제목처럼 | 가 가") {
 		t.Fatalf("머리글이 사라졌거나 첫머리가 탈출되지 않았다: %q", out)
+	}
+}
+
+// 보고는 채널에 맞춰 바꾼 것도 센다 — 러스트 쪽 report_counts_what_the_channel_rewrote.
+func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
+	gh := RenderWith("약 ~40km, **「설정」**가 <!-- x --> H<sub>2</sub>\n\n* 하나\n- 둘\n\n| a |\n|---|\n| 1 |\n\n| b |\n| --- |\n| 2 |",
+		GithubMarkdown, Options{}).Repairs
+	if gh.EscapedChar != 1 || gh.TagEmphasis != 1 || gh.StrippedHTML != 1 || gh.RewrittenBullet != 1 || gh.RewrittenTable != 1 || gh.ConvertedMarker != 0 {
+		t.Errorf("github: %+v", gh)
+	}
+	slack := RenderWith("*굵게* _기울임_ ~취소~ <https://a.com|링크>\n• 항목", SlackMarkdown, Options{From: SlackMrkdwn}).Repairs
+	if slack.ConvertedMarker != 4 || slack.RewrittenBullet != 1 {
+		t.Errorf("slack: %+v", slack)
+	}
+	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r.Changed() {
+		t.Errorf("바꿀 것이 없는데 셌다: %+v", r)
+	}
+	if r := RenderWith("약 ~40km", GithubMarkdown, Options{}).Repairs; !r.Changed() || r.Repaired() {
+		t.Errorf("탈출 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)
+	}
+	if r := RenderWith("<br>\n**x**", GithubMarkdown, Options{}).Repairs; r.StrippedHTML != 1 {
+		t.Errorf("줄 첫머리 태그를 두 번 셌다: %+v", r)
+	}
+	if r := RenderWith("<https://a.com|l~x>", GithubMarkdown, Options{From: SlackMrkdwn}).Repairs; r.EscapedChar != 1 {
+		t.Errorf("라벨 탈출을 안 셌다: %+v", r)
+	}
+	if r := RenderWith("1) a\n2) b", SlackMarkdown, Options{}).Repairs; r.RewrittenBullet != 2 {
+		t.Errorf("번호 기호를 안 셌다: %+v", r)
 	}
 }
