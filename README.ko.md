@@ -9,7 +9,7 @@ LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보냅니다.
 받는 문법이 다르고, 이스케이프 규칙이 다르고, 길이 제한이 다릅니다. 기존 변환기는 입력이 잘 짜인
 CommonMark 라고 가정하고 한 번에 한 채널만 다룹니다. 에이전트 출력에는 두 가정 모두 맞지 않습니다.
 
-**상태: v0.1.9.** 정규화, 렌더링, 분할, 스트리밍이 여섯 대상에서 동작합니다. Telegram HTML,
+**상태: v0.1.10.** 정규화, 렌더링, 분할, 스트리밍이 여섯 대상에서 동작합니다. Telegram HTML,
 Slack `markdown_text`, GitHub 코멘트(GFM), 노션 페이지, 평문, 브라우저 HTML 입니다. 구현은 Rust 코어, CLI, npm 패키지(WASM), Go 구현이 있습니다.
 v0.1 에 들어간 것과 일부러 미룬 것은 `SPEC.md` 에 있습니다.
 
@@ -160,13 +160,13 @@ cargo install mdwire-cli           # `mdwire` CLI
 
 ```sh
 # npm 패키지 (번들러에서도, 번들러 없는 Node 에서도 돈다)
-npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-0.1.9.tgz
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-0.1.10.tgz
 
 # CLI 바이너리 — 플랫폼에 맞는 것 하나
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
-curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-pc-windows-msvc.zip                 # Windows x86_64
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
+curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-x86_64-pc-windows-msvc.zip                 # Windows x86_64
 ```
 
 릴리스 본문에 산출물마다 SHA-256 이 있습니다. URL 로 설치할 때는 그 값으로 고정하세요.
