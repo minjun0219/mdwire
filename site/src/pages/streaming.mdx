@@ -1,0 +1,42 @@
+---
+layout: ../layouts/Doc.astro
+title: Streaming
+description: One LLM answer streamed token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire.
+---
+import StreamCompare from "../components/StreamCompare.tsx";
+
+# Streaming, side by side
+
+The same answer, cut into the same tokens, streamed into five renderers at once. Watch for three
+things: a half marker (`**bo`, an opening backtick) showing up as text and then vanishing, bold that
+ends right before a Korean particle (`**설정(config)**을`) never getting drawn, and emphasis or a
+table that freezes until it closes.
+
+<div class="wide">
+  <StreamCompare client:only="react" lang="en">
+    <p slot="fallback">Loading the WASM build…</p>
+  </StreamCompare>
+</div>
+
+- **react-markdown** redraws the whole accumulated text on every token, so half-written markup
+  flickers in and out.
+- **Streamdown** redraws too, but repairs unclosed syntax first.
+- **mdwire → Streamdown** puts mdwire's streamer in front: Streamdown receives the normalized output
+  plus `preview()` — the bridge.
+- **mdwire** `useMarkdownStream()` draws what is still held (open bold, table rows) early, as if the
+  input ended here.
+- **mdwire** `useMarkdownStream({ eager: false })` shows only what is final. Nothing it shows ever
+  changes, at the cost of pausing on emphasis and tables.
+
+## What the measurements say
+
+`DESIGN.md` measured this on 347 Korean documents written by agents (Streamdown 2.6.0,
+react-markdown 10.1.0 + remark-gfm): putting mdwire's streamer in front of Streamdown cut changes to
+already-visible text by about 60% and stopped markers from showing as text, and mdwire's own `html`
+streamer, showing only what is final, had neither. Showing only what is final pauses, though: in this
+example at a 60 ms token interval the longest pause was 1,389 ms against 302 ms with the preview —
+which is why the preview is the default. See the
+[bridge section of DESIGN.md](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md) (Korean).
+
+The sample answer is synthetic, but each of its shapes broke in real agent output. The page streams it
+with a fixed seed, so every run cuts the same tokens.

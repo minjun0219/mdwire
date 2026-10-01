@@ -1,0 +1,39 @@
+---
+layout: ../../layouts/Doc.astro
+title: 스트리밍
+description: LLM 답변 하나를 토큰 단위로 react-markdown, Streamdown, mdwire → Streamdown, mdwire 에 나란히 흘려 본다.
+---
+import StreamCompare from "../../components/StreamCompare.tsx";
+
+# 스트리밍 나란히 보기
+
+같은 답변을 같은 토큰으로 잘라 렌더러 다섯에 동시에 흘린다. 세 가지를 본다 — 반쪽 마커(`**굵`,
+여는 백틱)가 글자로 비쳤다 사라지는지, 조사 앞에서 끝나는 굵게(`**설정(config)**을`)가 끝까지
+그려지는지, 강조나 표가 닫힐 때까지 멈춰 보이는지.
+
+<div class="wide">
+  <StreamCompare client:only="react" lang="ko">
+    <p slot="fallback">WASM 빌드를 불러오는 중…</p>
+  </StreamCompare>
+</div>
+
+- **react-markdown** 은 토큰마다 누적본을 통째로 다시 그린다. 반쯤 쓴 마크업이 비쳤다 사라진다.
+- **Streamdown** 도 다시 그리지만, 안 닫힌 구문을 먼저 보정한다.
+- **mdwire → Streamdown** 은 mdwire 스트리머를 앞에 둔다. Streamdown 은 정규화한 누적본에
+  `preview()` 를 붙인 것을 받는다 — 브릿지다.
+- **mdwire** `useMarkdownStream()` 은 붙들고 있는 것(열린 굵게, 표 행)도 입력이 여기서 끝난 것처럼
+  먼저 그린다.
+- **mdwire** `useMarkdownStream({ eager: false })` 는 확정된 것만 보인다. 한 번 보인 것은 바뀌지
+  않는 대신 강조·표에서 멈춰 보인다.
+
+## 측정이 말하는 것
+
+`DESIGN.md` 는 에이전트가 쓴 한국어 문서 347건으로 이걸 쟀다(Streamdown 2.6.0, react-markdown
+10.1.0 + remark-gfm). mdwire 스트리머를 Streamdown 앞에 두면 이미 보인 글이 바뀌는 횟수가 60%쯤
+줄고 마커가 글자로 비치는 일이 사라졌다. 확정분만 보이는 mdwire `html` 스트리머는 둘 다 없었다.
+다만 확정분만 보이면 멈춘다 — 이 예제(토큰 간격 60ms)에서 가장 긴 멈춤이 1,389ms, 미리보기는
+302ms 였다. 미리보기가 기본인 이유다. 자세한 것은
+[DESIGN.md 의 브릿지 절](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md).
+
+샘플 답변은 합성이지만, 그 안의 모양은 모두 실제 에이전트 출력에서 깨졌던 것이다. 시드를 고정해
+흘려서 매번 같은 토큰으로 잘린다.
