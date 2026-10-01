@@ -1,0 +1,48 @@
+# mdwire
+
+> Send LLM-generated Markdown to chat channels without it breaking. mdwire is a bridge, not a renderer: it repairs the Markdown an agent wrote, renders it into the syntax each channel accepts, and splits it within the channel's length limit — in one shot or while tokens stream in.
+
+Pipeline: normalize → render for channel → split safely → send.
+
+Channels (the name each API takes):
+
+- `telegram-html` — Telegram `parse_mode: "HTML"` (nine tags, 4096-character limit)
+- `slack-markdown` — Slack `markdown_text` (standard Markdown, 12,000)
+- `github-markdown` — GitHub comments, GFM (65,536); a `~` or `<` meant as a character is escaped
+- `plain` — plain text
+- `html` — HTML for the browser, safe to set as `innerHTML`: text is escaped and, by default, only `http(s)`/`mailto` links become `<a>` (line breaks, images and allowed schemes are options)
+
+Things that are easy to get wrong:
+
+- Input dialect: standard Markdown by default. Legacy Slack `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`) must be declared — `from: "slack-mrkdwn"` in npm, `--from slack-mrkdwn` in the CLI.
+- Streaming is append-only: what `push` returns is final and `finish` only appends the tail, so the pieces concatenated equal a one-shot `render` (unless the document is long enough to be split into parts).
+- A channel that rewrites the whole message (Telegram edit) sends the accumulated output plus `preview()`. An append-only channel (Slack `appendStream`) sends each `push` piece as is and never calls `preview()`.
+- The repair report counts what the normalizer fixed: closed emphasis, closed code fences, backtick runs kept as text, dropped `**`.
+- One Rust core with no dependencies. The CLI, the npm package (WASM) and the Go port are held to the same test corpus.
+- `SPEC.md` and `DESIGN.md` are written in Korean.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/minjun0219/mdwire/main/README.md): install and usage for the CLI, Rust, npm, React and Go
+- [README (Korean)](https://raw.githubusercontent.com/minjun0219/mdwire/main/README.ko.md): the same in Korean
+- [SPEC](https://raw.githubusercontent.com/minjun0219/mdwire/main/SPEC.md): what v0.1 covers and what was deliberately deferred (Korean)
+- [DESIGN](https://raw.githubusercontent.com/minjun0219/mdwire/main/DESIGN.md): the measurements behind each decision (Korean)
+
+## Packages
+
+- [npm `@minjun0219/mdwire`](https://www.npmjs.com/package/@minjun0219/mdwire): `render`, `renderWithReport`, `Streamer`; `@minjun0219/mdwire/react` (`Markdown`, `useMarkdownStream`) and `@minjun0219/mdwire/events`
+- [crates.io `mdwire-core`](https://crates.io/crates/mdwire-core): the Rust library, imported as `mdwire`
+- [crates.io `mdwire-cli`](https://crates.io/crates/mdwire-cli): the `mdwire` command — `mdwire --channel <name> [--from <dialect>] [--stream] [--report]`
+- [Go `github.com/minjun0219/mdwire/go`](https://pkg.go.dev/github.com/minjun0219/mdwire/go): the Go port, library and CLI
+
+## Site
+
+- [Overview](https://mdwire.minjun.dev/): what mdwire does
+- [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, in the browser
+- [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
+
+## Optional
+
+- [Test corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases): input and expected output per channel, each a failure that actually happened
+- [Changelog](https://raw.githubusercontent.com/minjun0219/mdwire/main/CHANGELOG.md)
+- [Source](https://github.com/minjun0219/mdwire)
