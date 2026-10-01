@@ -27,10 +27,10 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.
 
 한국어 페이지의 본문 글꼴은 Pretendard 다(`pretendard` 패키지, OFL-1.1). `layouts/Doc.astro` 가 유니코드 범위로 나뉜
-woff2 를 싣고 `html:lang(ko)` 에만 쓴다 — 영어 페이지는 글꼴을 받지 않는다.
-사례 페이지의 한글 표 블록(`<div class="hangul-mono">`)만 Nanum Gothic Coding(`@fontsource/nanum-gothic-coding`, OFL-1.1)으로
-그린다. 한글이 정확히 영문 두 칸이라 표시 폭으로 맞춘 열이 화면에서도 맞는다. 다른 코드는 웹에서 읽기 좋은 기본 고정폭
-글꼴 그대로다(코드 전체에 써 보니 가독성이 떨어졌다). 글꼴은 그 페이지에서만 싣는다.
+woff2 를 싣고 `html:lang(ko)` 에만 쓴다 — 영어 페이지는 본문 글꼴을 받지 않는다.
+코드 글꼴은 영문이 Menlo(없으면 각 OS 의 고정폭), 한글이 Nanum Gothic Coding(`@fontsource/nanum-gothic-coding`, OFL-1.1)이다.
+유니코드 범위로 나뉜 woff2 라 한글이 든 코드가 있을 때만 그 조각을 받는다. 사례 페이지의 한글 표 블록(`<div class="hangul-mono">`)은
+영문까지 나눔고딕코딩으로 그린다 — 한글이 정확히 영문 두 칸이어야 표시 폭으로 맞춘 열이 화면에서도 맞는다.
 
 패키지 매니저는 pnpm 이다(버전은 `package.json` 의 `packageManager`).
 

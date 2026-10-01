@@ -9,7 +9,8 @@
   --accent: #0f766e;
   --accent-soft: #e6f4f2;
   --warn: #b45309;
-  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* 라틴은 Menlo(없으면 각 OS 의 고정폭), 한글은 나눔고딕코딩 — 기본 고정폭 글꼴에는 한글이 없거나 폭이 들쭉날쭉하다. */
+  --mono: Menlo, ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, "Nanum Gothic Coding", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   /* 고정 머리글의 높이 — 문서 사이드바가 그 아래에 붙고, 앵커로 뛸 때 헤딩이 그 밑에 가리지 않는다. */
   --header-h: 3.5rem;
@@ -298,8 +299,8 @@ details.code p {
   border-radius: 3px;
 }
 
-/* 한글이 든 고정폭 표(사례 페이지). 기본 고정폭 글꼴은 한글을 영문 두 칸 너비로 그리지 않아서 표시 폭으로
-   맞춘 열이 어긋나 보인다 — 그 블록만 한글이 정확히 두 칸인 글꼴로 그린다. 다른 코드는 읽기 좋은 기본 글꼴. */
+/* 한글이 든 고정폭 표(사례 페이지). Menlo 의 영문 폭과 나눔고딕코딩의 한글 폭은 2:1 이 아니어서 표시 폭으로
+   맞춘 열이 어긋난다 — 그 블록만 영문까지 나눔고딕코딩으로 그려 한글이 정확히 두 칸이 되게 한다. */
 .hangul-mono pre,
 .hangul-mono code {
   font-family: "Nanum Gothic Coding", var(--mono);
