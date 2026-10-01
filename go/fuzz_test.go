@@ -249,3 +249,29 @@ func TestGithubKeptTagsSurviveSplitsAndMatchByName(t *testing.T) {
 		}
 	}
 }
+
+// 노션 채널 — 러스트 쪽 notion_escapes_what_it_eats_and_strips_tags 와 같은 기대값.
+func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
+	cases := [][2]string{
+		{"**설정(config)**을 바꾼다", "**설정(config)**을 바꾼다"},
+		{"H<sub>2</sub>O 와 <kbd>C</kbd>", "H2O 와 C"},
+		{"카드 1***-****-001* 끝", `카드 1\*\*\*-\*\*\*\*-001\* 끝`},
+		{`백슬래시 \ 하나`, `백슬래시 \\ 하나`},
+		{"약 ~40km, Vec<T>", "약 ~40km, Vec<T>"},
+		{"\\*별\\* `a*b\\c`", "\\*별\\* `a*b\\c`"},
+		{"<https://a.com/x_y>", `[https://a.com/x\_y](https://a.com/x_y)`},
+		{"##### 다섯\n\n* 별표 목록", "#### 다섯\n\n- 별표 목록"},
+		{"> **a<br>b** 끝", "> **a<br>b** 끝"},
+		{"| a |\n|---|\n| 줄<br>바꿈 |", "| a |\n| --- |\n| 줄<br>바꿈 |"},
+		{"foo\\\nbar", "foo\\\\\nbar"},
+		{`path C:\`, `path C:\\`},
+		{`\$x\$ 와 $5`, `\$x\$ 와 $5`},
+		{"<https://a.com/*x*>", `[https://a.com/\*x\*](https://a.com/*x*)`},
+		{"<https://a.com/x)>", "[https://a.com/x)](https://a.com/x%29)"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(Render(c[0], NotionMarkdown), ""); got != c[1] {
+			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+	}
+}

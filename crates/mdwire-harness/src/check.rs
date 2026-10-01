@@ -772,7 +772,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
 /// 그래서 이 불변식을 테스트에 박아 둔다.
 fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
-        Channel::SlackMarkdown | Channel::GithubMarkdown => {
+        Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
             // 대신 **짝이 맞아야** 한다 — **조각마다.** 조각은 각각 메시지 하나라, 이어
             // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
@@ -1117,7 +1117,10 @@ fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     // **표를 직접 그리는 채널은 폭을 재지 않는다.** 슬랙 `markdown_text` 와 GitHub 은 GFM 표를
     // 그대로 받으므로 열이 글자로 맞아 있을 이유가 없다. 대신 **표가 표로 남았는가**를
     // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
-    if matches!(channel, Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::Html) {
+    if matches!(
+        channel,
+        Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown | Channel::Html
+    ) {
         let want = gfm_table_count(input);
         let got = if channel == Channel::Html {
             output.matches("<table>").count()
