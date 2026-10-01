@@ -89,10 +89,9 @@ export function toElements(html, components = {}, schemes = DEFAULT_SCHEMES) {
  * 보였다가 사라진다. 스트리밍은 [`useMarkdownStream`].
  * @param {import("./react.d.ts").MarkdownProps} props
  */
-export function Markdown({ text, from, components, options }) {
-  const opts = { ...options, ...(from ? { from } : {}) };
-  const html = render(text, "html", opts).join("");
-  return createElement(Fragment, null, ...toElements(html, components, opts.html?.schemes ?? DEFAULT_SCHEMES));
+export function Markdown({ text, components, options }) {
+  const html = render(text, "html", options).join("");
+  return createElement(Fragment, null, ...toElements(html, components, options?.html?.schemes ?? DEFAULT_SCHEMES));
 }
 
 /**
@@ -107,13 +106,18 @@ export function Markdown({ text, from, components, options }) {
  * 다른가다. 같으면 훅은 다시 그리지 않는다.
  * @param {import("./react.d.ts").MarkdownStreamOptions} [opts]
  */
-export function useMarkdownStream({ from, components, options, eager = true, onSettled } = {}) {
+export function useMarkdownStream({ components, options, eager = true, onSettled } = {}) {
   const ref = useRef(null);
   const init = useRef(null);
   const [, rerender] = useReducer((n) => n + 1, 0);
   if (init.current === null) {
-    const o = { ...options, ...(from ? { from } : {}) };
-    init.current = () => ({ streamer: new Streamer("html", o), acc: "", done: false, eager, schemes: o.html?.schemes ?? DEFAULT_SCHEMES });
+    init.current = () => ({
+      streamer: new Streamer("html", options),
+      acc: "",
+      done: false,
+      eager,
+      schemes: options?.html?.schemes ?? DEFAULT_SCHEMES,
+    });
   }
   // 해제됐으면 다시 만든다 — StrictMode 개발 모드는 이펙트를 붙였다 떼었다 다시 붙여서, 정리
   // 함수가 스트리머를 먼저 해제한다(토큰이 오기 전이라 잃는 것은 없다).

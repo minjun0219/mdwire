@@ -11,7 +11,7 @@ import (
 // 태그로 감싸고 줄바꿈 앞에 <br> 을 두므로 블록 층이 하는 그 둘만 여기서 흉내 낸다.
 func renderLine(input string, ch Channel) string {
 	v := newVocab(ch, Options{})
-	in := newInline(Markdown)
+	in := newInline()
 	var out []byte
 	if v.isHTML() {
 		out = append(out, "<p>"...)
@@ -105,23 +105,6 @@ func TestBlocksMatchRustCore(t *testing.T) {
 		}
 		for i, input := range inputs {
 			if got := strings.Join(Render(input, ch), "\x00"); got != want[i] {
-				t.Errorf("%s %q:\n  got  %q\n  want %q", ch.Name(), input, got, want[i])
-			}
-		}
-	}
-}
-
-// 입력 표기 — 레거시 mrkdwn 으로 쓴 입력. 기대값은 러스트 CLI `--from slack-mrkdwn` 에서 뽑았다.
-func TestMrkdwnMatchesRustCore(t *testing.T) {
-	inputs := readCases(t, "mrkdwn-input.txt")
-	for _, ch := range Channels() {
-		want := readCases(t, "mrkdwn."+ch.Name()+".txt")
-		if len(want) != len(inputs) {
-			t.Fatalf("%s: 기대값 %d개, 입력 %d개 — regen.sh 를 다시 돌린다", ch.Name(), len(want), len(inputs))
-		}
-		for i, input := range inputs {
-			got := strings.Join(RenderWith(input, ch, Options{From: SlackMrkdwn}).Parts, "\x00")
-			if got != want[i] {
 				t.Errorf("%s %q:\n  got  %q\n  want %q", ch.Name(), input, got, want[i])
 			}
 		}

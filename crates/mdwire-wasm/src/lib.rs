@@ -10,7 +10,7 @@
 //! import { render, Streamer } from "@minjun0219/mdwire";
 //!
 //! const parts = render(markdown, "telegram-html");
-//! const { parts: p, repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+//! const { parts: p, repairs } = renderWithReport(markdown, "slack-markdown");
 //!
 //! const s = new Streamer("slack-markdown");
 //! let out = "";
@@ -27,15 +27,13 @@
 
 #![forbid(unsafe_code)]
 
-use mdwire::{Channel, Dialect, Options};
+use mdwire::{Channel, Options};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(typescript_custom_section)]
 const OPTIONS_TS: &str = r#"
-/** 변환 옵션. 생략하면 표준 마크다운 입력이다. */
+/** 변환 옵션. 생략하면 채널의 기본값이다. */
 export interface RenderOptions {
-  /** 입력 표기. 슬랙 레거시 mrkdwn(`*굵게*` `~취소~`)으로 쓴 에이전트 출력이면 "slack-mrkdwn". */
-  from?: "markdown" | "slack-mrkdwn";
   /** 조각 한도(글자 수). 생략하면 채널의 한도다 — plain 을 텔레그램에 보내면 4096. 스트리밍은 나누지 않는다. */
   limit?: number;
   /** 브라우저 채널("html")의 정책. 기본값이 가장 보수적이다. */
@@ -55,9 +53,6 @@ extern "C" {
     /// JS 쪽 옵션 객체. 필드를 속성으로 읽는다 — `js-sys` 없이.
     #[wasm_bindgen(typescript_type = "RenderOptions")]
     pub type RenderOptions;
-
-    #[wasm_bindgen(method, getter)]
-    fn from(this: &RenderOptions) -> Option<String>;
 
     #[wasm_bindgen(method, getter)]
     fn limit(this: &RenderOptions) -> Option<f64>;
@@ -262,16 +257,9 @@ fn parse_channel(name: &str) -> Result<Channel, JsError> {
     channel_of(name).map_err(|e| JsError::new(&e))
 }
 
-fn dialect_of(name: &str) -> Result<Dialect, String> {
-    Dialect::parse(name).ok_or_else(|| format!("모르는 입력 표기: {name}"))
-}
-
 fn parse_options(options: Option<RenderOptions>) -> Result<Options, JsError> {
     let mut out = Options::default();
     let Some(options) = options else { return Ok(out) };
-    if let Some(from) = options.from() {
-        out.from = dialect_of(&from).map_err(|e| JsError::new(&e))?;
-    }
     if let Some(n) = options.limit() {
         out.limit = Some(limit_of(n).map_err(|e| JsError::new(&e))?);
     }
@@ -307,14 +295,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn channel_and_dialect_names_round_trip() {
+    fn channel_names_and_limits_round_trip() {
         assert!(channel_of("telegram-html").is_ok());
         assert!(channel_of("없는채널").is_err());
         assert_eq!(limit_of(4096.0), Ok(4096));
         assert!(limit_of(0.0).is_err() && limit_of(1.5).is_err() && limit_of(f64::NAN).is_err());
-        assert!(dialect_of("slack-mrkdwn").is_ok());
-        assert!(dialect_of("markdown").is_ok());
-        assert!(dialect_of("mrkdwn").is_err());
     }
 
     #[test]

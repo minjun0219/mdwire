@@ -701,9 +701,6 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g(r"5\~6월 \<T>"), r"5\~6월 \<T>");
     // 표 칸도 본문이다.
     assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
-    // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 이스케이프한다.
-    let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
-    assert_eq!(out.parts.join(""), r"\~40km 전");
     // 오토링크·링크 주소는 건드리지 않는다.
     assert_eq!(g("<https://a.com/~me>"), "<https://a.com/~me>");
     // 헤딩은 여섯 단계를 다 그린다.
@@ -827,30 +824,29 @@ fn notion_splits_long_tables_into_whole_tables() {
 /// 보고는 1건이었다). 붙이기 전에 무엇이 바뀌는지 보는 데 쓴다.
 #[test]
 fn report_counts_what_the_channel_rewrote() {
-    let r = |s: &str, ch, from| mdwire::render_with(s, ch, mdwire::Options { from, ..Default::default() }).repairs;
+    let r = |s: &str, ch| mdwire::render_with(s, ch, mdwire::Options::default()).repairs;
     let gh = r(
         "약 ~40km, **「설정」**가 <!-- x --> H<sub>2</sub>\n\n* 하나\n- 둘\n\n| a |\n|---|\n| 1 |\n\n| b |\n| --- |\n| 2 |",
         Channel::GithubMarkdown,
-        mdwire::Dialect::Markdown,
     );
     assert_eq!(
         (gh.escaped_char, gh.tag_emphasis, gh.stripped_html, gh.rewritten_bullet, gh.rewritten_table, gh.converted_marker),
         (1, 1, 1, 1, 1, 0),
         "{gh:?}"
     );
-    let slack = r("*굵게* _기울임_ ~취소~ <https://a.com|링크>\n• 항목", Channel::SlackMarkdown, mdwire::Dialect::SlackMrkdwn);
-    assert_eq!((slack.converted_marker, slack.rewritten_bullet), (4, 1), "{slack:?}");
+    let slack = r("_기울임_ __굵게__ <https://a.com|링크>\n• 항목", Channel::SlackMarkdown);
+    assert_eq!((slack.converted_marker, slack.rewritten_bullet), (3, 1), "{slack:?}");
     // 바꿀 것이 없으면 0 이다 — 이미 채널의 모양인 글.
-    assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown, mdwire::Dialect::Markdown).changed());
+    assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown).changed());
     // `any()` 는 고친 것만 본다 — 이스케이프 하나로 "모델이 서식을 깼다"가 되지 않는다.
-    let tilde = r("약 ~40km", Channel::GithubMarkdown, mdwire::Dialect::Markdown);
+    let tilde = r("약 ~40km", Channel::GithubMarkdown);
     assert!(tilde.changed() && !tilde.any(), "{tilde:?}");
     // 줄 첫머리에서 벗긴 태그는 한 번씩 센다(두 번 세던 것).
-    assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown, mdwire::Dialect::Markdown).stripped_html, 1);
+    assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown).stripped_html, 1);
     // `<url|텍스트>` 라벨의 이스케이프도 센다.
-    assert_eq!(r("<https://a.com|l~x>", Channel::GithubMarkdown, mdwire::Dialect::SlackMrkdwn).escaped_char, 1);
+    assert_eq!(r("<https://a.com|l~x>", Channel::GithubMarkdown).escaped_char, 1);
     // 번호 목록 기호를 다시 쓴 것도 센다(`1)` → `1.`).
-    assert_eq!(r("1) a\n2) b", Channel::SlackMarkdown, mdwire::Dialect::Markdown).rewritten_bullet, 2);
+    assert_eq!(r("1) a\n2) b", Channel::SlackMarkdown).rewritten_bullet, 2);
 }
 
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
@@ -959,54 +955,7 @@ fn a_long_space_free_span_is_cut_within_the_limit() {
     }
 }
 
-// ── 입력 표기 · 고친 것 ─────────────────────────────────────────────────
-
-fn mrkdwn(input: &str, channel: Channel) -> String {
-    let out = mdwire::render_with(input, channel, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
-    out.parts.join("")
-}
-
-/// **레거시 mrkdwn 으로 쓴 입력.** 슬랙에 답하는 에이전트는 흔히 이 표기로 쓴다 —
-/// 표준으로 읽으면 `*굵게*` 가 기울임이 되고 `~취소~` 는 글자로 남는다.
-#[test]
-fn slack_mrkdwn_input_reads_single_markers_as_bold_and_strike() {
-    let input = "*상품 상세 화면*은 `web-app` 에 있어요. ~예전 방식~ 대신 <https://x.io|서비스웹> 으로.";
-    assert_eq!(
-        mrkdwn(input, Channel::SlackMarkdown),
-        "**상품 상세 화면**은 `web-app` 에 있어요. ~~예전 방식~~ 대신 [서비스웹](https://x.io) 으로."
-    );
-    assert_eq!(
-        mrkdwn(input, Channel::TelegramHtml),
-        "<b>상품 상세 화면</b>은 <code>web-app</code> 에 있어요. <s>예전 방식</s> 대신 <a href=\"https://x.io\">서비스웹</a> 으로."
-    );
-    // 표준 표기가 섞여도 같은 뜻이다.
-    assert_eq!(mrkdwn("**굵게** 와 ~~취소~~ 와 _기울임_", Channel::TelegramHtml), "<b>굵게</b> 와 <s>취소</s> 와 <i>기울임</i>");
-    // 코드 안은 글자다.
-    assert_eq!(mrkdwn("`코드 안 *별표*`", Channel::SlackMarkdown), "`코드 안 *별표*`");
-}
-
-/// **한국어의 물결표는 mrkdwn 에서도 글자다.** 근사값(`~40km`)·범위(`5~6월`)는 취소선을
-/// 열지도 닫지도 않고, 안 닫힌 `~` 는 블록 끝까지 긋지 않고 글자로 되돌린다.
-#[test]
-fn slack_mrkdwn_keeps_korean_tildes_literal() {
-    assert_eq!(mrkdwn("약 ~40km, 5~6월 이동 ~취소~가 된다", Channel::SlackMarkdown), "약 ~40km, 5~6월 이동 ~~취소~~가 된다");
-    assert_eq!(mrkdwn("1~2일, ~3시간", Channel::TelegramHtml), "1~2일, ~3시간");
-    assert_eq!(mrkdwn("가격 ~만원 할인", Channel::TelegramHtml), "가격 ~만원 할인");
-}
-
-/// **mrkdwn 의 홑별표도 줄을 넘는다.** 닫히면 한 덩어리 굵게고, 문단이 끝나도록 안 닫히면
-/// 그 문단에서 닫고 고친 것으로 센다 — 다음 문단의 `*` 와 짝짓지 않는다.
-#[test]
-fn slack_mrkdwn_bold_spans_lines_but_not_paragraphs() {
-    assert_eq!(mrkdwn("*첫 줄\n둘째 줄*입니다", Channel::SlackMarkdown), "**첫 줄\n둘째 줄**입니다");
-    let out = mdwire::render_with(
-        "*굵게 시작\n\n다른 문단*",
-        Channel::SlackMarkdown,
-        mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() },
-    );
-    assert_eq!(out.parts.join(""), "**굵게 시작**\n\n다른 문단*");
-    assert_eq!(out.repairs.closed_emphasis, 1, "{:?}", out.repairs);
-}
+// ── 고친 것 ─────────────────────────────────────────────────────────
 
 /// **정규화가 고친 것을 센다.** 모델이 얼마나 자주 서식을 깨는지 재는 데 쓴다.
 #[test]

@@ -7,7 +7,7 @@
 //!
 //! 난수는 xorshift 다 — 의존을 두지 않고, 시드가 고정이라 실패가 재현된다.
 
-use mdwire::{Channel, Dialect, Options, Streamer};
+use mdwire::{Channel, Options, Streamer};
 use mdwire_harness::check::{check, Rule};
 
 struct Rng(u64);
@@ -68,8 +68,8 @@ fn random_input_never_breaks_the_invariants() {
     let rounds: usize = std::env::var("MDWIRE_FUZZ_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(3000);
     for round in 0..rounds {
         let input = doc(&mut rng);
-        for (channel, from) in Channel::all().into_iter().flat_map(|c| [(c, Dialect::Markdown), (c, Dialect::SlackMrkdwn)]) {
-            let options = Options { from, ..Default::default() };
+        for channel in Channel::all() {
+            let options = Options::default();
             let parts = mdwire::render_with(&input, channel, options.clone()).parts;
             let joined = parts.join("\0");
             // 한도 · 태그 · 이스케이프. 강조 범위와 낱말 손실은 여기서 보지 않는다 — 무작위
@@ -94,9 +94,8 @@ fn random_input_never_breaks_the_invariants() {
                     s.finish_into(&mut got);
                     if got != parts[0] {
                         failures.push(format!(
-                            "#{round} {} {} 조각 {size}: 스트리밍이 다르다\n  입력: {input:?}\n  완성본: {:?}\n  스트리밍: {got:?}",
+                            "#{round} {} 조각 {size}: 스트리밍이 다르다\n  입력: {input:?}\n  완성본: {:?}\n  스트리밍: {got:?}",
                             channel.name(),
-                            from.name(),
                             parts[0]
                         ));
                         break;

@@ -1,7 +1,7 @@
 ---
 layout: ../../../layouts/Doc.astro
 title: Rust
-description: mdwire-core 크레이트 — render, render_with, Options, Streamer, Channel, Dialect, Repairs.
+description: mdwire-core 크레이트 — render, render_with, Options, Streamer, Channel, Repairs.
 ---
 
 
@@ -29,10 +29,10 @@ assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
 ## `render_with`
 
 ```rust
-use mdwire::{render_with, Channel, Dialect, Options};
+use mdwire::{render_with, Channel, Options};
 
-let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
-let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
+let options = Options { limit: Some(4096), ..Default::default() };
+let out = render_with("**굵게** 는 **영향 범위", Channel::SlackMarkdown, options);
 assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
 assert_eq!(out.repairs.closed_emphasis, 1);
 ```
@@ -44,7 +44,6 @@ assert_eq!(out.repairs.closed_emphasis, 1);
 
 ```rust
 pub struct Options {
-    pub from: Dialect,          // 기본 Dialect::Markdown
     pub limit: Option<usize>,   // None = channel.limit(). MIN_LIMIT(256) 보다 작으면 올린다
     pub html: HtmlOptions,      // Channel::Html 에만
 }
@@ -56,7 +55,7 @@ pub struct HtmlOptions {
 }
 ```
 
-필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다. `MIN_LIMIT` 은 `256`.
+필드가 늘 수 있으니 `Options { limit, ..Default::default() }` 로 만든다. `MIN_LIMIT` 은 `256`.
 
 ## `Streamer`
 
@@ -89,11 +88,10 @@ assert!(!s.revised());                                       // 마지막 화면
 
 계약(`push` 출력은 확정, 이어 붙이면 `render` 와 같다)은 [개념](/ko/docs/#스트리밍-계약)에 있다.
 
-## `Channel` 과 `Dialect`
+## `Channel`
 
 ```rust
 pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, Html }
-pub enum Dialect { Markdown, SlackMrkdwn }
 ```
 
 | | |
@@ -101,7 +99,6 @@ pub enum Dialect { Markdown, SlackMrkdwn }
 | `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …). |
 | `Channel::all()` | 모든 채널. |
 | `Channel::limit(self) -> usize` | 조각 한도. `Html` 은 `usize::MAX`. |
-| `Dialect::name` · `Dialect::parse` | `"markdown"`, `"slack-mrkdwn"`. |
 
 ## `Repairs`
 

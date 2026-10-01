@@ -1,12 +1,10 @@
 // 같은 입력을 텔레그램 HTML 과 슬랙 markdown_text 로 옮겨 나란히 본다 — 채널이 실제로 받는 글자 그대로.
 // 변환은 브라우저에서 npm `@minjun0219/mdwire` 의 wasm 이 한다. 서버는 없다.
 import { useMemo, useState } from "react";
-import { limit, renderWithReport, type RenderOptions } from "@minjun0219/mdwire";
+import { limit, renderWithReport } from "@minjun0219/mdwire";
 import type { Locale } from "../i18n";
 import { samples } from "./samples";
 import styles from "./ChannelCompare.module.css";
-
-type From = NonNullable<RenderOptions["from"]>;
 
 const channels = [
   { id: "telegram-html", name: "Telegram HTML", via: 'parse_mode: "HTML"' },
@@ -34,9 +32,6 @@ const text = {
   en: {
     sample: "Example from the corpus",
     input: "Agent output (Markdown)",
-    from: "Input dialect",
-    fromMarkdown: "Markdown",
-    fromMrkdwn: "Slack legacy mrkdwn",
     parts: (n: number, max: number) => `${n} ${n === 1 ? "part" : "parts"} · limit ${max.toLocaleString("en")}`,
     noRepairs: "Nothing repaired or rewritten",
     repairs: {
@@ -56,9 +51,6 @@ const text = {
   ko: {
     sample: "코퍼스의 예시",
     input: "에이전트 출력 (마크다운)",
-    from: "입력 표기",
-    fromMarkdown: "마크다운",
-    fromMrkdwn: "슬랙 레거시 mrkdwn",
     parts: (n: number, max: number) => `조각 ${n}개 · 한도 ${max.toLocaleString("ko")}`,
     noRepairs: "고치거나 바꾼 것 없음",
     repairs: {
@@ -77,10 +69,10 @@ const text = {
   },
 } as const;
 
-function convert(input: string, channel: string, from: From): Output {
+function convert(input: string, channel: string): Output {
   try {
     // wasm 쪽 객체라 읽고 나서 바로 놓는다.
-    const out = renderWithReport(input, channel, { from });
+    const out = renderWithReport(input, channel);
     const r = out.repairs;
     const repairs = Object.fromEntries(keys.map((k) => [k, r[k]])) as Repairs;
     const parts = out.parts;
@@ -96,17 +88,15 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
   const t = text[lang];
   const [sampleId, setSampleId] = useState(samples[0].id);
   const [input, setInput] = useState(samples[0].input);
-  const [from, setFrom] = useState<From>(samples[0].from);
   const sample = samples.find((s) => s.id === sampleId);
 
-  const outputs = useMemo(() => channels.map((c) => ({ ...c, out: convert(input, c.id, from) })), [input, from]);
+  const outputs = useMemo(() => channels.map((c) => ({ ...c, out: convert(input, c.id) })), [input]);
 
   function pick(id: string) {
     const s = samples.find((x) => x.id === id);
     if (!s) return;
     setSampleId(id);
     setInput(s.input);
-    setFrom(s.from);
   }
 
   return (
@@ -120,13 +110,6 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
                 {s.id}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
-          <span>{t.from}</span>
-          <select value={from} onChange={(e) => setFrom(e.target.value as From)}>
-            <option value="markdown">{t.fromMarkdown}</option>
-            <option value="slack-mrkdwn">{t.fromMrkdwn}</option>
           </select>
         </label>
       </div>

@@ -162,8 +162,8 @@ out.push_str(s.finish());       // 남은 것을 내보내고 열린 마크업�
 // 할당이 0 이어야 하는 경로는 호출자 버퍼에 직접 쓴다
 s.push_into(chunk, &mut out);
 
-// 옵션(입력 표기)과 정규화가 고친 것 — 5.1절
-let out = mdwire::render_with(input, Channel::SlackMarkdown, Options { from: Dialect::SlackMrkdwn });
+// 옵션과 정규화가 고친 것 — 5.1절
+let out = mdwire::render_with(input, Channel::SlackMarkdown, Options::default());
 let (parts, repairs) = (out.parts, out.repairs);
 let mut s = Streamer::with_options(Channel::SlackMarkdown, Options::default());
 let fixed = s.repairs();   // 지금까지 고친 것. finish 뒤면 문서 전체
@@ -189,7 +189,7 @@ let fixed = s.repairs();   // 지금까지 고친 것. finish 뒤면 문서 전�
 → **`push_into`가 정본이고, `push`는 내부 버퍼를 빌려주는 편의 서명이다.**
 둘은 같은 코드를 부른다.
 
-CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--limit N] [--stream] [--report]`,
+CLI는 `mdwire --channel telegram-html [--limit N] [--stream] [--report]`,
 여러 문서의 고친 것만 잴 때는 `--batch jsonl`(5.1절).
 분할 결과는 **NUL 로 구분**한다 — 셸에서 다루기 가장 쉽고, 마크다운 본문에 안 나오는
 바이트다.
@@ -206,24 +206,13 @@ CLI는 `mdwire --channel telegram-html [--from slack-mrkdwn] [--limit N] [--stre
 누적본 다시 그리기는 347건에서 보인 글이 2,158번 바뀌었고 확정분만은 0. `DESIGN.md`). Go·Rust 소비자는 이벤트를
 받지 않는다.
 
-### 5.1 입력 표기과 고친 것
+### 5.1 입력 표기 · 고친 것
 
-**입력 표기**(`Options::from`)은 출력 채널과 따로 정한다. 기본은 표준 마크다운이고,
-`slack-mrkdwn` 은 슬랙 레거시 표기로 쓴 에이전트 출력을 받는다 — 슬랙에 답하는
-에이전트는 슬랙 문서가 가르치는 대로 흔히 이 표기로 쓴다. 표준으로 읽으면 `*굵게*` 가
-기울임이 되고 `~취소~` 는 글자로 남는다.
-
-| 입력 | 표준(`markdown`) | `slack-mrkdwn` |
-|---|---|---|
-| `*x*` · `**x**` | 기울임 · 굵게 | 둘 다 굵게 |
-| `_x_` | 기울임 | 기울임 |
-| `~x~` · `~~x~~` | 글자 · 취소선 | 둘 다 취소선 |
-| `<url\|텍스트>` | 링크 | 링크 |
-
-mrkdwn 의 홑 `~` 는 **한국어의 물결표와 부딪힌다**(`약 ~40km`, `5~6월`). 그래서 글자
-뒤나 숫자 앞에서는 열지 않고, 영숫자 앞에서는 닫지 않으며(슬랙 mrkdwn 도 단어 경계를
-요구한다), 안 닫히면 블록 끝까지 긋지 않고 글자로 되돌린다. 조사 앞에서는 닫는다
-(`~취소~가`). 멘션(`<@U…>`)·채널(`<#C…|이름>`)은 건드리지 않는다.
+**입력 표기는 고르지 않는다**(2026-10-01). LLM 은 대개 마크다운으로 쓰지만 표준에서 벗어나기도
+하고, 그걸 받아 내는 것이 기본 읽기의 일이다 — 표기를 미리 알려 달라는 것은 그 일을 호출자에게
+떠넘기는 셈이다. 그래서 슬랙 레거시 `mrkdwn` 으로 읽는 옵션(`--from slack-mrkdwn`)을 걷어냈다.
+기본 읽기는 `<url|텍스트>` 를 링크로 받고, 홑 `*x*` 는 표준대로 기울임, 홑 `~x~` 는 글자다.
+홑별표를 굵게로 받을지는 정하지 않았다(코퍼스 `mrkdwn-*`).
 
 **고친 것과 바꾼 것**(`Repairs`)은 정규화가 저자 대신 한 일과 채널에 맞춰 바꿔 쓴 것의 개수다 —
 모델이 얼마나 자주 서식을 깨는지 로그로 재고, 채널을 들이기 전에 그 채널이 무엇을 바꾸는지 보려는 쪽이
@@ -243,7 +232,7 @@ mrkdwn 의 홑 `~` 는 **한국어의 물결표와 부딪힌다**(`약 ~40km`, `
 | `stripped_html` | 벗긴 원문 HTML — 그 채널이 못 그리는 태그, 주석, 줄바꿈으로 바꾼 `<br>` |
 | `rewritten_bullet` | 다른 기호로 바꿔 쓴 목록 기호 — 불릿(`* ` `• ` → `- `, 텔레그램은 `- ` → `• `)과 번호(`1)` → `1.`) |
 | `rewritten_table` | 원문과 다른 모양으로 다시 쓴 표(구분선·칸 공백 정규화, 고정폭으로 내림). 브라우저 채널은 빼고 센다 |
-| `converted_marker` | 다른 표기로 바꿔 쓴 강조 마커와 링크(mrkdwn `*굵게*` → `**굵게**`, `_기울임_` → `*기울임*`, `<url\|텍스트>` → `[텍스트](url)`). 마크다운을 내는 채널만 |
+| `converted_marker` | 다른 표기로 바꿔 쓴 강조 마커와 링크(`_기울임_` → `*기울임*`, `__굵게__` → `**굵게**`, `<url\|텍스트>` → `[텍스트](url)`). 마크다운을 내는 채널만 |
 
 **세지 않는 것** — 빈 줄 접기, 헤딩 레벨 정규화, 줄 끝 공백처럼 모양만 고르는 일. 텔레그램·브라우저의
 마커 → 태그는 채널의 문법 자체라 세지 않는다.

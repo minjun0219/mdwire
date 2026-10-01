@@ -52,18 +52,3 @@ fn scan_mode_needs_no_expected_output() {
     assert!(outcomes[0].compared.is_none(), "훑기 모드는 기대 출력을 보지 않는다");
     assert!(!outcomes[0].findings.is_empty(), "불변식은 그래도 재야 한다");
 }
-
-/// **입력 표기 케이스는 `from` 을 읽고, 입력 표기를 모르는 구현에는 먹이지 않는다.** 표준으로 읽고
-/// 틀렸다고 채점하면 "입력 표기를 모른다"와 "변환이 틀렸다"가 한 실패로 섞인다.
-#[test]
-fn dialect_cases_are_skipped_for_renderers_that_cannot_read_them() {
-    let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
-    let dialect: Vec<_> = cases.iter().filter(|c| c.from != mdwire::Dialect::Markdown).collect();
-    assert!(!dialect.is_empty(), "`from` 파일이 있는 케이스가 없다");
-
-    let outcomes =
-        corpus::run_corpus(&corpus_dir(), &passthrough(), &[Channel::TelegramHtml]).expect("실행");
-    let s = corpus::summarize(&outcomes);
-    assert_eq!(s.skipped, dialect.len(), "입력 표기 케이스마다 한 번씩 건너뛰어야 한다");
-    assert!(outcomes.iter().filter(|o| o.skipped).all(|o| o.findings.is_empty() && o.compared.is_none()));
-}

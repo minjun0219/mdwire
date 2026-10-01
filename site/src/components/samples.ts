@@ -5,7 +5,6 @@ import type { Locale } from "../i18n";
 export interface Sample {
   /** 코퍼스 케이스 이름. */
   id: string;
-  from: "markdown" | "slack-mrkdwn";
   note: Record<Locale, string>;
   input: string;
 }
@@ -13,7 +12,6 @@ export interface Sample {
 export const samples: Sample[] = [
   {
     id: "chat-bot-answer",
-    from: "markdown",
     note: {
       en: "A real bot answer: bold next to a Korean particle, bold across a line break, unclosed bold, unclosed fence.",
       ko: "실제 봇 답: 조사 옆 굵게, 줄을 넘는 굵게, 닫히지 않은 굵게, 닫히지 않은 코드펜스.",
@@ -22,7 +20,6 @@ export const samples: Sample[] = [
   },
   {
     id: "emphasis-across-linebreak",
-    from: "markdown",
     note: {
       en: "Emphasis wrapped across lines. A regex converter pairs the stray ** with the next one and inverts the range.",
       ko: "줄을 넘는 강조. 정규식 변환기는 짝 잃은 ** 를 뒤의 것과 짝지어 범위를 뒤집는다.",
@@ -31,7 +28,6 @@ export const samples: Sample[] = [
   },
   {
     id: "cjk-adjacent-emphasis",
-    from: "markdown",
     note: {
       en: "** right next to Korean text. Nothing is padded in.",
       ko: "한글 바로 옆에 붙은 **. 사이에 공백을 끼우지 않는다.",
@@ -40,7 +36,6 @@ export const samples: Sample[] = [
   },
   {
     id: "unclosed-code-fence",
-    from: "markdown",
     note: {
       en: "The agent stopped before closing the fence. It is closed right before output.",
       ko: "에이전트가 펜스를 닫지 않고 끝냈다. 출력 직전에 닫는다.",
@@ -49,7 +44,6 @@ export const samples: Sample[] = [
   },
   {
     id: "korean-table",
-    from: "markdown",
     note: {
       en: "Telegram has no tables, so it goes out as a monospace block — columns aligned by display width, where Hangul takes two cells.",
       ko: "텔레그램에는 표가 없어 고정폭 블록으로 나간다 — 한글을 두 칸으로 재서 열을 맞춘다.",
@@ -57,17 +51,7 @@ export const samples: Sample[] = [
     input: "| 환경 | 재현 | 응답 시간 |\n|---|:---:|---:|\n| 스테이징 | 예 | 120ms |\n| 프로덕션 | 예 | 340ms |\n| 로컬 | 아니오 | 15ms |\n",
   },
   {
-    id: "mrkdwn-bold-across-linebreak",
-    from: "slack-mrkdwn",
-    note: {
-      en: "Legacy Slack mrkdwn (*bold*) across a line break, read with from: \"slack-mrkdwn\".",
-      ko: "줄을 넘는 레거시 슬랙 mrkdwn(*굵게*). from: \"slack-mrkdwn\" 으로 읽는다.",
-    },
-    input: "*첫 줄에서 열고 이어서\n둘째 줄에서 닫힘*입니다.\n\n앞말 *한 줄을 넘는\n굵게* 뒤에 말이 붙는다.\n",
-  },
-  {
     id: "table-cell-overflow",
-    from: "markdown",
     note: {
       en: "A | inside a code span splits the table cell — and GFM silently drops the cell that no longer fits.",
       ko: "코드 스팬 안의 | 가 표 칸을 가른다 — GFM 은 넘친 칸을 소리 없이 버린다.",
@@ -76,7 +60,6 @@ export const samples: Sample[] = [
   },
   {
     id: "unpaired-backtick-run",
-    from: "markdown",
     note: {
       en: "A ``` with no partner in the middle of a line. Opened as a code span, it would swallow the bold after it.",
       ko: "줄 가운데의 짝 없는 ```. 코드 스팬으로 열면 뒤의 굵게까지 삼킨다.",

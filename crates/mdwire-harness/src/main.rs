@@ -22,8 +22,7 @@ mdwire-check — 코퍼스 대조 + 구현 중립 불변식 채점
 옵션:
   --corpus <디렉토리>   코퍼스 케이스 디렉토리 (기본: corpus/cases)
   --scan <디렉토리>     .md 를 훑어 불변식만 잰다. 기대 출력은 보지 않는다
-  --cmd \"<명령>\"        외부 구현을 채점한다. {channel} 은 채널 이름, {from} 은 입력
-                        입력 표기로 치환된다. {from} 이 없으면 입력 표기 케이스는 건너뛴다
+  --cmd \"<명령>\"        외부 구현을 채점한다. {channel} 은 채널 이름으로 치환된다
   --channel <목록>      쉼표로 구분 (기본: telegram-html,slack-markdown,github-markdown,notion-markdown,plain,html)
   -v, --verbose         통과한 것도 전부 찍는다
   -h, --help            이 도움말

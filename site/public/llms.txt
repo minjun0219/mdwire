@@ -15,7 +15,6 @@ Channels (the name each API takes):
 
 Things that are easy to get wrong:
 
-- Input dialect: standard Markdown by default. Legacy Slack `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`) must be declared — `from: "slack-mrkdwn"` in npm, `--from slack-mrkdwn` in the CLI.
 - Streaming is append-only: what `push` returns is final and `finish` only appends the tail, so the pieces concatenated equal a one-shot `render` (unless the document is long enough to be split into parts).
 - A channel that rewrites the whole message (Telegram edit) sends the accumulated output plus `preview()`. An append-only channel (Slack `appendStream`) sends each `push` piece as is and never calls `preview()`.
 - The repair report counts what the normalizer fixed: closed emphasis, closed code fences, backtick runs kept as text, dropped `**` — and what the channel rewrote: escapes, tag emphasis, stripped HTML, bullets, tables, converted markers.
@@ -33,7 +32,7 @@ Things that are easy to get wrong:
 
 - [npm `@minjun0219/mdwire`](https://www.npmjs.com/package/@minjun0219/mdwire): `render`, `renderWithReport`, `Streamer`; `@minjun0219/mdwire/react` (`Markdown`, `useMarkdownStream`) and `@minjun0219/mdwire/events`
 - [crates.io `mdwire-core`](https://crates.io/crates/mdwire-core): the Rust library, imported as `mdwire`
-- [crates.io `mdwire-cli`](https://crates.io/crates/mdwire-cli): the `mdwire` command — `mdwire --channel <name> [--from <dialect>] [--stream] [--report]`
+- [crates.io `mdwire-cli`](https://crates.io/crates/mdwire-cli): the `mdwire` command — `mdwire --channel <name> [--stream] [--report]`
 - [Go `github.com/minjun0219/mdwire/go`](https://pkg.go.dev/github.com/minjun0219/mdwire/go): the Go port, library and CLI
 
 ## Site
@@ -43,7 +42,7 @@ Docs pages are Markdown at the page path plus `.md` (`/docs/npm/` → `/docs/npm
 - [Overview](https://mdwire.minjun.dev/index.md): what mdwire does
 - [Demos](https://mdwire.minjun.dev/demo/), all in the browser: [Telegram vs Slack](https://mdwire.minjun.dev/demo/channels/) (one agent answer converted for both), [Streaming](https://mdwire.minjun.dev/demo/streaming/) (token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook), [Before and after repair](https://mdwire.minjun.dev/demo/repair/) (broken agent output next to what mdwire sends, with the repair report)
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
-- [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, dialects, options, the repair report, the streaming contract
+- [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, options, the repair report, the streaming contract
 - [Docs: npm](https://mdwire.minjun.dev/docs/npm.md) · [Rust](https://mdwire.minjun.dev/docs/rust.md) · [Go](https://mdwire.minjun.dev/docs/go.md) · [CLI](https://mdwire.minjun.dev/docs/cli.md): the API of each
 - [Full docs](https://mdwire.minjun.dev/llms-full.txt): every docs page above in one file
 

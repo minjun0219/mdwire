@@ -113,18 +113,8 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 				}
 			}
 			opts.HTML.Schemes = schemes
-		case "--from":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--from 에 값이 없다")
-			}
-			i++
-			d, ok := mdwire.ParseDialect(args[i])
-			if !ok {
-				return fmt.Errorf("모르는 입력 표기: %q (markdown · slack-mrkdwn)", args[i])
-			}
-			opts.From = d
 		case "-h", "--help":
-			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|notion-markdown|plain|html [--from markdown|slack-mrkdwn] [--limit N] [--html-line-breaks br|space] [--html-images link|load] [--html-schemes http,https,mailto] [--stream] [--report] [--batch jsonl] < input.md\n")
+			fmt.Fprint(out, "사용법: mdwire --channel telegram-html|slack-markdown|github-markdown|notion-markdown|plain|html [--limit N] [--html-line-breaks br|space] [--html-images link|load] [--html-schemes http,https,mailto] [--stream] [--report] [--batch jsonl] < input.md\n")
 			return nil
 		default:
 			return fmt.Errorf("모르는 인자: %s", args[i])

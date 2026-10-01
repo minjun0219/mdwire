@@ -37,20 +37,16 @@ for (const channel of ["telegram-html", "slack-markdown", "github-markdown", "no
   assert.equal(appended, render(input, channel).join(""), `${channel}: 이어 붙인 것이 완성본과 다르다`);
 }
 
-// 입력 표기 — 레거시 mrkdwn 으로 쓴 에이전트 출력. 옵션은 객체 하나다.
-assert.deepEqual(
-  render("*굵게* ~취소~ <https://x.io|링크>", "slack-markdown", { from: "slack-mrkdwn" }),
-  ["**굵게** ~~취소~~ [링크](https://x.io)"],
-);
+// 입력 표기는 고르지 않는다 — 표준에서 벗어난 표기도 기본 읽기가 받는다.
+assert.deepEqual(render("_기울임_ <https://x.io|링크>", "slack-markdown"), ["*기울임* [링크](https://x.io)"]);
 // 한도는 호출자가 정한다 — plain 폴백을 텔레그램으로 보낼 때 4096.
 const long = "가나다 ".repeat(3000);
 assert.ok(render(long, "plain").length === 1, "plain 기본 한도는 12,000 이다");
 const capped = render(long, "plain", { limit: 4096 });
 assert.ok(capped.length > 1 && capped.every((p) => [...p].length <= 4096), "limit 을 넘는 조각이 있다");
 assert.throws(() => render(long, "plain", { limit: 0 }), /limit/);
-const ms = new Streamer("telegram-html", { from: "slack-mrkdwn" });
-assert.equal(ms.push("*굵") + ms.push("게*") + ms.finish(), "<b>굵게</b>");
-assert.throws(() => render("x", "plain", { from: "mrkdwn" }), /모르는 입력 표기/);
+const ms = new Streamer("telegram-html", { limit: 4096 });
+assert.equal(ms.push("**굵") + ms.push("게**") + ms.finish(), "<b>굵게</b>");
 
 // 정규화가 고친 것.
 const report = renderWithReport("**영향 범위\n```ts\nconst a = 1;", "telegram-html");
