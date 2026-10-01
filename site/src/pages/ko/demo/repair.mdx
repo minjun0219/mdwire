@@ -23,7 +23,7 @@ import RepairCompare from "../../../components/RepairCompare.tsx";
 
 정규화 보고는 모델이 제 서식을 얼마나 자주 깨는지 알려 준다. 답마다 남겨 두면 에이전트가 정규화에
 얼마나 기대는지 보인다 — CLI 의 `--batch jsonl` 은 답 수백 개에 대해 같은 일을 한다. 네 가지 수는
-0.1.8 에 있는 것이고, 다음 릴리스는 채널에 맞춰 바꾼 것도 센다([개념](/ko/docs/#정규화-보고)).
+0.1.8 이 세는 것이고, 다음 릴리스는 채널에 맞춰 바꾼 것도 센다([개념](/ko/docs/#정규화-보고)).
 
 <details class="code">
 <summary>이 데모의 코드</summary>
@@ -37,7 +37,7 @@ out.parts.join(""); // 보낼 것
 r.closedEmphasis;   // 블록 끝에서 닫아 준 강조
 r.closedFence;      // 문서 끝에서 닫아 준 코드펜스
 r.revertedCodeSpan; // 짝이 없어 글자로 되돌린 백틱 런
-r.droppedMarker;    // 짝을 잃어 버린 **
+r.droppedMarker;    // 짝이 없어 버린 **
 r.free();           // 둘 다 WASM 메모리에 있다 — 다 쓰면 놓는다
 out.free();
 ```

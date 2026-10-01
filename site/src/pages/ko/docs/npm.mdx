@@ -8,7 +8,7 @@ import Next from "../../../components/Next.astro";
 
 # npm — `@minjun0219/mdwire`
 
-Rust 코어를 WASM 으로 컴파일한 것에, React 와 이벤트 목록을 위한 손으로 쓴 JS 를 더했다. Node · Bun ·
+Rust 코어를 WASM 으로 컴파일하고, React 와 이벤트 목록용 JS 를 손으로 써서 더했다. Node · Bun ·
 번들러에서 돈다.
 
 ```sh
@@ -20,7 +20,7 @@ ESM 번들러 빌드. **번들러에서는** WASM 을 ES 모듈로 import 하므
 `build.target: "esnext"`(top-level `await`)가 필요하다.
 [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js) 참고.
 
-채널·입력 표기 이름은 [개념](/ko/docs/)의 문자열이다.
+채널과 입력 표기의 이름은 [개념](/ko/docs/)에 있는 문자열을 쓴다.
 
 ## `render(input, channel, options?)`
 
@@ -30,8 +30,7 @@ import { render } from "@minjun0219/mdwire";
 const parts: string[] = render(markdown, "telegram-html");
 ```
 
-완성된 문서를 옮긴다. 보낼 조각들을 돌려준다 — 채널의 한도(또는 `options.limit`)에 걸리지 않으면 문자열
-하나다.
+완성된 문서를 옮긴다. 보낼 조각들을 돌려준다 — 채널의 한도(또는 `options.limit`)를 넘지 않으면 하나뿐이다.
 
 ## `renderWithReport(input, channel, options?)`
 
@@ -107,7 +106,7 @@ interface RenderOptions {
 
 ## React — `@minjun0219/mdwire/react`
 
-React 요소를 `createElement` 로 만든다 — `innerHTML` 을 쓰지 않는다. escape, 태그 집합, 링크 스킴은 코어의
+React 요소를 `createElement` 로 만든다 — `innerHTML` 을 쓰지 않는다. 이스케이프, 태그 집합, 링크 스킴은 코어의
 `html` 채널이 정하고, 태그마다 어떤 컴포넌트로 그릴지만 고른다.
 
 ```tsx
@@ -122,7 +121,7 @@ const settled = useMarkdownStream({ eager: false });        // 확정된 것만
 | | |
 |---|---|
 | `<Markdown text from? components? options? />` | 완성된 답. `components` 는 태그(`a`, `code` …)를 내 컴포넌트에 잇는다. |
-| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | 스트리밍. `{ elements, push, finish }` 를 돌려준다. `eager`(기본 `true`)는 붙든 것도 먼저 그리고, `false` 는 확정된 것만. `onSettled(html, revised)` 는 `finish` 뒤에 불린다. `onSettled` 말고는 처음 한 번만 읽는다. |
+| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | 스트리밍. `{ elements, push, finish }` 를 돌려준다. `eager`(기본 `true`)는 붙든 것도 먼저 그리고, `false` 는 확정된 것만. `onSettled(html, revised)` 는 `finish` 뒤에 불린다. 옵션은 `onSettled` 말고는 처음 한 번만 읽는다. |
 | `toElements(html, components?, schemes?)` | `html` 채널 출력(스트리밍이면 누적본 + `preview()`)을 React 노드로. `schemes` 는 코어에 준 것과 같게 준다. |
 
 ## 이벤트 — `@minjun0219/mdwire/events`
@@ -133,6 +132,6 @@ import { toEvents } from "@minjun0219/mdwire/events";
 toEvents(html); // [{ type: "open", tag: "p", attrs: {} }, { type: "text", text: "…" }, { type: "close", tag: "p" }, …]
 ```
 
-같은 `html` 출력을 `open` / `text` / `close` / `void` 평평한 목록으로 — 다른 프레임워크용. 속성은 코어가
+같은 `html` 출력을 `open` / `text` / `close` / `void` 의 평평한 목록으로 푼다 — React 가 아닌 프레임워크에서 쓴다. 속성은 코어가
 내는 것만 담긴다: `a` 의 `href`, `code` 의 `class`(`language-…`), `th` · `td` 의 `style`(`text-align:…`),
 `ol` 의 `start`, 이미지를 불러올 때 `img` 의 `src` · `alt`.

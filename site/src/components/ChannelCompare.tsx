@@ -51,7 +51,7 @@ const text = {
       closedEmphasis: "닫아 준 강조",
       closedFence: "닫아 준 코드펜스",
       revertedCodeSpan: "글자로 되돌린 백틱",
-      droppedMarker: "버린 짝 잃은 **",
+      droppedMarker: "짝이 없어 버린 **",
     },
     empty: "(비어 있음)",
   },

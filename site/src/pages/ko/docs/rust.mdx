@@ -8,7 +8,7 @@ import Next from "../../../components/Next.astro";
 
 # Rust — `mdwire-core`
 
-코어. 표준 라이브러리만 쓴다 — 의존이 없다. 크레이트 이름은 `mdwire-core`, 라이브러리는 `mdwire` 로
+코어다. 표준 라이브러리만 쓰고 의존성이 없다. 크레이트 이름은 `mdwire-core`, 라이브러리는 `mdwire` 로
 import 한다. 전체 rustdoc: [docs.rs/mdwire-core](https://docs.rs/mdwire-core).
 
 ```sh
@@ -25,7 +25,7 @@ assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
 ```
 
 `render(input: &str, channel: Channel) -> Vec<String>` 은 완성된 문서를 옮긴다. 한도를 넘으면 열린
-마크업이 없는 자리에서 나눈다 — 렌더 결과를 글자 수로 자르지 않고 구조에서 고른다.
+마크업이 없는 자리에서 나눈다 — 렌더 결과를 글자 수로 자르는 게 아니라 구조를 보고 자를 자리를 고른다.
 
 ## `render_with`
 
@@ -83,7 +83,7 @@ assert!(!s.revised());                                       // 마지막 화면
 | `push(&mut self, chunk) -> &str` | 지금 보내도 안전한 것. 다음 호출 전까지 빌려준다. |
 | `push_into(&mut self, chunk, out: &mut String)` | 같은 것을 호출자 버퍼에 — 조각당 할당이 없다. |
 | `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | 남은 것, 열린 마크업은 닫아서. |
-| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | 메시지를 통째로 다시 그릴 때 붙일 꼬리. 열린 블록만큼 든다 — 그릴 때 부른다. |
+| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | 메시지를 통째로 다시 그릴 때 붙일 꼬리. 비용이 열린 블록에 비례한다 — 그릴 때만 부른다. |
 | `close_open(&self, out: &mut String)` | 이미 나간 블록 마크업의 닫는 태그만 붙인다. |
 | `revised(&self) -> bool` | `finish` 뒤에: 완성본이 마지막 `preview` 와 다른가. 참은 "다를 수 있다"는 뜻. |
 | `repairs(&self) -> Repairs` | 지금까지 고친 것. |

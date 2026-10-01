@@ -43,11 +43,11 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
   },
   "unpaired-backtick-run": {
     en: "A ``` with no partner. Opened as a code span, it swallows the rest of the line, bold included. mdwire keeps the run as text, so the Markdown barely changes — switch to Telegram HTML to see the bold after it come out as <b>.",
-    ko: "짝 없는 ```. 코드 스팬으로 열면 뒤의 굵게까지 줄 끝을 삼킨다. mdwire 는 이 런을 글자로 둔다 — 마크다운은 거의 그대로라, 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 게 보인다.",
+    ko: "짝 없는 ```. 코드 스팬으로 열면 줄 끝까지, 뒤의 굵게까지 삼킨다. mdwire 는 이 런을 글자로 둔다 — 마크다운은 거의 그대로라, 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 게 보인다.",
   },
   "table-cell-overflow": {
     en: "The | inside `vol|wlv` splits the cell, leaving two half code spans (kept as text) and one cell too many — which GFM silently drops. mdwire folds the extra cell into the last one with an escaped \\|, so the author's last cell survives.",
-    ko: "`vol|wlv` 안의 | 가 칸을 갈라, 반쪽 코드 스팬 둘(글자로 되돌림)과 넘친 칸 하나가 생긴다 — GFM 은 그 칸을 소리 없이 버린다. mdwire 는 넘친 칸을 탈출한 \\| 로 마지막 칸에 합쳐 저자의 마지막 칸을 살린다.",
+    ko: "`vol|wlv` 안의 | 가 칸을 갈라, 반쪽 코드 스팬 둘(글자로 되돌림)과 넘친 칸 하나가 생긴다 — GFM 은 그 칸을 소리 없이 버린다. mdwire 는 넘친 칸을 이스케이프한 \\| 로 마지막 칸에 합쳐 저자의 마지막 칸을 살린다.",
   },
 };
 
@@ -84,7 +84,7 @@ const text = {
       closedEmphasis: ["closedEmphasis", "블록 끝까지 안 닫힌 강조를 닫았다"],
       closedFence: ["closedFence", "문서 끝까지 안 닫힌 코드펜스를 닫았다"],
       revertedCodeSpan: ["revertedCodeSpan", "짝 없는 백틱 런을 글자로 되돌렸다"],
-      droppedMarker: ["droppedMarker", "짝 잃은 ** 를 버렸다"],
+      droppedMarker: ["droppedMarker", "짝이 없는 ** 를 버렸다"],
     },
     empty: "(비어 있음)",
   },

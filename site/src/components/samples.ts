@@ -34,7 +34,7 @@ export const samples: Sample[] = [
     from: "markdown",
     note: {
       en: "** right next to Korean text. Nothing is padded in.",
-      ko: "한글 바로 옆의 **. 아무것도 끼우지 않는다.",
+      ko: "한글 바로 옆에 붙은 **. 사이에 공백을 끼우지 않는다.",
     },
     input: "배포는 **금요일**에 하지 않는다. `main` 브랜치에 **직접 커밋**하지도 않는다.\n",
   },
