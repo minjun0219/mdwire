@@ -21,11 +21,11 @@ import RepairCompare from "../../../components/RepairCompare.tsx";
   </RepairCompare>
 </div>
 
-정규화 보고를 보면 모델이 자기 서식을 얼마나 자주 깨는지 알 수 있습니다. 답마다 기록해 두면 에이전트가
-정규화에 얼마나 기대는지도 보입니다. CLI 의 `--batch jsonl` 은 답 수백 개를 한 번에 이렇게 집계합니다.
-앞의 네 가지는 고친 것이고, 뒤의 여섯 가지는 채널 때문에 바꿔 쓴 것입니다. `table-cell-overflow`
-에서는 표를 다시 쓴 횟수도 잡힙니다. 노션은 예외인데, 노션에는 표가 `<table>` 태그로 나가기
-때문입니다([Concepts](/ko/docs/#정규화-보고)).
+정규화 보고를 보면 모델이 자기 서식을 얼마나 자주 깨는지 알 수 있습니다. 답변마다 기록해 두면 에이전트가
+정규화에 얼마나 기대는지도 보입니다. CLI 의 `--batch jsonl` 은 답변 수백 개를 한 번에 이렇게 집계합니다.
+앞의 네 가지는 고친 것이고, 뒤의 여섯 가지는 채널에 맞춰 바꿔 쓴 것입니다. `table-cell-overflow`
+에서는 표를 다시 쓴 횟수도 잡힙니다. 노션은 예외입니다. 노션으로는 표가 `<table>` 태그로
+나갑니다([Concepts](/ko/docs/#정규화-보고)).
 
 <details class="code">
 <summary>이 데모의 코드</summary>
@@ -38,14 +38,14 @@ const r = out.repairs;
 out.parts.join(""); // 보낼 텍스트
 r.closedEmphasis;   // 블록 끝에서 닫아 준 강조
 r.closedFence;      // 문서 끝에서 닫아 준 코드펜스
-r.revertedCodeSpan; // 짝이 없어 텍스트로 되돌린 백틱 런
+r.revertedCodeSpan; // 짝이 없어 텍스트로 되돌린 연속된 백틱
 r.droppedMarker;    // 짝이 없어 버린 **
 r.rewrittenTable;   // … 그리고 채널에 맞춰 바꿔 쓴 것 여섯 가지
 r.free();           // 둘 다 WASM 메모리에 있으므로 다 쓰면 해제
 out.free();
 ```
 
-표시는 이 페이지가 입력과 출력을 글자 단위로 비교해서 그린 것입니다. mdwire 는 바꾼 위치가 아니라
+표시는 이 페이지가 입력과 출력을 글자 단위로 비교해서 표시한 것입니다. mdwire 는 바꾼 위치가 아니라
 횟수만 알려 줍니다. 전체 컴포넌트:
 [`site/src/components/RepairCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/RepairCompare.tsx).
 

@@ -31,13 +31,13 @@ LLM 마크다운  →  정규화  →  채널별 렌더링  →  안전한 분�
 ## 대상
 
 텔레그램 HTML, 슬랙 `markdown_text`, GitHub 코멘트(GFM), 노션 페이지, 평문, 브라우저용 HTML 을
-지원합니다. 구현은 Rust 코어, CLI, npm 패키지(WASM), Go 구현이 있고 모두 같은 테스트 케이스를 통과합니다.
+지원합니다. Rust 코어, CLI, npm 패키지(WASM), Go 구현이 있고, 모두 같은 테스트 케이스를 통과합니다.
 
 ## 데모
 
 [데모](/ko/demo/)는 npm 패키지를 브라우저에서 실행합니다.
 
-- [Telegram vs Slack](/ko/demo/channels/): 에이전트 답 하나를 텔레그램용과 슬랙용으로 나란히 변환합니다.
+- [Telegram vs Slack](/ko/demo/channels/): 에이전트 답변 하나를 텔레그램용과 슬랙용으로 나란히 변환합니다.
 - [Streaming](/ko/demo/streaming/): 같은 답을 렌더러 다섯 개에 스트리밍합니다.
 - [깨진 마크다운 고치기](/ko/demo/repair/): 깨진 에이전트 출력을 고치기 전과 후로 비교합니다.
 

@@ -12,7 +12,7 @@ Rust 코어, npm 패키지, Go 구현, CLI 가 모두 같은 결과를 출력합
 
 ## 줄을 넘는 강조
 
-80열에서 줄을 접어 쓴 글은 강조가 다음 줄로 넘어가기 쉽습니다. 실제 문서 60개 중 44개에 있었습니다.
+한 줄을 80자로 접어 쓴 글은 강조가 다음 줄로 넘어가기 쉽습니다. 실제 문서 60개 중 44개에 있었습니다.
 정규식 기반 변환기는 짝을 잃은 `**` 를 뒤의 `**` 와 잘못 짝지어 강조 범위를 뒤집었습니다. 그래도 채널은
 HTTP 200 을 돌려줘서 아무도 알아채지 못했습니다.
 
@@ -32,7 +32,7 @@ mdwire
 읽습니다. 테스트 케이스: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-across-linebreak),
 [`emphasis-wraps-line`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-wraps-line)
 
-## 기호로 끝나는 굵게 뒤에 조사
+## 기호로 끝나는 굵게 뒤의 조사
 
 한국어는 강조 바로 뒤에 조사가 붙습니다. 굵게가 괄호, 따옴표, 백틱, 마침표로 끝나면 CommonMark
 규칙상 닫는 `**` 가 닫히지 않습니다. GitHub 에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이 엇갈려
@@ -48,7 +48,7 @@ GitHub
 ```
 
 mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 내보냅니다. 태그는 이 규칙과
-상관없이 그려지기 때문입니다. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+상관없이 렌더링되기 때문입니다. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## 범위와 근사값의 물결표
 
@@ -76,12 +76,12 @@ GitHub
   결제 수단: 신한카드 1\*\*\*-\*\*\*\*-\*\*\*\*-001\* (본인 명의)
 ```
 
-열 수 없는 자리의 별표는 글자로 판정하고, 별표를 구문으로 읽는 GitHub 과 노션으로는 이스케이프합니다.
+강조를 열 수 없는 자리의 별표는 글자로 보고, 별표를 구문으로 읽는 GitHub 과 노션으로는 이스케이프합니다.
 테스트 케이스: [`masked-number-asterisks`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/masked-number-asterisks)
 
 ## 짝 없는 백틱
 
-짝 없는 백틱 런이 코드 스팬을 열고 블록 끝까지 삼켰습니다. 뒤에 오던 강조가 통째로 코드 안에 갇힙니다.
+짝 없는 연속된 백틱이 코드 스팬을 열고 블록 끝까지 삼켰습니다. 뒤에 오던 강조가 통째로 코드 안에 갇힙니다.
 
 ```text
 입력
@@ -92,7 +92,7 @@ GitHub
   앞부분 ``` 뒤에 <b>굵게</b> 가 온다
 ```
 
-블록이 끝날 때까지 닫는 런이 없으면 그 백틱은 글자로 되돌리고, 삼켰던 내용을 다시 읽어 강조를
+블록이 끝날 때까지 닫는 백틱이 오지 않으면 그 백틱은 글자로 되돌리고, 삼켰던 내용을 다시 읽어 강조를
 살립니다. 테스트 케이스: [`unpaired-backtick-run`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unpaired-backtick-run)
 
 ## 닫히지 않은 코드펜스
@@ -157,4 +157,4 @@ GitHub
   슬랙에서 긁어 온 글은 [문서 보기](https://example.com/p) 꼴이다.
 ```
 
-꺾쇠 링크는 링크로 내보냅니다. `|` 뒤가 있으면 그것이 텍스트입니다. 테스트 케이스: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)
+꺾쇠 링크는 링크로 내보냅니다. `|` 뒤에 글이 있으면 그것을 링크 텍스트로 씁니다. 테스트 케이스: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)

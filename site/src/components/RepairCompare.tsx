@@ -54,7 +54,7 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
   },
   "unpaired-backtick-run": {
     en: "A ``` with no partner. Opened as a code span, it swallows the rest of the line, bold included. mdwire keeps the run as text, so the Markdown barely changes — switch to Telegram HTML to see the bold after it come out as <b>.",
-    ko: "짝 없는 ``` 입니다. 이를 코드 스팬으로 열면 뒤의 굵게까지 줄 끝을 통째로 삼킵니다. mdwire 는 이 런을 텍스트로 둡니다. 마크다운은 거의 그대로이므로, 채널을 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 것을 확인할 수 있습니다.",
+    ko: "짝 없는 ``` 입니다. 이를 코드 스팬으로 열면 뒤의 굵게까지 줄 끝을 통째로 삼킵니다. mdwire 는 이 백틱을 텍스트로 둡니다. 마크다운은 거의 그대로이므로, 채널을 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 것을 확인할 수 있습니다.",
   },
   "table-cell-overflow": {
     en: "The | inside `vol|wlv` splits the cell, leaving two half code spans (kept as text) and one cell too many — which GFM silently drops. mdwire folds the extra cell into the last one with an escaped \\|, so the author's last cell survives.",
@@ -101,7 +101,7 @@ const text = {
     rows: {
       closedEmphasis: ["closedEmphasis", "블록 끝까지 닫히지 않은 강조를 닫았습니다"],
       closedFence: ["closedFence", "문서 끝까지 닫히지 않은 코드펜스를 닫았습니다"],
-      revertedCodeSpan: ["revertedCodeSpan", "짝 없는 백틱 런을 텍스트로 되돌렸습니다"],
+      revertedCodeSpan: ["revertedCodeSpan", "짝 없는 연속된 백틱을 텍스트로 되돌렸습니다"],
       droppedMarker: ["droppedMarker", "짝이 없는 ** 를 버렸습니다"],
       escapedChar: ["escapedChar", "채널이 구문으로 읽을 글자를 이스케이프했습니다"],
       tagEmphasis: ["tagEmphasis", "강조를 마커 대신 태그로 출력했습니다(GitHub 의 <strong>)"],
