@@ -117,6 +117,7 @@ pre {
 .site-header a {
   color: var(--fg);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .site-header a:hover,
@@ -140,7 +141,9 @@ pre {
   font-size: 0.9rem;
 }
 
-/* 좁은 화면에서도 한 줄 — 줄바꿈되면 고정 머리글이 화면을 너무 먹는다. */
+/* 좁은 화면에서도 한 줄 — 줄바꿈되면 고정 머리글이 화면을 너무 먹는다. 영문 메뉴가 더 길어서 375px 에서
+   `한국어` 가 세로로 꺾였다. GitHub 은 푸터에도 있으니 머리글에서 빼고, 그래도 모자란 폭(320px)에서는
+   메뉴만 가로로 민다 — 페이지 전체가 옆으로 밀리지 않게. */
 @media (max-width: 40rem) {
   .site-header {
     gap: 0.9rem;
@@ -153,8 +156,31 @@ pre {
     gap: 0.7rem;
   }
 
+  .site-header nav {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
   .header-end {
     font-size: inherit;
+  }
+
+  .header-github {
+    display: none;
+  }
+}
+
+/* 320px 대 — 간격과 글자를 조금 더 줄여 메뉴가 잘리지 않게. */
+@media (max-width: 22.5rem) {
+  .site-header {
+    gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .site-header nav {
+    gap: 0.55rem;
   }
 }
 
