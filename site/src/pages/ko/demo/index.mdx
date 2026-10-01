@@ -1,0 +1,23 @@
+---
+layout: ../../../layouts/Doc.astro
+title: 데모
+description: 브라우저에서 도는 mdwire — 답 하나를 텔레그램과 슬랙으로, 렌더러 다섯에 스트리밍으로, 그리고 깨진 에이전트 출력의 정규화 전후.
+---
+import DemoHashRedirect from "../../../components/DemoHashRedirect.astro";
+
+<DemoHashRedirect />
+
+# 데모
+
+여기 있는 데모는 모두 npm 패키지의 WASM 빌드로 브라우저에서 돈다 — 서버는 없다. 데모마다 아래에
+코드가 있다.
+
+- **[텔레그램 대 슬랙](/ko/demo/channels/)** — 에이전트 답 하나를 두 채널로 옮긴다. 보이는 것이 채널로
+  나가는 글자 그대로다.
+- **[스트리밍](/ko/demo/streaming/)** — 같은 답을 같은 토큰으로 잘라 react-markdown · Streamdown ·
+  Streamdown 앞의 mdwire · mdwire React 훅에 한꺼번에 흘린다.
+- **[정규화 전후](/ko/demo/repair/)** — 실제로 깨졌던 에이전트 출력과 mdwire 가 보내는 것을 나란히
+  놓는다. 바뀐 자리를 모두 표시하고, 그걸 센 정규화 보고도 보여 준다.
+
+입력은 [코퍼스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔다 — 모두 실제로
+겪은 고장이다. 직접 고쳐 봐도 된다.

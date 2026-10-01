@@ -1,0 +1,43 @@
+---
+layout: ../../layouts/Doc.astro
+title: Telegram vs Slack
+description: One agent answer converted for Telegram HTML and Slack markdown_text in your browser — exactly what goes over the wire.
+---
+import ChannelCompare from "../../components/ChannelCompare.tsx";
+
+# Telegram vs Slack
+
+One agent answer, converted for two channels. What you see is exactly what goes over the wire —
+the text you would pass to Telegram with `parse_mode: "HTML"`, and to Slack as `markdown_text`.
+
+The examples come from the [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases):
+each one is a failure that actually happened. Edit the input to try your own.
+
+<div class="wide">
+  <ChannelCompare client:only="react" lang="en">
+    <p slot="fallback">Loading the WASM build…</p>
+  </ChannelCompare>
+</div>
+
+Telegram gets tags — its HTML mode has no headings or tables, so a table goes out as a
+monospace block. Slack `markdown_text` reads standard Markdown, so the output stays Markdown,
+repaired. In both, unclosed emphasis and fences are closed before sending, and the counts under
+each output say how often the normalizer stepped in.
+
+<details class="code">
+<summary>This demo's code</summary>
+
+```ts
+import { renderWithReport } from "@minjun0219/mdwire";
+
+for (const channel of ["telegram-html", "slack-markdown"]) {
+  const out = renderWithReport(input, channel, { from: "markdown" }); // or "slack-mrkdwn"
+  out.parts;   // what you send — one string unless the limit splits it
+  out.repairs; // closedEmphasis · closedFence · revertedCodeSpan · droppedMarker
+  out.free();  // the result lives in WASM memory; free it when done
+}
+```
+
+Full component: [`site/src/components/ChannelCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/ChannelCompare.tsx).
+
+</details>

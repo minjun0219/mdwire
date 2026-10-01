@@ -230,3 +230,16 @@ details.code p {
   font-size: 0.9rem;
   color: var(--muted);
 }
+
+/* 정규화 데모와 그 설명 글의 더한 · 뺀 표시. 공백만 더해도 보이게 바탕을 깐다. */
+.doc ins {
+  text-decoration: none;
+  background: color-mix(in srgb, #16a34a 22%, transparent);
+  border-radius: 3px;
+}
+
+.doc del {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-radius: 3px;
+}

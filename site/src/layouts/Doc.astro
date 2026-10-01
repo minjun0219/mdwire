@@ -3,7 +3,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
-import DocsNav from "../components/DocsNav.astro";
+import SectionNav from "../components/SectionNav.astro";
 import "../styles/global.css";
 
 interface Props {
@@ -29,7 +29,8 @@ const nav = [
 ];
 // `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
 const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
-const isDocs = isCurrent("docs");
+// 문서 · 데모 묶음은 왼쪽에 그 묶음의 목차를 둔다.
+const section = isCurrent("docs") ? "docs" : isCurrent("demo") ? "demo" : undefined;
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
 const summary = description ?? t.tagline;
 
@@ -128,8 +129,8 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         <a href="https://github.com/minjun0219/mdwire">GitHub</a>
       </div>
     </header>
-    <div class:list={["page", { "with-sidebar": isDocs }]}>
-      {isDocs && <DocsNav headings={Astro.props.headings} />}
+    <div class:list={["page", { "with-sidebar": section }]}>
+      {section && <SectionNav section={section} headings={Astro.props.headings} />}
       <main class="doc">
         <slot />
       </main>

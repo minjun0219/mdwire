@@ -41,7 +41,7 @@ Things that are easy to get wrong:
 Docs pages are Markdown at the page path plus `.md` (`/docs/npm/` → `/docs/npm.md`, `/ko/docs/` → `/ko/docs.md`).
 
 - [Overview](https://mdwire.minjun.dev/index.md): what mdwire does
-- [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, and streamed token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook — in the browser
+- [Demos](https://mdwire.minjun.dev/demo/), all in the browser: [Telegram vs Slack](https://mdwire.minjun.dev/demo/channels/) (one agent answer converted for both), [Streaming](https://mdwire.minjun.dev/demo/streaming/) (token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook), [Before and after repair](https://mdwire.minjun.dev/demo/repair/) (broken agent output next to what mdwire sends, with the repair report)
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
 - [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, dialects, options, the repair report, the streaming contract
 - [Docs: npm](https://mdwire.minjun.dev/docs/npm.md) · [Rust](https://mdwire.minjun.dev/docs/rust.md) · [Go](https://mdwire.minjun.dev/docs/go.md) · [CLI](https://mdwire.minjun.dev/docs/cli.md): the API of each

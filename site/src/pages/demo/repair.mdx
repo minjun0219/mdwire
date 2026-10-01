@@ -1,0 +1,50 @@
+---
+layout: ../../layouts/Doc.astro
+title: Before and after repair
+description: Broken agent output from the corpus next to what mdwire sends — every added and removed character marked, with the repair report that counts them.
+---
+import RepairCompare from "../../components/RepairCompare.tsx";
+
+# Before and after repair
+
+Agents do not write well-formed Markdown: emphasis left open, a fence the output ran out before
+closing, a backtick with no partner. mdwire repairs these before rendering for the channel. Here the
+input sits next to what mdwire sends — <ins>added</ins> and <del>removed</del> characters are marked —
+and the repair report below counts each kind of fix.
+
+Each example is a case from the [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases) where
+a repair actually happens. Edit the input to break it your own way.
+
+<div class="wide">
+  <RepairCompare client:only="react" lang="en">
+    <p slot="fallback">Loading the WASM build…</p>
+  </RepairCompare>
+</div>
+
+The repair report says how often the model broke its own formatting. Logged per answer, it shows how
+much an agent leans on the normalizer — the CLI's `--batch jsonl` does the same over hundreds of
+answers. The four counters are the ones in 0.1.8; the next release also counts what each channel
+rewrote ([concepts](/docs/#the-repair-report)).
+
+<details class="code">
+<summary>This demo's code</summary>
+
+```ts
+import { renderWithReport } from "@minjun0219/mdwire";
+
+const out = renderWithReport(input, "slack-markdown");
+const r = out.repairs;
+out.parts.join(""); // what you send
+r.closedEmphasis;   // emphasis closed at the end of its block
+r.closedFence;      // fence closed at the end of the document
+r.revertedCodeSpan; // backtick run with no partner, kept as text
+r.droppedMarker;    // stray ** dropped
+r.free();           // both live in WASM memory — free them when done
+out.free();
+```
+
+The marks come from a character-level diff of the input against the output, done in the page — mdwire
+reports counts, not positions. Full component:
+[`site/src/components/RepairCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/RepairCompare.tsx).
+
+</details>

@@ -1,0 +1,23 @@
+---
+layout: ../../layouts/Doc.astro
+title: Demo
+description: mdwire running in your browser — one answer for Telegram and Slack, streaming into five renderers, and broken agent output before and after repair.
+---
+import DemoHashRedirect from "../../components/DemoHashRedirect.astro";
+
+<DemoHashRedirect />
+
+# Demo
+
+Everything here runs in your browser with the npm package's WASM build — no server. Each demo shows
+its code underneath.
+
+- **[Telegram vs Slack](/demo/channels/)** — one agent answer, converted for two channels. What you see
+  is exactly what goes over the wire.
+- **[Streaming](/demo/streaming/)** — the same answer, cut into the same tokens, streamed into
+  react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook at once.
+- **[Before and after repair](/demo/repair/)** — agent output that actually broke, next to what mdwire
+  sends, with every change marked and the repair report that counts them.
+
+The inputs come from the [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases): each one
+is a failure that actually happened. Edit them to try your own.

@@ -1,0 +1,11 @@
+---
+// 데모가 한 페이지였을 때의 앵커(`/demo/#streaming`)로 들어오면 그 데모의 페이지로 보낸다.
+// 앵커는 서버에 오지 않아 `_redirects` 로는 못 잡는다.
+---
+
+<script is:inline>
+  {
+    const to = { "#channels": "channels/", "#streaming": "streaming/" }[location.hash];
+    if (to) location.replace(to);
+  }
+</script>
