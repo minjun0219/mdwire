@@ -468,7 +468,7 @@ mod gate {
     #[test]
     fn notion_prose_streaming_is_allocation_free_once_warm() {
         let unit = "카드 1***-001* 과 백슬래시 \\ 하나. **배포를 금요일에\n하지 않는다** 이고\n\
-                    > **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝\n\n";
+                    > **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝, `a``\nb` 코드\n\n";
         let doc = unit.repeat(12);
         let pieces = split_chunks(&doc, CHUNK);
         let mut s = Streamer::new(Channel::NotionMarkdown);

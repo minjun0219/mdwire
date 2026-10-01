@@ -509,9 +509,11 @@ func wrapPerLine(out *[]byte, at int, open, close string, code bool, buf []byte)
 		case len(text) == 0:
 			*out = append(*out, body...)
 		case code:
-			fence := bytes.Repeat([]byte{'`'}, longestRun(text, '`')+1)
+			fence := longestRun(text, '`') + 1
 			pad := text[0] == '`' || text[len(text)-1] == '`'
-			*out = append(*out, fence...)
+			for k := 0; k < fence; k++ {
+				*out = append(*out, '`')
+			}
 			if pad {
 				*out = append(*out, ' ')
 			}
@@ -519,7 +521,9 @@ func wrapPerLine(out *[]byte, at int, open, close string, code bool, buf []byte)
 			if pad {
 				*out = append(*out, ' ')
 			}
-			*out = append(*out, fence...)
+			for k := 0; k < fence; k++ {
+				*out = append(*out, '`')
+			}
 			*out = append(*out, body[len(text):]...)
 		default:
 			*out = append(*out, open...)

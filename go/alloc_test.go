@@ -92,7 +92,7 @@ func TestGithubProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 // 둔 `<br>`. 러스트 쪽 같은 이름의 테스트.
 func TestNotionProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	unit := "카드 1***-001* 과 백슬래시 \\ 하나. **배포를 금요일에\n하지 않는다** 이고\n" +
-		"> **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝\n\n"
+		"> **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝, `a``\nb` 코드\n\n"
 	pieces := splitChunks(strings.Repeat(unit, 12), 64)
 	s := NewStreamer(NotionMarkdown)
 	var out []byte
