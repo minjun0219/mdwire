@@ -117,8 +117,8 @@ mdwire in front of Streamdown, and mdwire side by side. Measured numbers are in 
 and `finish` only appends the tail. So the pieces concatenated equal a one-shot `render`,
 whatever the chunk size (unless the document is long enough to be split into parts).
 This is tested on the corpus, by fuzzing, and by `mdwire-check --scan <dir>`, which streams
-every file one character and 64 characters at a time and reports any divergence. Runs in
-Node, Bun, and bundlers. See `SPEC.md` §8.2.
+every file one character and 64 characters at a time and reports any divergence. See
+`SPEC.md` §8.2.
 
 The streamer holds back only what it must: a prefix it cannot classify yet, a marker run
 at the end of a chunk, and the inside of an emphasis that has not closed. Paragraphs are
@@ -223,8 +223,8 @@ mdwire-check --scan ./some-directory-of-markdown   # invariants only, no expecte
 
 ## Releasing
 
-Nobody edits the version by hand. After every merge to `main` a bot keeps a
-`release: X.Y.Z` pull request open; merging it tags `vX.Y.Z` and `go/vX.Y.Z` and publishes
+Nobody edits the version by hand. When a merge to `main` changes what ships (the core, CLI,
+WASM or Go sources, manifests, npm packaging), a bot keeps a `release: X.Y.Z` pull request open; merging it tags `vX.Y.Z` and `go/vX.Y.Z` and publishes
 the release with its artifacts. See `AGENTS.md`.
 
 ## License
