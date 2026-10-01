@@ -1,0 +1,88 @@
+# 사이트가 쓰는 npm 판을 올리는 PR 을 연다 — 릴리스 하루 뒤에.
+#
+# 사이트(`site/`)는 저장소의 코어가 아니라 npm 에 올라간 `@minjun0219/mdwire` 를 쓴다. 릴리스가 나가면
+# 1. `site/package.json`·잠금 파일의 판을 올리고
+# 2. 이번 판에 들어간 기능의 `<Next />` 표시를 걷는다(`scripts/site-release-next.sh`).
+#
+# **하루를 기다린다.** 갓 올린 판은 레지스트리·CDN 에 퍼지는 사이에 받는 쪽마다 다르게 보이고, 그 판에서
+# 문제가 나 바로 다음 판이 나올 수도 있다. 하루 지난 판만 사이트에 들인다. 매일 한 번 보고, 낼 것이
+# 없으면 아무것도 하지 않는다. 열린 PR 이 있으면 그 브랜치를 새로 만들어 덮는다.
+#
+# 봇이 민 브랜치에는 CI 가 저절로 안 뜬다 — `release-pr.yml` 처럼 직접 부른다.
+name: site-bump
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 매일 10:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  BRANCH: site/bump-mdwire
+  PKG: '@minjun0219/mdwire'
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # `<Next />` 를 걷을 때 줄의 커밋이 태그의 조상인지 본다
+
+      - name: 새로운 버전 확인
+        id: next
+        run: |
+          latest=$(npm view "$PKG" version)
+          current=$(node -p "require('./site/package.json').dependencies['$PKG']")
+          echo "npm $latest · 사이트 $current"
+          if [ "$latest" = "$current" ]; then
+            echo "::notice::사이트가 이미 $latest 다"
+            exit 0
+          fi
+          published=$(npm view "$PKG" time --json | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0))['$latest'])")
+          age=$(( $(date +%s) - $(date -d "$published" +%s) ))
+          if [ "$age" -lt 86400 ]; then
+            echo "::notice::$latest 는 올린 지 $((age / 3600))시간이다 — 하루 뒤에 들인다"
+            exit 0
+          fi
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: 릴리즈 버전 확인 후 다음 릴리즈 표시 제거
+        if: steps.next.outputs.version != ''
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          npm install -g pnpm
+          (cd site && pnpm add --save-exact "$PKG@$VERSION")
+          ./scripts/site-release-next.sh "v$VERSION"
+          (cd site && pnpm run check && pnpm run build)
+
+      - name: PR 열기·갱신
+        if: steps.next.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$BRANCH"
+          git add site/
+          git commit -m "chore(site): mdwire $VERSION 을 쓴다"
+          # 이 브랜치는 봇 것이다 — 매번 main 에서 새로 만들어 덮는다.
+          git push --force origin "$BRANCH"
+
+          cat > body.md <<EOF
+          사이트가 쓰는 \`$PKG\` 를 $VERSION 으로 올리고, 이 판에 들어간 기능의 \`<Next />\` 표시를 걷는다.
+          표시를 단 뒤에 그 줄을 다시 고친 경우는 남을 수 있으니 diff 를 한 번 본다.
+          EOF
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "chore(site): mdwire $VERSION 을 쓴다" --body-file body.md
+          else
+            gh pr create --base main --head "$BRANCH" --title "chore(site): mdwire $VERSION 을 쓴다" --body-file body.md
+          fi
+          gh workflow run ci.yml --ref "$BRANCH"

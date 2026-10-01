@@ -14,7 +14,8 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 사례(`src/pages/why/cases.mdx`)는 `corpus/cases/` 중 대표 케이스의 입력과 기대 출력을 옮기고 `why.md` 를 풀어 쓴 것이다.
   옮긴 케이스의 기대 출력이 바뀌면 같이 고친다.
 - API 문서(`src/pages/docs/`)는 `main` 을 따른다. 코어·바인딩·CLI 의 공개 API 가 바뀌면 같은 PR 에서 문서도
-  고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 달고, 릴리스가 나가면 그 표시를 지운다.
+  고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 단다. 릴리스 하루 뒤 `site-bump.yml` 이 사이트의
+  npm 판을 올리고 그 판에 들어간 표시를 걷는 PR 을 연다(`scripts/site-release-next.sh`).
 - 스트리밍 데모(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
   을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
 - `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
