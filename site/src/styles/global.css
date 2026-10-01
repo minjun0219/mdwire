@@ -275,3 +275,10 @@ details.code p {
   background: color-mix(in srgb, var(--warn) 14%, transparent);
   border-radius: 3px;
 }
+
+/* 한글이 든 고정폭 표(사례 페이지). 브라우저 기본 고정폭 글꼴은 한글을 영문 두 칸 너비로 그리지 않아서
+   표시 폭으로 맞춘 열이 어긋나 보인다 — 그 블록만 한글 폭이 정확히 두 칸인 글꼴로 그린다. */
+.hangul-mono pre,
+.hangul-mono code {
+  font-family: "Nanum Gothic Coding", var(--mono);
+}

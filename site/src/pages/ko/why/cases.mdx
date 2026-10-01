@@ -3,7 +3,7 @@ layout: ../../../layouts/Doc.astro
 title: 사례
 description: 에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장과 mdwire 가 대신 보내는 결과를 모았습니다.
 ---
-
+import "@fontsource/nanum-gothic-coding/400.css";
 
 # 사례
 
@@ -116,6 +116,8 @@ GitHub
 텔레그램에는 표 문법이 없어서 고정폭 블록으로 보내야 합니다. 이때 열 너비를 글자 수로 맞추면 한글이 든
 표는 반드시 어긋납니다. 한글, 한자, 이모지는 화면에서 두 칸을 차지하기 때문입니다.
 
+<div class="hangul-mono">
+
 ```text
 환경     |  재현  | 응답 시간
 -------- | ------ | ---------
@@ -123,6 +125,8 @@ GitHub
 프로덕션 |   예   |     340ms
 로컬     | 아니오 |      15ms
 ```
+
+</div>
 
 열 너비를 표시 폭으로 재고, `:---:` 같은 정렬 지정도 지킵니다. 슬랙과 GitHub 으로는 표를 그대로 보냅니다.
 테스트 케이스: [`korean-table`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/korean-table)

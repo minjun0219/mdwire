@@ -29,6 +29,8 @@ function toMarkdown(source, { lang, site, url }) {
     if (line.startsWith("```")) inFence = !inFence;
     if (!inFence) {
       if (/^import\s/.test(line)) continue;
+      // 글꼴 같은 겉모양만 바꾸는 감싸개(`<div class="hangul-mono">`)는 사본에서 뺀다.
+      if (/^<\/?div\b[^>]*>$/.test(line)) continue;
       lines.push(
         line
           .replaceAll(/<Next\s*\/>/g, `(${ui[lang].next})`)
