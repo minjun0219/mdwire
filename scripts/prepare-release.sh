@@ -16,11 +16,23 @@ cd "$(dirname "$0")/.."
 last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)
 last=${last#v}
 
-# 낼 것이 있는가 — `release:` 커밋은 버전만 바꾼 판이라 세지 않는다.
+# 낼 것이 있는가 — **배포물이 바뀐 커밋만 센다.** 사이트·예제·문서·시험·CI 만 바꾼 커밋으로
+# 판을 내면 내용이 똑같은 crates.io·npm 판과 Go 태그가 나간다(사이트 커밋 하나로 0.1.x 가
+# 오르던 것). 배포물의 원본은 아래 경로뿐이다 — 코어·CLI·wasm 바인딩의 소스와 npm 패키징,
+# 워크스페이스 매니페스트·잠금, Go 이식(시험 제외). README 는 패키지에 담기지만 문서라 판을
+# 내지 않는다 — 다음 판에 같이 나간다. 하네스·벤치는 배포하지 않는다.
+#
+# `release:` 커밋은 버전만 바꾼 판이라 세지 않는다.
 # (`git log | grep -q` 로 쓰면 grep 이 먼저 끝날 때 git 이 SIGPIPE 로 죽고, pipefail 이
 # 그걸 "없음"으로 읽는다. 목록을 먼저 받아 둔다.)
+module_paths=(
+  crates/mdwire-core crates/mdwire-cli crates/mdwire-wasm
+  Cargo.toml Cargo.lock scripts/build-npm.sh
+  go
+  ':(exclude)crates/*/tests/*' ':(exclude)go/*_test.go' ':(exclude)go/testdata/*'
+)
 if [ "$last" != 0.0.0 ]; then
-  pending=$(git log --format=%s "v$last..HEAD" | grep -v '^release' || true)
+  pending=$(git log --format=%s "v$last..HEAD" -- "${module_paths[@]}" | grep -v '^release' || true)
   [ -n "$pending" ] || exit 0
 fi
 
