@@ -9,5 +9,7 @@
     "directory": "./dist",
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash"
-  }
+  },
+  // Worker Previews(PR 브랜치 프리뷰)의 설정. 정적 자산뿐이라 프로덕션과 다를 것이 없어 비워 둔다.
+  "previews": {}
 }
