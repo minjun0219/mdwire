@@ -33,6 +33,16 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 	var channel string
 	stream, report, batch := false, false, false
 	var opts mdwire.Options
+	// --이름=값 도 받는다 — 두 인자로 편다(러스트 CLI 와 같다).
+	var flat []string
+	for _, a := range args {
+		if k, v, ok := strings.Cut(a, "="); ok && strings.HasPrefix(k, "--") {
+			flat = append(flat, k, v)
+		} else {
+			flat = append(flat, a)
+		}
+	}
+	args = flat
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--channel":

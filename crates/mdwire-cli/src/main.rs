@@ -44,6 +44,8 @@ mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸�
   -h, --help            이 도움말
   -V, --version         버전
 
+  값을 받는 옵션은 --이름=값 으로도 쓸 수 있다(--channel=slack-markdown).
+
 출력:
   조각이 여럿이면 NUL(\\0) 로 구분한다. --stream 은 한 덩어리로 흘린다.
 
@@ -70,7 +72,11 @@ fn run() -> Result<(), String> {
     let mut batch = false;
     let mut options = Options::default();
 
-    let mut args = std::env::args().skip(1);
+    // `--이름=값` 도 받는다 — 두 인자로 편다. 흔한 표기라 `모르는 인자` 로 막으면 쓰는 쪽이 헷갈린다.
+    let mut args = std::env::args().skip(1).flat_map(|a| match a.split_once('=') {
+        Some((k, v)) if k.starts_with("--") => vec![k.to_string(), v.to_string()],
+        _ => vec![a],
+    });
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or_else(|| format!("{arg} 에 값이 없다"));
         match arg.as_str() {
