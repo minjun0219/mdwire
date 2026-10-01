@@ -8,7 +8,7 @@
 const TAGS = new Set([
   "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "pre", "code",
   "strong", "em", "del", "a", "table", "thead", "tbody", "tr", "th", "td", "hr", "br",
-  "sub", "sup", "b", "i", "u", "s", "strike", "span", "small", "mark", "kbd", "img",
+  "sub", "sup", "b", "i", "u", "s", "strike", "span", "small", "mark", "kbd", "ins", "img",
 ]);
 const VOID = new Set(["br", "hr", "img"]);
 /** 태그마다 읽는 속성. 코어가 내는 것만 — 나머지는 버린다. */

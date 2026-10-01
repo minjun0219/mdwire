@@ -564,6 +564,51 @@ func gfmPairs(before rune, body []byte, after rune) bool {
 // angle 은 `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
 // 돌려주고, 아니면 0 이라 `<` 는 글자로 나간다. 아는 태그만 벗긴다 — `Vec<T>` 의 `<T>` 나
 // `1 < 2` 를 태그로 읽으면 글이 사라진다.
+// rendersEmpty 는 이 채널의 출력에서 아무것도 안 남기는가다 — 스페이스·탭, 주석, 이 채널이
+// 벗기는 태그뿐인가. 러스트 쪽 renders_empty.
+func rendersEmpty(rest []rune, v vocab) bool {
+	for i := 0; i < len(rest); {
+		switch {
+		case rest[i] == ' ' || rest[i] == '\t':
+			i++
+		case startsWith(rest[i:], "<!--"):
+			end := findSeq(rest[i+4:], "-->")
+			if end < 0 {
+				return false
+			}
+			i += 4 + end + 3
+		case rest[i] == '<':
+			at := i + 1
+			if at < len(rest) && rest[at] == '/' {
+				at++
+			}
+			j := at
+			for j < len(rest) && isASCIIAlnum(rest[j]) {
+				j++
+			}
+			name := rest[at:j]
+			kept := inlineTag(name) >= 0 || eqIgnoreCase(name, "br")
+			if len(name) == 0 || !isKnownTag(name) || kept && v.htmlEmphasis() {
+				return false
+			}
+			end := -1
+			for k := j; k < len(rest); k++ {
+				if rest[k] == '>' {
+					end = k
+					break
+				}
+			}
+			if end < 0 {
+				return false
+			}
+			i = end + 1
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	rest := line[i:]
 	if startsWith(rest, "<!--") {
@@ -640,7 +685,11 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		p := in.prevChar(line, i)
 		// 표 칸 첫머리는 `| ` 뒤라 줄 첫머리가 아니다.
 		atLineStart := !in.inCell && (p == noChar || p == '\n')
-		githubStart := !v.isHTML() && atLineStart
+		// 태그뿐인 줄만 벗긴다 — 여는 태그 뒤가 줄 끝까지 공백이면 GFM 이 HTML 블록을 연다.
+		// 꼬리말 <sub>모델 · 토큰</sub> 처럼 뒤에 글이 오면 살린다. 태그뿐인지는 출력으로 본다 —
+		// 뒤에 주석이나 벗기는 태그만 있으면 출력에는 이 태그 하나만 남는다. 러스트 쪽과 같다.
+		tagOnlyLine := rendersEmpty(rest[closeAt+1:], v)
+		githubStart := !v.isHTML() && atLineStart && tagOnlyLine
 		n := len(in.strippedTags)
 		switch {
 		case closing && !v.isHTML() && tag >= 0 && n > 0 && in.strippedTags[n-1] == uint8(tag):
@@ -762,7 +811,7 @@ func inlineTag(name []rune) int {
 func isKnownTag(name []rune) bool {
 	for _, t := range [...]string{
 		"br", "sub", "sup", "b", "strong", "i", "em", "u", "s", "strike", "del", "code", "span",
-		"div", "p", "small", "mark", "kbd", "font", "center", "details", "summary",
+		"div", "p", "small", "mark", "kbd", "font", "center", "details", "summary", "ins",
 	} {
 		if eqIgnoreCase(name, t) {
 			return true

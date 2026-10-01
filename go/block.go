@@ -790,6 +790,48 @@ func classify(p []rune, eol, canTable bool) decision {
 	}
 }
 
+// tagsOnly 는 스페이스·탭을 빼면 완결된 태그(<…>)와 주석뿐인가다 — 러스트 쪽 tags_only. 태그가
+// 하나는 있어야 한다. 조각마다 불려서 확인한 자리(memo.tags)에서 잇고, 태그 아닌 글자를 한 번 만나면
+// 그 줄에서는 다시 안 본다 — 처음부터 다시 훑으면 태그가 긴 줄에서 제곱이 된다.
+func tagsOnly(p []rune, memo *holdMemo) bool {
+	if memo.notTags {
+		return false
+	}
+	i := min(memo.tags, len(p))
+	for {
+		for i < len(p) && (p[i] == ' ' || p[i] == '\t') {
+			i++
+		}
+		if i == len(p) {
+			return memo.tags > 0
+		}
+		comment := startsWith(p[i:], "<!--")
+		if p[i] != '<' || !(comment || i+1 < len(p) && (p[i+1] == '/' || p[i+1] < 128 && unicode.IsLetter(p[i+1]))) {
+			memo.notTags = true
+			return false
+		}
+		end := -1
+		if comment {
+			if e := findSeq(p[i+4:], "-->"); e >= 0 {
+				end = i + 4 + e + 3
+			}
+		} else {
+			for j := i; j < len(p); j++ {
+				if p[j] == '>' {
+					end = j + 1
+					break
+				}
+			}
+		}
+		// 아직 안 끝난 태그 — 다음 조각을 본다(그 꼬리는 위에서 이미 붙들었다).
+		if end < 0 {
+			return false
+		}
+		i = end
+		memo.tags = end
+	}
+}
+
 // safeCut 은 아직 내보내면 안 되는 꼬리를 빼고 남은 길이다. 마커는 다음 글자를 봐야 열기/닫기가
 // 갈린다. 줄 끝 공백은 지워야 한다. 닫히지 않은 `[` 는 링크가 될지 글자가 될지 모른다.
 //
@@ -828,7 +870,8 @@ func safeCut(p []rune, memo *holdMemo) int {
 	// 주석은 `-->` 까지 통째로 붙든다 — 길이를 안 잰다. 긴 주석을 80자에서 놓으면 `<` 가 글자로
 	// 나가 주석이 본문에 새고, 완성본(주석을 지운다)과 갈린다. 붙드는 범위는 그 줄 안이다.
 	// 주석 안의 `<b>` 에 속지 않게 앞에서부터 본다.
-	for i := 0; i+4 <= k; {
+	// 앞 조각에서 닫힌 주석 뒤부터 본다 — 줄을 붙들고 있는 동안 처음부터 다시 훑으면 제곱이 된다.
+	for i := min(memo.comments, k); i+4 <= k; {
 		if startsWith(p[i:], "<!--") {
 			body := p[i+4 : k]
 			// 앞 조각에서 `-->` 가 없던 데까지는 다시 안 본다.
@@ -844,8 +887,11 @@ func safeCut(p []rune, memo *holdMemo) int {
 				break
 			}
 			i += 4 + from + end + 3
+			memo.comments = i
 		} else {
 			i++
+			// `<!--` 가 끝에 걸쳤을 수 있다 — 세 글자 앞까지만 확정한다.
+			memo.comments = max(memo.comments, min(i, max(k-3, 0)))
 		}
 	}
 	if at := lastIndexRune(p[:k], '<'); at >= 0 && indexRune(p[at:k], '>') < 0 {
@@ -886,6 +932,11 @@ func safeCut(p []rune, memo *holdMemo) int {
 	for k > 0 && p[k-1] == '\\' {
 		k--
 	}
+	// 내보낼 것이 태그뿐이면 통째로 붙든다 — 러스트 쪽 safe_cut. GitHub 은 태그뿐인 줄을 HTML
+	// 블록으로 읽어서, 줄 첫머리 태그를 살릴지는 뒤에 글이 오는지 봐야 갈린다. 맨 끝에서 본다.
+	if tagsOnly(p[:k], memo) {
+		k = 0
+	}
 	return k
 }
 
@@ -896,8 +947,11 @@ type holdMemo struct {
 	linkAt      int // 안 닫힌 `[` 의 자리
 	link        linkScan
 	hasComment  bool
-	commentAt   int // 안 닫힌 `<!--` 의 자리
-	commentFrom int // 그 뒤에서 `-->` 를 이어 찾을 자리
+	commentAt   int  // 안 닫힌 `<!--` 의 자리
+	commentFrom int  // 그 뒤에서 `-->` 를 이어 찾을 자리
+	comments    int  // 여기 앞의 주석은 다 닫혔다 — 주석 찾기가 여기서 잇는다
+	tags        int  // 줄 첫머리부터 여기까지는 태그와 주석뿐이다(tagsOnly)
+	notTags     bool // 이 줄에 태그 아닌 글자가 나왔다
 }
 
 // shift 는 앞 n 글자가 나갔을 때 자리를 당긴다. 그 안에 있던 구문은 끝난 것이라 잊는다.
@@ -911,6 +965,12 @@ func (m *holdMemo) shift(n int) {
 		m.commentAt -= n
 		m.hasComment = m.commentAt >= 0
 	}
+	// 무엇이든 나갔으면 이 줄은 이미 글이 있다 — 남은 것이 줄 첫머리가 아니다.
+	if n > 0 {
+		m.notTags = true
+	}
+	m.tags = max(m.tags-n, 0)
+	m.comments = max(m.comments-n, 0)
 }
 
 const (
