@@ -10,7 +10,7 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: v0.1.9.** Normalizing, rendering, splitting and streaming work for six
+**Status: v0.1.10.** Normalizing, rendering, splitting and streaming work for six
 targets — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain text,
 and HTML for the browser — from a Rust core, a CLI,
 an npm package (WASM), and a Go port. See `SPEC.md` for what is in v0.1 and what was
@@ -171,13 +171,13 @@ Every release also carries its own artifacts, if you would rather not go through
 
 ```sh
 # npm package (works under a bundler and in plain Node)
-npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-0.1.9.tgz
+npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-0.1.10.tgz
 
 # CLI binary — pick your platform
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
-curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
-curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-pc-windows-msvc.zip                 # Windows x86_64
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-aarch64-apple-darwin.tar.gz | tar xz        # macOS, Apple silicon
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-x86_64-unknown-linux-gnu.tar.gz | tar xz    # Linux x86_64 (glibc)
+curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-aarch64-unknown-linux-gnu.tar.gz | tar xz   # Linux arm64 (glibc)
+curl -LO https://github.com/minjun0219/mdwire/releases/download/v0.1.10/mdwire-v0.1.10-x86_64-pc-windows-msvc.zip                 # Windows x86_64
 ```
 
 The release notes list a SHA-256 for every artifact — verify the download against it when installing by URL.

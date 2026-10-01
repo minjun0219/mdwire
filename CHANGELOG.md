@@ -2,6 +2,26 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.10 — 2026-10-01
+
+### 고친 것
+
+- **core** — 슬랙에서 조사 앞 구두점 강조에 워드 조이너를 끼운다 ([#85](https://github.com/minjun0219/mdwire/pull/85))
+
+### 문서
+
+- 사이트와 README 의 어색한 영어 표현을 다듬는다 ([#86](https://github.com/minjun0219/mdwire/pull/86))
+
+### 유지
+
+- **release** — Linux arm64 · Windows 바이너리를 더하고 PR 에서 돌려 본다 ([#87](https://github.com/minjun0219/mdwire/pull/87))
+- **release** — 그새 main 이 움직였으면 release PR 을 건드리지 않는다 ([#79](https://github.com/minjun0219/mdwire/pull/79))
+
+### refactor
+
+- 입력 표기 옵션을 걷어낸다 ([#84](https://github.com/minjun0219/mdwire/pull/84))
+- 한국어 용어를 맞추고 CLI · 바인딩 오류 메시지를 다듬는다 ([#77](https://github.com/minjun0219/mdwire/pull/77))
+
 ## 0.1.9 — 2026-10-01
 
 ### 새로 할 수 있는 것
@@ -18,6 +38,7 @@
 
 ### 문서
 
+- 한국어 문구를 다듬고 용어를 맞춘다 ([#76](https://github.com/minjun0219/mdwire/pull/76))
 - **spec** — 불릿과 표를 다시 쓰는 이유를 적는다 ([#67](https://github.com/minjun0219/mdwire/pull/67))
 
 ### 유지
