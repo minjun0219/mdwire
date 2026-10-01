@@ -1,0 +1,26 @@
+---
+layout: ../layouts/Doc.astro
+title: Telegram vs Slack
+description: One agent answer, converted for Telegram HTML and Slack markdown_text in your browser.
+---
+import ChannelCompare from "../components/ChannelCompare.tsx";
+
+# Telegram vs Slack
+
+One agent answer, converted for two channels. What you see is exactly what goes over the wire —
+the text you would pass to Telegram with `parse_mode: "HTML"`, and to Slack as
+`markdown_text`. The conversion runs in your browser with the npm package's WASM build.
+
+The examples come from the [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases):
+each one is a failure that actually happened. Edit the input to try your own.
+
+<div class="wide">
+  <ChannelCompare client:only="react" lang="en">
+    <p slot="fallback">Loading the WASM build…</p>
+  </ChannelCompare>
+</div>
+
+Telegram gets tags — its HTML mode has no headings or tables, so a table goes out as a
+monospace block. Slack `markdown_text` reads standard Markdown, so the output stays Markdown,
+repaired. In both, unclosed emphasis and fences are closed before sending, and the counts under
+each output say how often the normalizer stepped in.

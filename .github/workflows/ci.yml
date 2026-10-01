@@ -87,3 +87,33 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+
+      # **사이트는 site/ 가 바뀔 때만 빌드한다.** 사이트는 npm 에 올라간 패키지를 쓰는 독립
+      # 패키지라 위의 pkg/ 와 무관하다. 배포는 Cloudflare Workers Builds 가 한다(site/README.md) —
+      # 여기서는 그 빌드가 깨지지 않는지만 본다. 경로 필터는 워크플로 단위라 게이트 안에서 쓸 수
+      # 없어서, 기준 커밋과 트리를 비교한다. 기준을 못 얻으면(수동 실행 등) 그냥 돈다.
+      - name: 사이트 변경 확인
+        id: site
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && [ "$BASE" != 0000000000000000000000000000000000000000 ] \
+            && git fetch --no-tags --depth=1 origin "$BASE" \
+            && git diff --quiet "$BASE" HEAD -- site/ .github/workflows/ci.yml; then
+            echo "site/ 변경 없음 — 사이트 빌드를 건너뛴다"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 패키지 매니저는 pnpm 이다. 버전은 site/package.json 의 `packageManager` 가 정본이고,
+      # pnpm 이 그 버전으로 스스로 갈아탄다. 액션 대신 npm 으로 받는다 — 위의 bun 과 같은 길이다.
+      - name: 사이트 빌드
+        if: steps.site.outputs.changed == 'true'
+        working-directory: site
+        run: |
+          node --version
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+          pnpm run check
+          pnpm run build

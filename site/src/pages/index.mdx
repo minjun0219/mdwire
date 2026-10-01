@@ -1,0 +1,45 @@
+---
+layout: ../layouts/Doc.astro
+title: Markdown for chat channels
+description: Send LLM-generated Markdown to chat channels without it breaking.
+---
+
+# Send LLM Markdown to chat channels without it breaking
+
+mdwire is a **bridge, not a renderer.** It takes the Markdown an agent wrote and hands each
+channel the syntax that channel actually accepts — repaired, escaped, and split within its
+length limit. Drawing it is still the channel's job.
+
+```
+LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
+```
+
+1. **Normalize.** Agent output is not well-formed: unpaired `**`, emphasis that spans a line
+   break in wrapped prose, unclosed code fences. Repair before rendering.
+2. **Render.** Emit the syntax the channel accepts. Telegram HTML allows nine tags; Slack
+   `markdown_text` takes standard Markdown directly.
+3. **Split.** Respect the channel's limit and never cut through markup — including while
+   streaming, where a chunk boundary must not land inside `**bold**`.
+
+## Targets
+
+Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), plain text, and HTML for the
+browser — from a Rust core, a CLI, an npm package (WASM), and a Go port held to the same
+corpus.
+
+## Try it
+
+The [demo](/demo/) runs the npm package in your browser: one agent answer, rendered for
+Telegram and for Slack side by side.
+
+## Install
+
+```sh
+npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun
+cargo add mdwire-core              # Rust library (`use mdwire::…`)
+cargo install mdwire-cli           # the `mdwire` CLI
+go get github.com/minjun0219/mdwire/go@latest
+```
+
+API guides for Rust, Go and npm are on the way. Until then, the
+[README](https://github.com/minjun0219/mdwire#readme) is the reference.

@@ -1,0 +1,26 @@
+---
+layout: ../../layouts/Doc.astro
+title: 텔레그램 대 슬랙
+description: 에이전트 답 하나를 브라우저에서 텔레그램 HTML 과 슬랙 markdown_text 로 옮겨 본다.
+---
+import ChannelCompare from "../../components/ChannelCompare.tsx";
+
+# 텔레그램 대 슬랙
+
+에이전트 답 하나를 두 채널로 옮긴다. 보이는 것이 채널로 나가는 글자 그대로다 — 텔레그램에
+`parse_mode: "HTML"` 로 넘길 본문, 슬랙에 `markdown_text` 로 넘길 본문. 변환은 npm 패키지의
+WASM 빌드가 브라우저에서 한다.
+
+예시는 [코퍼스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔다 —
+전부 실제로 겪은 고장이다. 입력을 고쳐 직접 넣어 봐도 된다.
+
+<div class="wide">
+  <ChannelCompare client:only="react" lang="ko">
+    <p slot="fallback">WASM 빌드를 불러오는 중…</p>
+  </ChannelCompare>
+</div>
+
+텔레그램은 태그를 받는다 — HTML 모드에는 헤딩도 표도 없어서 표는 고정폭 블록으로 나간다.
+슬랙 `markdown_text` 는 표준 마크다운을 읽으니 출력도 마크다운이다, 고쳐진 채로. 두 채널
+모두 닫히지 않은 강조와 코드펜스는 보내기 전에 닫고, 출력 아래의 숫자가 정규화가 몇 번
+끼어들었는지 말해 준다.
