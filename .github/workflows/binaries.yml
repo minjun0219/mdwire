@@ -1,13 +1,17 @@
 # 릴리스 바이너리를 PR 에서 미리 만들어 돌려 본다 — 릴리스 때 처음 도는 러너가 없게.
 #
 # 매트릭스와 빌드·돌려 보기·묶기 단계는 `release.yml` 의 `cli` 잡과 같다. 한쪽을 고치면 다른 쪽도 고친다.
-# 바이너리에 닿는 경로가 바뀐 PR 에서만 돈다.
+# 바이너리에 닿는 경로가 바뀐 PR 에서 돌고, **릴리스 전에도 돈다** — `release-pr.yml` 이 release PR 에
+# 직접 부르고(봇이 민 브랜치라 저절로 안 뜬다), 태그를 찍기 전에 `workflow_call` 로 불러 통과해야 찍는다.
 name: binaries
 
 on:
+  workflow_dispatch:
+  workflow_call:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - .github/workflows/release-pr.yml
       - .github/workflows/binaries.yml
       - crates/mdwire-core/**
       - crates/mdwire-cli/**
