@@ -89,7 +89,7 @@ const text = {
     empty: "(empty)",
   },
   ko: {
-    sample: "코퍼스의 깨진 출력",
+    sample: "테스트 케이스의 깨진 출력",
     channel: "채널",
     input: "에이전트 출력 (직접 고쳐 보세요)",
     output: "mdwire 가 보내는 결과",

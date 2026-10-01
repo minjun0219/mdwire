@@ -109,7 +109,7 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
 **append-only 계약.** `push` 가 반환한 출력은 확정입니다. 나중에 들어온 입력이 이미 반환한 출력을
 고치지 않고, `finish` 는 뒷부분만 덧붙입니다. 그래서 `push` 결과를 이어 붙이면 입력을 어떤 크기로
 끊어 넣었든 한 번에 `render` 한 결과와 같습니다(문서가 길어서 `render` 가 길이 제한에 맞춰 여러 조각으로
-나누는 경우는 예외). 코퍼스와
+나누는 경우는 예외). 테스트 케이스와
 퍼징, 그리고 `mdwire-check --scan <dir>` 이 이 계약을 검사합니다. 디렉터리의 모든 파일을 한
 글자씩, 64자씩 흘려 보고 결과가 어긋나면 알려 줍니다. `SPEC.md` 8.2절을 참고하세요.
 
@@ -137,10 +137,10 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
   않습니다. `DESIGN.md` 를 참고하세요.
 - **Rust 코어 하나, 여러 진입점.** npm 은 WASM, CLI 는 정적 바이너리 하나입니다. 가장 중요한 것은 CLI
   입니다. 어떤 언어의 에이전트든 바인딩 없이 파이프로 연결할 수 있습니다. Go 구현은 `go/` 에
-  있고(표준 라이브러리만 사용), 같은 코퍼스를 통과해야 합니다. Rust 코어와도 직접 대조해서
+  있고(표준 라이브러리만 사용), 같은 테스트 케이스를 통과해야 합니다. Rust 코어와도 직접 대조해서
   무작위 입력과 실제 문서가 똑같이 렌더링되는지 확인합니다.
-- **테스트 코퍼스가 일급 산출물입니다.** `corpus/` 에 채널별 입력과 기대 출력이 있습니다. 다른
-  언어로 옮긴 구현은 코퍼스를 통과하면 올바른 것입니다. 구현이 여러 개여도 일관성을 지키는
+- **테스트 케이스가 일급 산출물입니다.** `corpus/` 에 채널별 입력과 기대 출력이 있습니다. 다른
+  언어로 옮긴 구현은 테스트 케이스를 통과하면 올바른 것입니다. 구현이 여러 개여도 일관성을 지키는
   방법이 바로 이것입니다.
 
 ## 설치
@@ -200,10 +200,10 @@ wasm 바이너리는 `wasm-opt` 를 거친 release 빌드 기준 111 KB 입니�
 wasm-pack 은 npm 패키지 이름을 크레이트 이름에서 가져가기 때문입니다.
 
 ```sh
-cargo test --workspace     # 단위 테스트, 코퍼스, 할당 게이트
+cargo test --workspace     # 단위 테스트, 테스트 케이스 대조, 할당 게이트
 cargo clippy --workspace
 cargo run --release -p mdwire-bench       # 할당 수와 처리량
-cargo run -p mdwire-harness --bin mdwire-check   # 코퍼스 + 불변식 채점
+cargo run -p mdwire-harness --bin mdwire-check   # 테스트 케이스 + 불변식 채점
 ```
 
 `mdwire-check` 는 stdin 을 읽어 stdout 에 쓰는 구현이라면 무엇이든 채점합니다. 다른 언어로 옮긴

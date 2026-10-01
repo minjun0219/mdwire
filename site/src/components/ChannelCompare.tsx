@@ -54,7 +54,7 @@ const text = {
     empty: "(empty)",
   },
   ko: {
-    sample: "코퍼스의 예시",
+    sample: "테스트 케이스 예시",
     input: "에이전트 출력 (마크다운)",
     from: "입력 표기",
     fromMarkdown: "마크다운",

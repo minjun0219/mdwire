@@ -1,7 +1,7 @@
 ---
 layout: ../../../layouts/Doc.astro
 title: 정규화 전후
-description: 코퍼스의 깨진 에이전트 출력과 mdwire 가 보내는 결과를 나란히 비교합니다. 더하고 뺀 글자를 모두 표시하고, 그 횟수를 센 정규화 보고도 보여 줍니다.
+description: 테스트 케이스에 있는 깨진 에이전트 출력과 mdwire 가 보내는 결과를 나란히 비교합니다. 더하고 뺀 글자를 모두 표시하고, 그 횟수를 센 정규화 보고도 보여 줍니다.
 ---
 import RepairCompare from "../../../components/RepairCompare.tsx";
 
@@ -12,8 +12,8 @@ import RepairCompare from "../../../components/RepairCompare.tsx";
 데모는 입력과 mdwire 가 보내는 결과를 나란히 놓고 <ins>더한</ins> 글자와 <del>뺀</del> 글자를
 표시합니다. 아래의 정규화 보고는 고친 것을 종류별로 셉니다.
 
-예시는 [코퍼스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 실제로 정규화가 일어나는
-케이스만 골랐습니다. 입력을 직접 망가뜨려 봐도 됩니다.
+예시는 [테스트 케이스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases) 중에서 실제로 정규화가
+일어나는 것만 골랐습니다. 입력을 직접 망가뜨려 봐도 됩니다.
 
 <div class="wide">
   <RepairCompare client:only="react" lang="ko">
