@@ -11,7 +11,7 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 데모는 `/demo/` 아래 페이지 하나에 하나씩 둔다(목록은 `src/components/SectionNav.astro`). 예시
   (`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다. 정규화 전후 데모는 그중 npm
   에 올라간 판에서 정규화 보고가 0 이 아닌 케이스만 쓴다.
-- 사례(`src/pages/cases.mdx`)는 `corpus/cases/` 중 대표 케이스의 입력과 기대 출력을 옮기고 `why.md` 를 풀어 쓴 것이다.
+- 사례(`src/pages/why/cases.mdx`)는 `corpus/cases/` 중 대표 케이스의 입력과 기대 출력을 옮기고 `why.md` 를 풀어 쓴 것이다.
   옮긴 케이스의 기대 출력이 바뀌면 같이 고친다.
 - API 문서(`src/pages/docs/`)는 `main` 을 따른다. 코어·바인딩·CLI 의 공개 API 가 바뀌면 같은 PR 에서 문서도
   고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 달고, 릴리스가 나가면 그 표시를 지운다.

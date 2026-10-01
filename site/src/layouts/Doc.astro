@@ -26,14 +26,14 @@ const href = (page: string) => getRelativeLocaleUrl(lang, page);
 const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
-  { page: "cases", label: t.nav.cases },
+  { page: "why", label: t.nav.why },
   { page: "demo", label: t.nav.demo },
   { page: "docs", label: t.nav.docs },
 ];
 // `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
 const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
-// 문서 · 데모 묶음은 왼쪽에 그 묶음의 목차를 둔다.
-const section = isCurrent("docs") ? "docs" : isCurrent("demo") ? "demo" : undefined;
+// 왜 mdwire · 문서 · 데모 묶음은 왼쪽에 그 묶음의 목차를 둔다.
+const section = isCurrent("docs") ? "docs" : isCurrent("demo") ? "demo" : isCurrent("why") ? "why" : undefined;
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
 const summary = description ?? t.tagline;
 

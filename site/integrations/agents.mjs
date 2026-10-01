@@ -10,13 +10,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { ui } from "../src/i18n.ts";
 import { hasMarkdown, markdownPath } from "../src/markdownCopies.ts";
 
-// llms-full.txt 에 싣는 차례 — 개요와 사례, 개념, 언어별 API 순.
-const fullOrder = ["", "cases", "docs", "docs/npm", "docs/rust", "docs/go", "docs/cli"];
+// llms-full.txt 에 싣는 차례 — 개요, 왜 mdwire 와 사례, 개념, 언어별 API 순.
+const fullOrder = ["", "why", "why/cases", "docs", "docs/npm", "docs/rust", "docs/go", "docs/cli"];
 
-// `src/pages` 안의 원본 위치. `docs` 는 `docs/index.mdx`, 개요는 `index.mdx`.
+// `src/pages` 안의 원본 위치. 묶음의 첫 페이지(`docs`, `why`)는 `docs/index.mdx`, 개요는 `index.mdx`.
 const sourceOf = (lang, rest) => {
   const base = lang === "en" ? "" : `${lang}/`;
-  const file = rest === "" ? "index" : rest === "docs" ? "docs/index" : rest;
+  const file = rest === "" ? "index" : rest === "docs" || rest === "why" ? `${rest}/index` : rest;
   return `src/pages/${base}${file}.mdx`;
 };
 
