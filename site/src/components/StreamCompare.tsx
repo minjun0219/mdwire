@@ -48,8 +48,23 @@ export default function StreamCompare({ lang }: { lang: Locale }) {
   const t = text[lang];
   const [run, setRun] = useState(0); // 바뀌면 처음부터 다시 흘린다
   const [delay, setDelay] = useState(60);
+  // 데모 페이지 아래쪽에 있어서, 화면에 들어온 뒤에 흘리기 시작한다 — 미리 흘리면 내려왔을 땐 끝나 있다.
+  const root = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        setVisible(true);
+        io.disconnect();
+      }
+    }, { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
-    <div className="sc">
+    <div className="sc" ref={root}>
       <div className="sc-controls">
         <label>
           <span>{t.delay(delay)}</span>
@@ -60,7 +75,7 @@ export default function StreamCompare({ lang }: { lang: Locale }) {
         </button>
         <span className="sc-meta">{t.tokens(TOKENS.length)}</span>
       </div>
-      <Panes key={run} delay={delay} lang={lang} />
+      {visible && <Panes key={run} delay={delay} lang={lang} />}
     </div>
   );
 }
@@ -106,8 +121,9 @@ function Panes({ delay, lang }: { delay: number; lang: Locale }) {
 
   const bodies: ReactNode[] = [
     <ReactMarkdown remarkPlugins={[remarkGfm]}>{acc}</ReactMarkdown>,
-    <Streamdown>{acc}</Streamdown>,
-    <Streamdown>{bridged}</Streamdown>,
+    // 표·코드 블록의 복사·다운로드·전체화면 버튼은 끈다 — 그리는 방식만 비교한다.
+    <Streamdown controls={false}>{acc}</Streamdown>,
+    <Streamdown controls={false}>{bridged}</Streamdown>,
     mdwire.elements,
     settled.elements,
   ];

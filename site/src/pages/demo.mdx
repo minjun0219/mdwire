@@ -1,15 +1,20 @@
 ---
 layout: ../layouts/Doc.astro
-title: Telegram vs Slack
-description: One agent answer, converted for Telegram HTML and Slack markdown_text in your browser.
+title: Demo
+description: One agent answer converted for Telegram and Slack, and streamed token by token into five renderers — in your browser.
 ---
 import ChannelCompare from "../components/ChannelCompare.tsx";
+import StreamCompare from "../components/StreamCompare.tsx";
 
-# Telegram vs Slack
+# Demo
+
+Everything here runs in your browser with the npm package's WASM build. Two things to try:
+[one answer converted for two channels](#channels), and [one answer streamed into five renderers](#streaming).
+
+<h2 id="channels">Telegram vs Slack</h2>
 
 One agent answer, converted for two channels. What you see is exactly what goes over the wire —
-the text you would pass to Telegram with `parse_mode: "HTML"`, and to Slack as
-`markdown_text`. The conversion runs in your browser with the npm package's WASM build.
+the text you would pass to Telegram with `parse_mode: "HTML"`, and to Slack as `markdown_text`.
 
 The examples come from the [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases):
 each one is a failure that actually happened. Edit the input to try your own.
@@ -24,3 +29,35 @@ Telegram gets tags — its HTML mode has no headings or tables, so a table goes 
 monospace block. Slack `markdown_text` reads standard Markdown, so the output stays Markdown,
 repaired. In both, unclosed emphasis and fences are closed before sending, and the counts under
 each output say how often the normalizer stepped in.
+
+<h2 id="streaming">Streaming</h2>
+
+The same answer, cut into the same tokens, streamed into five renderers at once. It starts when this
+section scrolls into view. Watch for three things: a half marker (`**bo`, an opening backtick)
+showing up as text and then vanishing, bold that ends right before a Korean particle
+(`**설정(config)**을`) never getting drawn, and emphasis or a table that freezes until it closes.
+
+<div class="wide">
+  <StreamCompare client:only="react" lang="en">
+    <p slot="fallback">Loading the WASM build…</p>
+  </StreamCompare>
+</div>
+
+- **react-markdown** redraws the whole accumulated text on every token, so half-written markup
+  flickers in and out.
+- **Streamdown** redraws too, but repairs unclosed syntax first.
+- **mdwire → Streamdown** puts mdwire's streamer in front: Streamdown receives the normalized output
+  plus `preview()` — the bridge.
+- **mdwire** `useMarkdownStream()` draws what is still held (open bold, table rows) early, as if the
+  input ended here.
+- **mdwire** `useMarkdownStream({ eager: false })` shows only what is final. Nothing it shows ever
+  changes, at the cost of pausing on emphasis and tables.
+
+`DESIGN.md` measured this on 347 Korean documents written by agents (Streamdown 2.6.0,
+react-markdown 10.1.0 + remark-gfm): putting mdwire's streamer in front of Streamdown cut changes to
+already-visible text by about 60% and stopped markers from showing as text, and mdwire's own `html`
+streamer, showing only what is final, had neither. Showing only what is final pauses, though: with
+this sample at a 60 ms token interval the longest pause was 1,389 ms against 302 ms with the
+preview — which is why the preview is the default. See the
+[bridge section of DESIGN.md](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md) (Korean).
+The sample answer is synthetic, but each of its shapes broke in real agent output.

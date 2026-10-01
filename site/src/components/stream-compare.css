@@ -95,7 +95,7 @@
   border-left: 3px solid var(--line);
 }
 
-/* Streamdown 은 Tailwind 클래스로 칠한다 — 이 사이트엔 Tailwind 가 없어서 굵게·링크만 직접 준다(예제와 같다). */
+/* Streamdown 은 Tailwind 클래스로 칠한다 — 이 사이트엔 Tailwind 가 없어서 굵게·링크만 직접 준다. 버튼(controls)은 컴포넌트에서 끈다. */
 [data-streamdown="strong"] {
   font-weight: 700;
 }
