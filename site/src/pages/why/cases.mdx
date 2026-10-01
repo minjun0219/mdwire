@@ -117,17 +117,13 @@ The fence is closed right before sending. Test case: [`unclosed-code-fence`](htt
 Telegram has no table syntax, so a table goes out as a fixed-width block. Pad the columns by character count and
 a table with Korean text always misaligns: Hangul, Han characters and emoji take two cells on screen.
 
-<div class="hangul-mono">
-
-```text
+```text cells
 환경     |  재현  | 응답 시간
 -------- | ------ | ---------
 스테이징 |   예   |     120ms
 프로덕션 |   예   |     340ms
 로컬     | 아니오 |      15ms
 ```
-
-</div>
 
 
 Columns are measured by display width, and alignment such as `:---:` is kept. Slack and GitHub get the table as

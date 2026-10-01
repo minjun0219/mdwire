@@ -14,9 +14,6 @@ importers:
       '@astrojs/react':
         specifier: ^7.0.0
         version: 7.0.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(yaml@2.9.1)
-      '@fontsource/nanum-gothic-coding':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@minjun0219/mdwire':
         specifier: 0.1.9
         version: 0.1.9(react@19.3.0)
@@ -664,9 +661,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@fontsource/nanum-gothic-coding@5.3.0':
-    resolution: {integrity: sha512-1xUOE+ro+F1J5lYw+0WwMbhesK85JCjbAP3/rOGHB3DbZI2/s0dR4WHSuTcag1uJAfT8ozH9B50L88tMn4eFkw==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2966,8 +2960,6 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
-
-  '@fontsource/nanum-gothic-coding@5.3.0': {}
 
   '@img/colour@1.1.0': {}
 

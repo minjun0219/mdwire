@@ -32,9 +32,45 @@ function versionFile() {
   };
 }
 
+// 고정폭 블록 속 전각 글자(한글 · 한자 · 전각 기호)를 정확히 영문 두 칸(`2ch`) 너비로 감싼다. 글꼴마다 한글
+// 폭이 영문의 두 배가 아니어서, 표시 폭으로 맞춘 표가 화면에서 어긋나기 때문이다. ```text cells 처럼 meta 에
+// `cells` 를 단 블록에만 쓴다 — 다른 코드는 글꼴 그대로 둔다.
+const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u;
+function wideCells() {
+  const split = (node) => {
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type !== "text") {
+        split(child);
+        return [child];
+      }
+      const out = [];
+      let run = "";
+      for (const ch of child.value) {
+        if (!WIDE.test(ch)) {
+          run += ch;
+          continue;
+        }
+        if (run) out.push({ type: "text", value: run });
+        run = "";
+        out.push({ type: "element", tagName: "span", properties: { className: ["wide"] }, children: [{ type: "text", value: ch }] });
+      }
+      if (run) out.push({ type: "text", value: run });
+      return out;
+    });
+  };
+  return {
+    name: "mdwire-wide-cells",
+    code(node) {
+      if (this.options.meta?.__raw?.split(/\s+/).includes("cells")) split(node);
+    },
+  };
+}
+
 export default defineConfig({
   site: "https://mdwire.minjun.dev",
   integrations: [react(), mdx(), versionFile(), agents()],
+  markdown: { shikiConfig: { transformers: [wideCells()] } },
   i18n: {
     locales: ["en", "ko"],
     defaultLocale: "en",
