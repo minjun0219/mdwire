@@ -124,21 +124,22 @@ never held — a renderer that waits for a newline is not streaming.
 
 ## Why another one
 
-Three gaps in what exists today, each measured rather than assumed:
+We found three gaps in existing tools:
 
-- **Broken input is the normal case.** In a sample of 60 agent-generated documents,
+- **Emphasis spanning lines is common.** In a sample of 60 agent-generated documents,
   44 contained emphasis spanning a line break. A regex-based converter mispaired those
   into *inverted* emphasis ranges — and the channel returned HTTP 200, so nothing caught it.
-- **Emphasis before Korean particles breaks.** Korean attaches a particle right after the
-  emphasis, and that is exactly where CommonMark's rules trip:
-  - `_기울임_은`: `_` cannot close inside a word, so the markers stay as text. `*기울임*은`
-    renders.
-  - `**설정(config)**을`: when the closing `**` follows punctuation and precedes a letter,
-    GitHub (GFM) does not close the emphasis.
+- **Common Korean notation collides with Markdown.**
+  - In `**설정(config)**을` or `**52%**다`, the bold ends in a symbol and a particle follows right
+    after. Under CommonMark's rules the bold does not close and the `**` shows as text. GitHub and
+    browser renderers follow those rules.
+  - In `약 ~40km, 5~6월`, tildes mark an approximation and a range. With two of them in one
+    paragraph, GitHub (GFM), which reads a single `~` as strikethrough, pairs them and strikes
+    everything in between (`40km, 5`).
 
-  Existing converters guess at this spot (one pads it with U+200B, another leaves it alone)
-  and neither checked the channel. mdwire measured each channel: it emits `*` for italics and,
-  on GitHub only, `<strong>` at that spot.
+  Existing converters guess at Korean-adjacent emphasis (one pads it with U+200B, another leaves it
+  alone) and neither checked the channel. mdwire measured each channel: on GitHub it writes just that
+  bold as `<strong>` and escapes a literal `~` as `\~`.
 - **Chat-channel converters ignore streaming.** Some browser renderers, like Streamdown, patch
   unclosed syntax while tokens stream in. The Telegram and Slack converters we looked at all
   take the whole document and convert it in one pass. When tokens arrive incrementally,
