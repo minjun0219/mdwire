@@ -458,6 +458,19 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		*out = append(*out, v.closeHTML(o.emph)...)
 		return
 	}
+	// 슬랙은 태그가 없어서 마커 안쪽에 U+2060(워드 조이너)을 끼운다 — 러스트 쪽과 같다(실측
+	// 2026-10-01). 못 읽는 쪽에만 넣는다.
+	if v.joinerEmphasis() && o.emph != emphCode {
+		if left, right := gfmSides(o.before, (*out)[o.at:], after); !(left && right) {
+			in.repairs.TagEmphasis++
+			if !right {
+				*out = append(*out, wordJoiner...)
+			}
+			if !left {
+				insertAt(out, o.at, wordJoiner)
+			}
+		}
+	}
 	// 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — 러스트 쪽과 같다.
 	if !v.htmlOut() && !v.isPlain() && o.emph != emphCode {
 		w := v.open(o.emph)
@@ -538,20 +551,26 @@ func wrapPerLine(out *[]byte, at int, open, close string, code bool, buf []byte)
 // 주석이 벗겨지면(`**x.**<font>y`) 출력의 이웃은 그 너머 글자가 된다. 태그 너머를 보려면 조각을
 // 더 붙들어야 해서, 그 자리는 판정 없이 태그로 낸다.
 func gfmPairs(before rune, body []byte, after rune) bool {
-	if before == '>' || after == '<' {
-		return false
-	}
+	left, right := gfmSides(before, body, after)
+	return left && right
+}
+
+// gfmSides 는 gfmPairs 를 양쪽으로 나눠 본다 — 여는 마커가 열리는가, 닫는 마커가 닫히는가.
+func gfmSides(before rune, body []byte, after rune) (bool, bool) {
 	if len(body) == 0 {
-		return true
+		return true, true
 	}
 	first, _ := utf8.DecodeRune(body)
 	last, _ := utf8.DecodeLastRune(body)
 	punct := func(c rune) bool { return !isAlphanumeric(c) && !unicode.IsSpace(c) }
 	edge := func(c rune) bool { return c == noChar || unicode.IsSpace(c) || punct(c) }
-	left := !unicode.IsSpace(first) && (!punct(first) || edge(before))
-	right := !unicode.IsSpace(last) && (!punct(last) || edge(after))
-	return left && right
+	left := before != '>' && !unicode.IsSpace(first) && (!punct(first) || edge(before))
+	right := after != '<' && !unicode.IsSpace(last) && (!punct(last) || edge(after))
+	return left, right
 }
+
+// wordJoiner 는 슬랙에서 마커가 못 읽히는 자리에 끼우는 글자다. 보이지 않고 줄도 가르지 않는다.
+const wordJoiner = "\u2060"
 
 // angle 은 `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
 // 돌려주고, 아니면 0 이라 `<` 는 글자로 나간다. 아는 태그만 벗긴다 — `Vec<T>` 의 `<T>` 나

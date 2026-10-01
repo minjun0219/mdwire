@@ -1,2 +1,4 @@
 <p>마감 전에 <strong>설정(config)</strong>을 바꾸고, <strong>"배포 금지"</strong>는 금요일까지 유지한다.<br>
 롤백은 <strong><code>git revert</code></strong>로 하고 <strong>끝.</strong>이라서 더 볼 것은 없다.</p>
+
+<p>전환율은 <strong>52%</strong>다. 비중이 <strong>3.5%</strong>로 늘었다.</p>
