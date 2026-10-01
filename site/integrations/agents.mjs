@@ -10,7 +10,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { ui } from "../src/i18n.ts";
 import { hasMarkdown, markdownPath } from "../src/markdownCopies.ts";
 
-// llms-full.txt 에 싣는 차례 — 개요, 왜 mdwire 와 사례, 개념, 언어별 API 순.
+// llms-full.txt 에 싣는 차례 — 개요, 배경(왜 또 만들었나 · 사례), 개념, 언어별 API 순.
 const fullOrder = ["", "why", "why/cases", "docs", "docs/npm", "docs/rust", "docs/go", "docs/cli"];
 
 // `src/pages` 안의 원본 위치. 묶음의 첫 페이지(`docs`, `why`)는 `docs/index.mdx`, 개요는 `index.mdx`.
@@ -29,8 +29,6 @@ function toMarkdown(source, { lang, site, url }) {
     if (line.startsWith("```")) inFence = !inFence;
     if (!inFence) {
       if (/^import\s/.test(line)) continue;
-      // 글꼴 같은 겉모양만 바꾸는 감싸개(`<div class="hangul-mono">`)는 사본에서 뺀다.
-      if (/^<\/?div\b[^>]*>$/.test(line)) continue;
       // 배지 줄은 이미지 링크뿐이라 사본에서 뺀다 — 패키지 주소는 본문에 있다.
       if (/^<Badges\b.*\/>$/.test(line)) continue;
       lines.push(

@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: Cases
 description: Real failures from sending agent-written Markdown to chat channels, and what mdwire sends instead.
 ---
-import "@fontsource/nanum-gothic-coding/400.css";
 
 # Cases
 
@@ -118,8 +117,6 @@ The fence is closed right before sending. Test case: [`unclosed-code-fence`](htt
 Telegram has no table syntax, so a table goes out as a fixed-width block. Pad the columns by character count and
 a table with Korean text always misaligns: Hangul, Han characters and emoji take two cells on screen.
 
-<div class="hangul-mono">
-
 ```text
 환경     |  재현  | 응답 시간
 -------- | ------ | ---------
@@ -128,7 +125,6 @@ a table with Korean text always misaligns: Hangul, Han characters and emoji take
 로컬     | 아니오 |      15ms
 ```
 
-</div>
 
 Columns are measured by display width, and alignment such as `:---:` is kept. Slack and GitHub get the table as
 is. Test case: [`korean-table`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/korean-table)
