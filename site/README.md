@@ -18,7 +18,7 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   npm 판을 올리고 그 판에 들어간 표시를 걷는 PR 을 연다(`scripts/site-release-next.sh`).
 - 스트리밍 데모(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
   을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
-- `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
+- `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 모든 페이지 푸터에서 링크한다. 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
