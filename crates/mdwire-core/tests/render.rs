@@ -823,6 +823,27 @@ fn notion_splits_long_tables_into_whole_tables() {
     assert_eq!(acc.matches("<table ").count(), 1);
 }
 
+/// **보고는 채널에 맞춰 바꾼 것도 센다**(실사용 보고 — GitHub 코멘트 44개 중 22개의 출력이 달라졌는데
+/// 보고는 1건이었다). 붙이기 전에 무엇이 바뀌는지 보는 데 쓴다.
+#[test]
+fn report_counts_what_the_channel_rewrote() {
+    let r = |s: &str, ch, from| mdwire::render_with(s, ch, mdwire::Options { from, ..Default::default() }).repairs;
+    let gh = r(
+        "약 ~40km, **「설정」**가 <!-- x --> H<sub>2</sub>\n\n* 하나\n- 둘\n\n| a |\n|---|\n| 1 |\n\n| b |\n| --- |\n| 2 |",
+        Channel::GithubMarkdown,
+        mdwire::Dialect::Markdown,
+    );
+    assert_eq!(
+        (gh.escaped_char, gh.tag_emphasis, gh.stripped_html, gh.rewritten_bullet, gh.rewritten_table, gh.converted_marker),
+        (1, 1, 1, 1, 1, 0),
+        "{gh:?}"
+    );
+    let slack = r("*굵게* _기울임_ ~취소~ <https://a.com|링크>\n• 항목", Channel::SlackMarkdown, mdwire::Dialect::SlackMrkdwn);
+    assert_eq!((slack.converted_marker, slack.rewritten_bullet), (4, 1), "{slack:?}");
+    // 바꿀 것이 없으면 0 이다 — 이미 채널의 모양인 글.
+    assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown, mdwire::Dialect::Markdown).any());
+}
+
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
 /// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
 #[test]

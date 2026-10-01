@@ -57,6 +57,8 @@ const report = renderWithReport("**영향 범위\n```ts\nconst a = 1;", "telegra
 assert.equal(report.parts.length, 1);
 assert.equal(report.repairs.closedEmphasis, 1);
 assert.equal(report.repairs.closedFence, 1);
+// 채널에 맞춰 바꾼 것도 센다 — GitHub 의 `\~` 탈출.
+assert.equal(renderWithReport("약 ~40km", "github-markdown").repairs.escapedChar, 1);
 const rs = new Streamer("slack-markdown");
 rs.push("**열고 안 닫힘");
 rs.finish();

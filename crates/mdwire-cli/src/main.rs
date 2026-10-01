@@ -181,8 +181,19 @@ fn repairs_json(r: &Repairs) -> String {
 
 fn repairs_fields(r: &Repairs) -> String {
     format!(
-        "\"closedEmphasis\":{},\"closedFence\":{},\"revertedCodeSpan\":{},\"droppedMarker\":{}",
-        r.closed_emphasis, r.closed_fence, r.reverted_code_span, r.dropped_marker
+        "\"closedEmphasis\":{},\"closedFence\":{},\"revertedCodeSpan\":{},\"droppedMarker\":{},\
+         \"escapedChar\":{},\"tagEmphasis\":{},\"strippedHtml\":{},\"rewrittenBullet\":{},\
+         \"rewrittenTable\":{},\"convertedMarker\":{}",
+        r.closed_emphasis,
+        r.closed_fence,
+        r.reverted_code_span,
+        r.dropped_marker,
+        r.escaped_char,
+        r.tag_emphasis,
+        r.stripped_html,
+        r.rewritten_bullet,
+        r.rewritten_table,
+        r.converted_marker
     )
 }
 
@@ -337,8 +348,12 @@ mod tests {
         assert_eq!(failed, 0);
         assert_eq!(
             out,
-            "{\"line\":1,\"id\":\"a\\\"1\",\"closedEmphasis\":0,\"closedFence\":0,\"revertedCodeSpan\":0,\"droppedMarker\":0}\n\
-             {\"line\":3,\"id\":7,\"closedEmphasis\":1,\"closedFence\":0,\"revertedCodeSpan\":0,\"droppedMarker\":0}\n"
+            "{\"line\":1,\"id\":\"a\\\"1\",\"closedEmphasis\":0,\"closedFence\":0,\"revertedCodeSpan\":0,\"droppedMarker\":0,\
+             \"escapedChar\":0,\"tagEmphasis\":0,\"strippedHtml\":0,\"rewrittenBullet\":0,\"rewrittenTable\":0,\
+             \"convertedMarker\":1}\n\
+             {\"line\":3,\"id\":7,\"closedEmphasis\":1,\"closedFence\":0,\"revertedCodeSpan\":0,\"droppedMarker\":0,\
+             \"escapedChar\":0,\"tagEmphasis\":0,\"strippedHtml\":0,\"rewrittenBullet\":0,\"rewrittenTable\":0,\
+             \"convertedMarker\":0}\n"
         );
     }
 

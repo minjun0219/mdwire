@@ -118,7 +118,7 @@ impl Rendered {
     }
 }
 
-/// 정규화가 고친 것의 개수.
+/// 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수.
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct Repairs {
@@ -134,6 +134,24 @@ pub struct Repairs {
     /// 짝 잃은 채 버린 `**`.
     #[wasm_bindgen(js_name = droppedMarker)]
     pub dropped_marker: usize,
+    /// 채널이 구문으로 읽을 글자를 탈출한 수(GitHub 의 `\~`·`\<`·`\*`).
+    #[wasm_bindgen(js_name = escapedChar)]
+    pub escaped_char: usize,
+    /// 마커 대신 태그로 낸 강조(GitHub 의 `<strong>`).
+    #[wasm_bindgen(js_name = tagEmphasis)]
+    pub tag_emphasis: usize,
+    /// 벗긴 원문 HTML(태그·주석·줄바꿈으로 바꾼 `<br>`).
+    #[wasm_bindgen(js_name = strippedHtml)]
+    pub stripped_html: usize,
+    /// 다른 기호로 바꿔 쓴 목록 불릿.
+    #[wasm_bindgen(js_name = rewrittenBullet)]
+    pub rewritten_bullet: usize,
+    /// 원문과 다른 모양으로 다시 쓴 표.
+    #[wasm_bindgen(js_name = rewrittenTable)]
+    pub rewritten_table: usize,
+    /// 다른 표기로 바꿔 쓴 강조 마커와 `<url|텍스트>` 링크.
+    #[wasm_bindgen(js_name = convertedMarker)]
+    pub converted_marker: usize,
 }
 
 impl From<mdwire::Repairs> for Repairs {
@@ -143,6 +161,12 @@ impl From<mdwire::Repairs> for Repairs {
             closed_fence: r.closed_fence,
             reverted_code_span: r.reverted_code_span,
             dropped_marker: r.dropped_marker,
+            escaped_char: r.escaped_char,
+            tag_emphasis: r.tag_emphasis,
+            stripped_html: r.stripped_html,
+            rewritten_bullet: r.rewritten_bullet,
+            rewritten_table: r.rewritten_table,
+            converted_marker: r.converted_marker,
         }
     }
 }

@@ -2,6 +2,7 @@ package mdwire
 
 import (
 	"bytes"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -184,7 +185,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 
 		if c != '*' && c != '_' && c != '~' {
-			v.escapeChar(c, out)
+			in.textChar(c, out, v)
 			i++
 			continue
 		}
@@ -219,7 +220,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 		// 취소선은 `~~` 다. 홀로 선 `~` 는 글자다 — `~40km`, `5~6월`.
 		if c == '~' && take < 2 && !mrkdwn {
-			v.escapeChar(c, out)
+			in.textChar(c, out, v)
 			i++
 			continue
 		}
@@ -244,7 +245,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		intraword := c == '_' && prev != noChar && isAlphanumeric(prev)
 		if intraword && same < 0 {
 			for k := 0; k < take; k++ {
-				v.escapeChar(c, out)
+				in.textChar(c, out, v)
 			}
 			i += take
 			continue
@@ -264,14 +265,14 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 추측을 닫지 않고 열지도 않는다 — 열면 블록 끝까지 삼킨다. 글자다.
 		case same >= 0 && in.open[same].guess && (!left || !afterSpace):
 			for k := 0; k < take; k++ {
-				v.escapeChar(c, out)
+				in.textChar(c, out, v)
 			}
 		// 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고 이쪽을 연다.
 		case same >= 0 && in.open[same].guess:
 			in.reopenAt(same, out, v, fresh)
 		// mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
 		case same >= 0 && !afterSpace && softBlockedClose:
-			v.escapeChar(c, out)
+			in.textChar(c, out, v)
 		// 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
 		case same >= 0 && !afterSpace:
 			in.afterClose = next
@@ -349,7 +350,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
 	if old.run == 1 || (old.guess && (old.afterSpace || old.split)) {
-		insertMarker(out, old.at, old.ch, old.run, v)
+		insertMarker(out, old.at, old.ch, old.run, v, &in.repairs)
 	} else {
 		in.repairs.DroppedMarker++
 	}
@@ -419,7 +420,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		if o.afterSpace || o.run == 1 || o.split {
-			insertMarker(out, o.at, o.ch, o.run, v)
+			insertMarker(out, o.at, o.ch, o.run, v, &in.repairs)
 		} else {
 			in.repairs.DroppedMarker++
 		}
@@ -469,9 +470,17 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		after = in.afterClose
 	}
 	if v.htmlEmphasis() && o.emph != emphCode && !gfmPairs(o.before, (*out)[o.at:], after) {
+		in.repairs.TagEmphasis++
 		insertAt(out, o.at, v.openHTML(o.emph))
 		*out = append(*out, v.closeHTML(o.emph)...)
 		return
+	}
+	// 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — 러스트 쪽과 같다.
+	if !v.htmlOut() && !v.isPlain() && o.emph != emphCode {
+		w := v.open(o.emph)
+		if utf8.RuneCountInString(w) != o.run || strings.Trim(w, string(o.ch)) != "" {
+			in.repairs.ConvertedMarker++
+		}
 	}
 	if v.lineEmphasis() && bytes.IndexByte((*out)[o.at:], '\n') >= 0 {
 		in.wrap = wrapPerLine(out, o.at, v.open(o.emph), v.close(o.emph), false, in.wrap)
@@ -609,6 +618,14 @@ func rendersEmpty(rest []rune, v vocab) bool {
 	return true
 }
 
+// textChar 는 본문 글자 하나를 적는다. 채널이 탈출하는 글자면 센다(Repairs.EscapedChar).
+func (in *inline) textChar(c rune, out *[]byte, v vocab) {
+	if v.escapes(c) {
+		in.repairs.EscapedChar++
+	}
+	v.escapeChar(c, out)
+}
+
 func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 	rest := line[i:]
 	if startsWith(rest, "<!--") {
@@ -616,6 +633,7 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		if end < 0 {
 			return 0
 		}
+		in.repairs.StrippedHTML++
 		return end + 4 + 3
 	}
 	closeAt := indexRune(rest, '>')
@@ -644,6 +662,9 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			} else {
 				v.escapeChar(c, &text)
 			}
+		}
+		if !bare && !v.htmlOut() && !v.isPlain() {
+			in.repairs.ConvertedMarker++
 		}
 		v.link(string(text), string(url), out)
 		in.scratch = text
@@ -696,10 +717,12 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			// 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. 이름이 맞을 때만이다 —
 			// `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
 			in.strippedTags = in.strippedTags[:n-1]
+			in.repairs.StrippedHTML++
 		case githubStart:
 			if !closing && tag >= 0 {
 				in.strippedTags = append(in.strippedTags, uint8(tag))
 			}
+			in.repairs.StrippedHTML++
 		default:
 			switch {
 			case tag < 0:
@@ -723,6 +746,10 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 			in.prev = '>'
 			return closeAt + 1
 		}
+	}
+	// 여기까지 오면 태그를 벗긴다(GitHub 칸 안의 <br> 만 그대로 둔다).
+	if !(in.inCell && v.htmlEmphasis() && !closing && br) {
+		in.repairs.StrippedHTML++
 	}
 	if !closing && br {
 		// 표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다 — 칸 안에 `\n` 이 들어가면 GFM 은 그 뒤를
@@ -891,11 +918,12 @@ func repeatRune(c rune, n int) []rune {
 
 // insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 탈출을
 // 따른다 — GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
-func insertMarker(out *[]byte, at int, c rune, n int, v vocab) {
+func insertMarker(out *[]byte, at int, c rune, n int, v vocab, repairs *Repairs) {
 	if !v.escapes(c) {
 		insertRun(out, at, c, n)
 		return
 	}
+	repairs.EscapedChar += n
 	// 문자열을 만들지 않고 자리를 늘려 `\` 와 마커를 번갈아 채운다 — 조각마다 불리는 경로다.
 	insertRun(out, at, c, 2*n)
 	for k := 0; k < n; k++ {

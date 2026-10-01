@@ -102,6 +102,18 @@ type Repairs struct {
 	RevertedCodeSpan int
 	// DroppedMarker 는 짝 잃은 채 버린 `**` 다.
 	DroppedMarker int
+	// EscapedChar 는 채널이 구문으로 읽을 글자를 탈출한 수다(GitHub 의 \~·\<·\*).
+	EscapedChar int
+	// TagEmphasis 는 마커 대신 태그로 낸 강조다(GitHub 의 <strong>).
+	TagEmphasis int
+	// StrippedHTML 은 벗긴 원문 HTML 이다 — 태그, 주석, 줄바꿈으로 바꾼 <br>.
+	StrippedHTML int
+	// RewrittenBullet 은 다른 기호로 바꿔 쓴 목록 불릿이다.
+	RewrittenBullet int
+	// RewrittenTable 은 원문과 다른 모양으로 다시 쓴 표다.
+	RewrittenTable int
+	// ConvertedMarker 는 다른 표기로 바꿔 쓴 강조 마커와 <url|텍스트> 링크다(마크다운 채널).
+	ConvertedMarker int
 }
 
 func (r *Repairs) add(o Repairs) {
@@ -109,6 +121,12 @@ func (r *Repairs) add(o Repairs) {
 	r.ClosedFence += o.ClosedFence
 	r.RevertedCodeSpan += o.RevertedCodeSpan
 	r.DroppedMarker += o.DroppedMarker
+	r.EscapedChar += o.EscapedChar
+	r.TagEmphasis += o.TagEmphasis
+	r.StrippedHTML += o.StrippedHTML
+	r.RewrittenBullet += o.RewrittenBullet
+	r.RewrittenTable += o.RewrittenTable
+	r.ConvertedMarker += o.ConvertedMarker
 }
 
 // Rendered 는 RenderWith 의 결과 — 조각과 고친 것이다.

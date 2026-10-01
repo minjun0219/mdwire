@@ -106,6 +106,14 @@ impl Inline {
         self.stripped_tags.clear();
     }
 
+    /// 본문 글자 하나를 적는다. 채널이 탈출하는 글자면 센다([`Repairs::escaped_char`]).
+    fn text_char(&mut self, c: char, out: &mut String, v: &Vocab) {
+        if v.escapes(c) {
+            self.repairs.escaped_char += 1;
+        }
+        v.escape_char(c, out);
+    }
+
     /// 지금 `out` 에서 **내보내도 안전한 길이**. 열린 마커가 있으면 그 앞까지다.
     pub fn safe_len(&self, out_len: usize) -> usize {
         self.open.first().map_or(out_len, |o| o.at)
@@ -234,7 +242,7 @@ impl Inline {
             }
 
             if !matches!(c, '*' | '_' | '~') {
-                v.escape_char(c, out);
+                self.text_char(c, out, v);
                 i += 1;
                 continue;
             }
@@ -279,7 +287,7 @@ impl Inline {
             // 취소선으로 읽는 것은 레거시 `mrkdwn` 과 MarkdownV2 의 *출력* 규칙이지
             // 입력 문법이 아니다.
             if c == '~' && take < 2 && !mrkdwn {
-                v.escape_char(c, out);
+                self.text_char(c, out, v);
                 i += 1;
                 continue;
             }
@@ -306,7 +314,7 @@ impl Inline {
             let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
             if intraword && same.is_none() {
                 for _ in 0..take {
-                    v.escape_char(c, out);
+                    self.text_char(c, out, v);
                 }
                 i += take;
                 continue;
@@ -332,14 +340,14 @@ impl Inline {
                 // 블록 끝까지 삼킨다. 글자다.
                 Some(at) if self.open[at].guess && (!left || !after_space) => {
                     for _ in 0..take {
-                        v.escape_char(c, out);
+                        self.text_char(c, out, v);
                     }
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
                 // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
                 Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, soft, prev, split)),
                 // mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
-                Some(_) if !after_space && soft_blocked_close => v.escape_char(c, out),
+                Some(_) if !after_space && soft_blocked_close => self.text_char(c, out, v),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
                 Some(at) if !after_space => {
                     self.after_close = next;
@@ -453,7 +461,7 @@ impl Inline {
         }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
         if old.run == 1 || (old.guess && (old.after_space || old.split)) {
-            insert_marker(out, old.at, old.ch, old.run, v);
+            insert_marker(out, old.at, old.ch, old.run, v, &mut self.repairs);
         } else {
             self.repairs.dropped_marker += 1;
         }
@@ -503,7 +511,7 @@ impl Inline {
             // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
             // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
             if open.after_space || open.run == 1 || open.split {
-                insert_marker(out, open.at, open.ch, open.run, v);
+                insert_marker(out, open.at, open.ch, open.run, v, &mut self.repairs);
             } else {
                 self.repairs.dropped_marker += 1;
             }
@@ -571,9 +579,17 @@ impl Inline {
         // flanking 을 안 따지고 GitHub 이 그대로 그린다.
         let after = if matched { self.after_close } else { None };
         if v.html_emphasis() && open.emph != Emph::Code && !gfm_pairs(open.before, &out[open.at..], after) {
+            self.repairs.tag_emphasis += 1;
             out.insert_str(open.at, v.open_html(open.emph));
             out.push_str(v.close_html(open.emph));
             return;
+        }
+        // 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — mrkdwn `*굵게*` → `**`, `_` → `*`.
+        if !v.html_out() && !v.is_plain() && open.emph != Emph::Code {
+            let written = v.open(open.emph);
+            if written.chars().count() != open.run || !written.chars().all(|c| c == open.ch) {
+                self.repairs.converted_marker += 1;
+            }
         }
         if v.line_emphasis() && out[open.at..].contains('\n') {
             let mut buf = std::mem::take(&mut self.wrap);
@@ -599,6 +615,7 @@ impl Inline {
         let rest = &line[i..];
         if starts_with(rest, "<!--") {
             let end = find_seq(&rest[4..], "-->")? + 4;
+            self.repairs.stripped_html += 1;
             return Some(end + 3);
         }
         let close = rest.iter().position(|&c| c == '>')?;
@@ -627,6 +644,9 @@ impl Inline {
                 } else {
                     v.escape_char(c, &mut text);
                 }
+            }
+            if !bare && !v.html_out() && !v.is_plain() {
+                self.repairs.converted_marker += 1;
             }
             v.link(&text, &href, out);
             self.scratch = text;
@@ -680,10 +700,12 @@ impl Inline {
                 // 여는 쪽을 벗겼다 — 닫는 쪽만 남기지 않는다. **이름이 맞을 때만**이다 —
                 // `<sub>a <kbd>x</kbd></sub>` 의 `</kbd>` 를 벗기면 `</sub>` 만 홀로 남는다.
                 self.stripped_tags.pop();
+                self.repairs.stripped_html += 1;
             } else if github_start {
                 if let (false, Some(t)) = (closing, tag) {
                     self.stripped_tags.push(t);
                 }
+                self.repairs.stripped_html += 1;
             } else {
                 match tag {
                     None => {
@@ -712,6 +734,10 @@ impl Inline {
                 self.prev = Some('>');
                 return Some(close + 1);
             }
+        }
+        // 여기까지 오면 태그를 벗긴다(GitHub 칸 안의 `<br>` 만 그대로 둔다).
+        if !(self.in_cell && v.html_emphasis() && !closing && eq_ignore_case(name, "br")) {
+            self.repairs.stripped_html += 1;
         }
         if !closing && eq_ignore_case(name, "br") {
             // **표 칸 안의 `<br>` 은 줄바꿈으로 못 바꾼다** — 칸 안에 `\n` 이 들어가면 GFM 은
@@ -837,8 +863,11 @@ fn wrap_per_line(out: &mut String, at: usize, marker: (&str, &str), code: bool, 
 
 /// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
 /// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
-fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab) {
+fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab, repairs: &mut Repairs) {
     let escaped = v.escapes(c);
+    if escaped {
+        repairs.escaped_char += run;
+    }
     for _ in 0..run {
         out.insert(at, c);
         if escaped {

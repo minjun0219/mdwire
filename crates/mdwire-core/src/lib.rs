@@ -200,6 +200,19 @@ pub struct Repairs {
     pub reverted_code_span: usize,
     /// 짝 잃은 채 버린 `**` (`꼬리**` 처럼 앞이 글자인 것).
     pub dropped_marker: usize,
+    /// 채널이 구문으로 읽을 글자를 탈출한 수(GitHub 의 `\~`·`\<`·`\*`).
+    pub escaped_char: usize,
+    /// 마커 대신 태그로 낸 강조 — GitHub 이 마커로 못 읽는 자리(`**「설정」**가`)의 `<strong>`.
+    pub tag_emphasis: usize,
+    /// 벗긴 원문 HTML — 그 채널이 못 그리는 태그, 주석, 줄바꿈으로 바꾼 `<br>`.
+    pub stripped_html: usize,
+    /// 다른 기호로 바꿔 쓴 목록 불릿(`* `·`• ` → `- `, 마크다운 채널의 `- ` → 텔레그램 `• `).
+    pub rewritten_bullet: usize,
+    /// 원문과 다른 모양으로 다시 쓴 표(구분선·칸 공백 정규화, 고정폭으로 내림).
+    pub rewritten_table: usize,
+    /// 다른 표기로 바꿔 쓴 강조 마커와 링크 — mrkdwn `*굵게*` → `**굵게**`, `_기울임_` → `*기울임*`,
+    /// `<url|텍스트>` → `[텍스트](url)`. 마크다운을 내는 채널에서만 센다.
+    pub converted_marker: usize,
 }
 
 impl Repairs {
@@ -208,6 +221,12 @@ impl Repairs {
         self.closed_fence += other.closed_fence;
         self.reverted_code_span += other.reverted_code_span;
         self.dropped_marker += other.dropped_marker;
+        self.escaped_char += other.escaped_char;
+        self.tag_emphasis += other.tag_emphasis;
+        self.stripped_html += other.stripped_html;
+        self.rewritten_bullet += other.rewritten_bullet;
+        self.rewritten_table += other.rewritten_table;
+        self.converted_marker += other.converted_marker;
     }
 
     /// 하나라도 고쳤는가.

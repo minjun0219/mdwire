@@ -427,7 +427,15 @@ impl Engine {
                             push_usize(&mut self.out, n);
                             self.out.push_str(". ");
                         }
-                        _ => self.out.push_str(self.v.bullet()),
+                        _ => {
+                            let bullet = self.v.bullet();
+                            // 원문 기호와 다르게 썼으면 센다(`* `·`• `·`-\t` → `- `).
+                            let src = self.pending.get(indent..indent + 2);
+                            if src.is_none_or(|s| !bullet.chars().eq(s.iter().copied())) {
+                                self.inline.repairs.rewritten_bullet += 1;
+                            }
+                            self.out.push_str(bullet);
+                        }
                     }
                 }
                 self.inline.set_prev(None);
@@ -1092,11 +1100,17 @@ pub(crate) struct Table {
     rows: Vec<Vec<String>>,
     align: Vec<Align>,
     cell: String,
+    /// 원문 줄들. 다시 쓴 모양이 원문과 다른지 세는 데만 쓴다([`Repairs::rewritten_table`]).
+    src: String,
 }
 
 impl Table {
     /// 머리글과 구분선으로 표를 시작한다. 모양이 안 맞으면 표가 아니다.
     fn begin(&mut self, header: &str, delim: &str) -> bool {
+        self.src.clear();
+        self.src.push_str(header);
+        self.src.push('\n');
+        self.src.push_str(delim);
         let head = split_cells(header);
         let delim = split_cells(delim);
         if head.is_empty() || head.len() != delim.len() {
@@ -1120,11 +1134,21 @@ impl Table {
 
     fn push(&mut self, line: &str) {
         self.rows.push(split_cells(line));
+        self.src.push('\n');
+        self.src.push_str(line);
     }
 
     fn clear(&mut self) {
         self.rows.clear();
         self.align.clear();
+        self.src.clear();
+    }
+
+    /// 다시 쓴 표가 원문과 다르면 센다. 줄마다 앞뒤 공백은 뺀다 — 들여쓰기는 모양이 아니다.
+    fn count_rewrite(&self, count: bool, written: &str, repairs: &mut Repairs) {
+        if count && !written.lines().map(str::trim).eq(self.src.lines().map(str::trim)) {
+            repairs.rewritten_table += 1;
+        }
     }
 
     /// 고정폭 블록으로 그린다. **열은 표시 폭으로 맞춘다** — 문자 수로 맞추면
@@ -1174,6 +1198,10 @@ impl Table {
         }
         self.rows = rows;
         repairs.add(inline.repairs);
+        // 원문과 다른 모양으로 쓰면 센다 — 브라우저 채널은 표를 태그로 그리는 것이 곧 동작이라 빼고,
+        // 나머지는 다 쓴 뒤 줄마다 앞뒤 공백을 빼고 원문과 견준다.
+        let from = out.len();
+        let count = !v.is_html();
 
         if v.is_html() {
             write_html_table(out, &cells, &self.align);
@@ -1184,6 +1212,7 @@ impl Table {
         }
         if v.tables_native() {
             write_gfm_table(out, &cells, &self.align);
+            self.count_rewrite(count, &out[from..], repairs);
             return Vec::new();
         }
 
@@ -1219,6 +1248,7 @@ impl Table {
         }
         v.escape(&body, out);
         v.verbatim_close("", out);
+        self.count_rewrite(count, &out[from..], repairs);
         Vec::new()
     }
 }
