@@ -31,7 +31,7 @@ import ChannelCompare from "../../../components/ChannelCompare.tsx";
 import { renderWithReport } from "@minjun0219/mdwire";
 
 for (const channel of ["telegram-html", "slack-markdown"]) {
-  const out = renderWithReport(input, channel, { from: "markdown" }); // 슬랙 레거시는 "slack-mrkdwn"
+  const out = renderWithReport(input, channel);
   out.parts;   // 보낼 텍스트. 길이 제한을 넘지 않으면 문자열 하나
   out.repairs; // closedEmphasis · closedFence · … · convertedMarker, 모두 열 가지
   out.free();  // 결과는 WASM 메모리에 있으므로 다 쓰면 해제

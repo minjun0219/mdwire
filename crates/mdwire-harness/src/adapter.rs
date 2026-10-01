@@ -7,7 +7,7 @@
 //! 분할 결과는 NUL 로 이어 붙인 한 문자열로 돌려준다 — CLI 와 같은 규약이다
 //! (`SPEC.md` 5절).
 
-use mdwire::{Channel, Dialect, Options};
+use mdwire::{Channel, Options};
 use std::io::Write;
 use std::process::{Command as Proc, Stdio};
 
@@ -15,17 +15,12 @@ use std::process::{Command as Proc, Stdio};
 pub trait Renderer {
     /// 표에 찍힐 이름.
     fn name(&self) -> String;
-    /// 입력을 채널용으로 변환한다. 조각이 여럿이면 NUL 로 잇는다. `from` 은 입력 표기이다.
-    fn render(&self, input: &str, channel: Channel, from: Dialect) -> Result<String, String>;
+    /// 입력을 채널용으로 변환한다. 조각이 여럿이면 NUL 로 잇는다.
+    fn render(&self, input: &str, channel: Channel) -> Result<String, String>;
     /// 입력을 `chunk` 글자씩 흘려 넣고, 돌려받은 것을 **이어 붙이기만** 한 결과.
     /// 스트리밍이 없는 구현은 `None` 이다 — 그러면 스트리밍 불일치는 재지 않는다.
-    fn stream(&self, _input: &str, _channel: Channel, _from: Dialect, _chunk: usize) -> Option<String> {
+    fn stream(&self, _input: &str, _channel: Channel, _chunk: usize) -> Option<String> {
         None
-    }
-    /// 이 입력 표기를 받는가. **못 받는 구현에 그 케이스를 먹이지 않는다** — 표준으로 읽고
-    /// 틀렸다고 채점하면 입력 표기를 모르는 것과 변환이 틀린 것이 구분되지 않는다.
-    fn supports(&self, from: Dialect) -> bool {
-        from == Dialect::Markdown
     }
 }
 
@@ -38,12 +33,12 @@ impl Renderer for Mdwire {
         "mdwire".to_string()
     }
 
-    fn render(&self, input: &str, channel: Channel, from: Dialect) -> Result<String, String> {
-        Ok(mdwire::render_with(input, channel, Options { from, ..Default::default() }).parts.join("\0"))
+    fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
+        Ok(mdwire::render_with(input, channel, Options::default()).parts.join("\0"))
     }
 
-    fn stream(&self, input: &str, channel: Channel, from: Dialect, chunk: usize) -> Option<String> {
-        let mut s = mdwire::Streamer::with_options(channel, Options { from, ..Default::default() });
+    fn stream(&self, input: &str, channel: Channel, chunk: usize) -> Option<String> {
+        let mut s = mdwire::Streamer::with_options(channel, Options::default());
         let mut out = String::new();
         let mut rest = input;
         while !rest.is_empty() {
@@ -54,17 +49,12 @@ impl Renderer for Mdwire {
         out.push_str(s.finish());
         Some(out)
     }
-
-    fn supports(&self, _from: Dialect) -> bool {
-        true
-    }
 }
 
 /// 외부 구현. stdin 으로 넣고 stdout 으로 받는다.
 ///
-/// `argv` 안의 `{channel}` 은 채널 이름으로, `{from}` 은 입력 표기 이름(`markdown` ·
-/// `slack-mrkdwn`)으로 치환된다. 예: `--cmd "node tools/convert.js --target {channel}"`.
-/// `{from}` 이 없으면 표준 마크다운만 받는 구현으로 보고 입력 표기 케이스는 건너뛴다.
+/// `argv` 안의 `{channel}` 은 채널 이름으로 치환된다.
+/// 예: `--cmd "node tools/convert.js --target {channel}"`.
 pub struct Command {
     pub label: String,
     pub argv: Vec<String>,
@@ -87,12 +77,8 @@ impl Renderer for Command {
         self.label.clone()
     }
 
-    fn render(&self, input: &str, channel: Channel, from: Dialect) -> Result<String, String> {
-        let args: Vec<String> = self
-            .argv
-            .iter()
-            .map(|a| a.replace("{channel}", channel.name()).replace("{from}", from.name()))
-            .collect();
+    fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
+        let args: Vec<String> = self.argv.iter().map(|a| a.replace("{channel}", channel.name())).collect();
         let mut child = Proc::new(&args[0])
             .args(&args[1..])
             .stdin(Stdio::piped())
@@ -120,13 +106,9 @@ impl Renderer for Command {
         }
         String::from_utf8(out.stdout).map_err(|e| format!("출력이 UTF-8 이 아니다: {e}"))
     }
-
-    fn supports(&self, from: Dialect) -> bool {
-        from == Dialect::Markdown || self.argv.iter().any(|a| a.contains("{from}"))
-    }
 }
 
-/// 클로저를 채점 대상으로 쓴다. 테스트에서 가짜 구현을 끼울 때 쓴다. 표준 마크다운만 받는다.
+/// 클로저를 채점 대상으로 쓴다. 테스트에서 가짜 구현을 끼울 때 쓴다.
 pub struct FnRenderer<F> {
     pub label: String,
     pub f: F,
@@ -139,7 +121,7 @@ where
     fn name(&self) -> String {
         self.label.clone()
     }
-    fn render(&self, input: &str, channel: Channel, _from: Dialect) -> Result<String, String> {
+    fn render(&self, input: &str, channel: Channel) -> Result<String, String> {
         (self.f)(input, channel)
     }
 }

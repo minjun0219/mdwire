@@ -26,7 +26,7 @@ func TestWriteFailuresAreReported(t *testing.T) {
 
 // batchInput 은 정상 줄과 못 읽는 줄을 섞는다. 러스트 CLI 와 글자까지 같아야 한다.
 var batchInput = strings.Join([]string{
-	`{"id":"a\"1<&>","text":"*첫 줄\n둘째*입니다"}`,
+	`{"id":"a\"1<&>","text":"_첫 줄\n둘째_ 입니다"}`,
 	``,
 	`{"id": 7, "text": "**안 닫힘"}` + "\r",
 	`{"text":"` + "```" + `\n안 닫힌 펜스"}`,
@@ -47,7 +47,7 @@ var batchInput = strings.Join([]string{
 
 func TestBatchKeepsGoingAndCountsFailures(t *testing.T) {
 	var out, errOut strings.Builder
-	err := runWith([]string{"--channel", "slack-markdown", "--from", "slack-mrkdwn", "--batch", "jsonl"}, strings.NewReader(batchInput), &out, &errOut)
+	err := runWith([]string{"--channel", "slack-markdown", "--batch", "jsonl"}, strings.NewReader(batchInput), &out, &errOut)
 	if err == nil || err.Error() != "11줄을 읽지 못했다" {
 		t.Fatalf("에러가 %v — 못 읽은 11줄을 세야 한다\n%s", err, out.String())
 	}
@@ -71,7 +71,7 @@ func TestBatchMatchesRust(t *testing.T) {
 	if !filepath.IsAbs(bin) {
 		bin = filepath.Join("..", "..", bin)
 	}
-	args := []string{"--channel", "slack-markdown", "--from", "slack-mrkdwn", "--batch", "jsonl"}
+	args := []string{"--channel", "slack-markdown", "--batch", "jsonl"}
 	cmd := exec.Command(bin, args...)
 	cmd.Stdin = strings.NewReader(batchInput)
 	// 못 읽은 줄이 있어 실패로 끝나는 것이 정상이다. 실행 자체가 안 된 것만 막는다.
@@ -91,14 +91,14 @@ func TestBatchMatchesRust(t *testing.T) {
 func TestEqualsFormIsTheSameAsTwoArgs(t *testing.T) {
 	render := func(args ...string) string {
 		var out strings.Builder
-		if err := run(args, strings.NewReader("*굵게* ~취소~"), &out); err != nil {
+		if err := run(args, strings.NewReader("_기울임_ __굵게__"), &out); err != nil {
 			t.Fatal(err)
 		}
 		return out.String()
 	}
-	spaced := render("--channel", "slack-markdown", "--from", "slack-mrkdwn")
-	equals := render("--channel=slack-markdown", "--from=slack-mrkdwn")
-	if spaced != "**굵게** ~~취소~~" || equals != spaced {
+	spaced := render("--channel", "slack-markdown", "--limit", "300")
+	equals := render("--channel=slack-markdown", "--limit=300")
+	if spaced != "*기울임* **굵게**" || equals != spaced {
 		t.Fatalf("spaced %q equals %q", spaced, equals)
 	}
 }

@@ -9,44 +9,14 @@ func Render(input string, ch Channel) []string {
 	return RenderWith(input, ch, Options{}).Parts
 }
 
-// Dialect 는 입력 표기 — 에이전트가 무슨 표기로 썼는가다. 기본은 표준 마크다운이다. 슬랙에
-// 답하는 에이전트는 흔히 레거시 mrkdwn(`*굵게*` · `_기울임_` · `~취소~`)으로 쓴다.
-type Dialect int
-
-const (
-	// Markdown 은 표준 마크다운(CommonMark · GFM)이다.
-	Markdown Dialect = iota
-	// SlackMrkdwn 은 슬랙 레거시 mrkdwn 이다. 별표는 몇 개든 굵게, 물결은 하나든 둘이든
-	// 취소선이다. 표준 표기가 섞여도 같은 뜻으로 읽는다.
-	SlackMrkdwn
-)
-
-// Name 은 CLI 인자와 바인딩에서 쓰는 이름이다.
-func (d Dialect) Name() string {
-	if d == SlackMrkdwn {
-		return "slack-mrkdwn"
-	}
-	return "markdown"
-}
-
-// ParseDialect 는 이름으로 입력 표기를 찾는다.
-func ParseDialect(name string) (Dialect, bool) {
-	for _, d := range []Dialect{Markdown, SlackMrkdwn} {
-		if d.Name() == name {
-			return d, true
-		}
-	}
-	return 0, false
-}
-
 // MinLimit 은 호출자가 줄 수 있는 가장 작은 조각 한도다. 조각마다 마크업을 닫고 다시 열 자리가 있어야
 // 한다 — 한도가 태그보다 작으면 분할기가 태그 글자 사이를 가른다(텔레그램 **x** 를 한도 1 로 나누면
 // < · b · ></b>). 러스트 쪽 MIN_LIMIT 과 같다.
 const MinLimit = 256
 
-// Options 는 변환 옵션이다 — 입력 표기, 조각 한도, 브라우저 채널의 정책. 영값이 기본값이다.
+// Options 는 변환 옵션이다 — 조각 한도, 브라우저 채널의 정책. 영값이 기본값이다. 입력 표기는 고르지
+// 않는다 — LLM 이 표준에서 벗어나게 써도 받아 내는 것이 기본 읽기의 일이다.
 type Options struct {
-	From Dialect
 	// Limit 은 한 조각의 한도(렌더한 출력의 글자 수)다. 0 이면 채널의 Limit().
 	//
 	// 한도는 보내는 쪽이 정한다 — plain 은 어디로 가는지 모르는 폴백이라 텔레그램으로 보내면

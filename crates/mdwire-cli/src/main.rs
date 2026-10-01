@@ -14,7 +14,7 @@
 //! `--batch jsonl` 은 문서 여럿을 한 프로세스로 잰다 — 답변 수백 개의 품질을 점검할 때
 //! 문서마다 프로세스를 띄우지 않게.
 
-use mdwire::{Channel, Dialect, Images, LineBreaks, Options, Repairs, Streamer};
+use mdwire::{Channel, Images, LineBreaks, Options, Repairs, Streamer};
 use serde_json::value::RawValue;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Read, Write};
@@ -24,15 +24,14 @@ const USAGE: &str = "\
 mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸다
 
 사용법:
-  mdwire --channel <채널> [--from <표기>] [--stream] [--report]
-  mdwire --channel <채널> [--from <표기>] --batch jsonl
+  mdwire --channel <채널> [--stream] [--report]
+  mdwire --channel <채널> --batch jsonl
 
 채널:
   telegram-html · slack-markdown · github-markdown · notion-markdown · plain · html
 
 옵션:
   --channel <이름>      필수
-  --from <표기>         입력 표기. markdown(기본) · slack-mrkdwn
   --limit <글자 수>     조각 한도. 기본은 채널의 한도 — plain 을 텔레그램에 보내면 4096
   --html-line-breaks <br|space>   html: 블록 안 줄바꿈. 기본 br
   --html-images <link|load>       html: 이미지를 링크로만(기본) · <img> 로 불러오기
@@ -119,11 +118,6 @@ fn run() -> Result<(), String> {
                 let v = value()?;
                 let n: usize = v.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("--limit 은 1 이상의 정수여야 한다: {v}"))?;
                 options.limit = Some(n);
-            }
-            "--from" => {
-                let v = value()?;
-                options.from =
-                    Dialect::parse(&v).ok_or_else(|| format!("모르는 입력 표기: {v}\n\n{USAGE}"))?;
             }
             "--channel" => {
                 let v = value()?;
@@ -336,15 +330,14 @@ mod tests {
 
     fn batch(input: &str) -> (String, usize) {
         let mut out = Vec::new();
-        let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
-        let failed = batch_jsonl(Channel::SlackMarkdown, options, input.as_bytes(), &mut out).expect("쓰기");
+        let failed = batch_jsonl(Channel::SlackMarkdown, Options::default(), input.as_bytes(), &mut out).expect("쓰기");
         (String::from_utf8(out).expect("UTF-8"), failed)
     }
 
     /// 문서마다 한 줄. `id` 는 받은 글자 그대로, 줄 번호는 빈 줄까지 센다.
     #[test]
     fn batch_reports_each_document_on_its_own_line() {
-        let (out, failed) = batch("{\"id\":\"a\\\"1\",\"text\":\"*첫 줄\\n둘째*\"}\n\n{\"id\":7,\"text\":\"**안 닫힘\"}\r\n");
+        let (out, failed) = batch("{\"id\":\"a\\\"1\",\"text\":\"_첫 줄\\n둘째_\"}\n\n{\"id\":7,\"text\":\"**안 닫힘\"}\r\n");
         assert_eq!(failed, 0);
         assert_eq!(
             out,

@@ -100,36 +100,6 @@ impl Channel {
     }
 }
 
-/// 입력 표기 — 에이전트가 무슨 표기로 썼는가.
-///
-/// 기본은 표준 마크다운이다. 슬랙에 답하는 에이전트는 흔히 **레거시 `mrkdwn`** 으로 쓴다
-/// (슬랙 문서가 그렇게 가르친다) — `*굵게*` · `_기울임_` · `~취소~`. 표준으로 읽으면
-/// `*굵게*` 가 기울임이 되고 `~취소~` 는 글자로 남는다. 출력 채널과는 따로 정한다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Dialect {
-    /// 표준 마크다운(CommonMark · GFM).
-    #[default]
-    Markdown,
-    /// 슬랙 레거시 `mrkdwn`. 별표는 몇 개든 굵게, 물결은 하나든 둘이든 취소선이다.
-    /// 표준 표기(`**굵게**` · `~~취소~~` · `[텍스트](url)`)가 섞여도 같은 뜻으로 읽는다.
-    SlackMrkdwn,
-}
-
-impl Dialect {
-    /// CLI 인자와 바인딩에서 쓰는 이름.
-    pub fn name(self) -> &'static str {
-        match self {
-            Dialect::Markdown => "markdown",
-            Dialect::SlackMrkdwn => "slack-mrkdwn",
-        }
-    }
-
-    /// 이름으로 입력 표기를 찾는다.
-    pub fn parse(name: &str) -> Option<Dialect> {
-        [Dialect::Markdown, Dialect::SlackMrkdwn].into_iter().find(|d| d.name() == name)
-    }
-}
-
 /// 호출자가 줄 수 있는 가장 작은 조각 한도.
 ///
 /// **조각마다 마크업을 닫고 다시 열 자리가 있어야 한다.** 한도가 태그보다 작으면 분할기가 태그 글자
@@ -138,12 +108,13 @@ impl Dialect {
 /// 값이다. 실제 쓰임(텔레그램 4096 에서 머리글 몫을 빼는 것)과는 거리가 멀다.
 pub const MIN_LIMIT: usize = 256;
 
-/// 변환 옵션 — 입력 표기, 조각 한도, 브라우저 채널의 정책.
+/// 변환 옵션 — 조각 한도, 브라우저 채널의 정책.
 ///
-/// 필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다.
+/// **입력 표기는 고르지 않는다.** LLM 이 표준에서 벗어나게 써도 받아 내는 것이 기본 읽기의 일이다.
+///
+/// 필드가 늘 수 있으니 `Options { limit, ..Default::default() }` 로 만든다.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Options {
-    pub from: Dialect,
     /// 한 조각의 한도(렌더한 출력의 글자 수). `None` 이면 [`Channel::limit`].
     ///
     /// **한도는 보내는 쪽이 정한다.** 채널이 정해 주지 못하는 경우가 있다 — plain 은 어디로
@@ -212,7 +183,7 @@ pub struct Repairs {
     pub rewritten_bullet: usize,
     /// 원문과 다른 모양으로 다시 쓴 표(구분선·칸 공백 정규화, 고정폭으로 내림).
     pub rewritten_table: usize,
-    /// 다른 표기로 바꿔 쓴 강조 마커와 링크 — mrkdwn `*굵게*` → `**굵게**`, `_기울임_` → `*기울임*`,
+    /// 다른 표기로 바꿔 쓴 강조 마커와 링크 — `_기울임_` → `*기울임*`, `__굵게__` → `**굵게**`,
     /// `<url|텍스트>` → `[텍스트](url)`. 마크다운을 내는 채널에서만 센다.
     pub converted_marker: usize,
 }
@@ -480,10 +451,10 @@ pub fn render(input: &str, channel: Channel) -> Vec<String> {
 /// [`render`] 에 옵션을 주고, 정규화가 고친 것도 같이 받는다.
 ///
 /// ```
-/// use mdwire::{render_with, Channel, Dialect, Options};
+/// use mdwire::{render_with, Channel, Options};
 ///
-/// let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
-/// let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
+/// let options = Options { limit: Some(4096), ..Default::default() };
+/// let out = render_with("**굵게** 는 **영향 범위", Channel::SlackMarkdown, options);
 /// assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
 /// assert_eq!(out.repairs.closed_emphasis, 1);
 /// ```

@@ -32,8 +32,6 @@ type openMark struct {
 	guess bool
 	// 이 마커 앞이 공백(또는 블록 시작)이었는가. 추측이 빗나갔을 때 되돌릴지 버릴지를 가른다.
 	afterSpace bool
-	// 짝이 오면 닫지만, 안 오면 닫아 주지 않고 글자로 되돌린다. mrkdwn 의 홑 `~` 다.
-	soft bool
 	// 여는 마커 바로 앞의 원문 글자. GitHub 이 이 짝을 강조로 읽는지 가를 때 쓴다.
 	before rune
 	// 더 긴 런(`***`)의 첫 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한 덩어리의
@@ -50,8 +48,6 @@ type inline struct {
 	// 지금 열려 있는 코드 스팬의 날것 내용. 블록이 끝나도록 닫는 런이 안 오면 그 백틱은
 	// 글자였다는 뜻이라, 삼킨 내용을 도로 꺼내 다시 읽는다.
 	codeSrc []rune
-	// 입력 표기. 마커를 무엇으로 읽을지가 여기서 갈린다.
-	dialect Dialect
 	// 정규화가 고친 것.
 	repairs Repairs
 	// 지금 닫는 마커 바로 뒤의 원문 글자. 짝이 맞아 닫을 때만 뜻이 있다.
@@ -67,8 +63,8 @@ type inline struct {
 	wrap []byte
 }
 
-func newInline(d Dialect) *inline {
-	return &inline{prev: noChar, dialect: d, afterClose: noChar}
+func newInline() *inline {
+	return &inline{prev: noChar, afterClose: noChar}
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
@@ -194,10 +190,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 먼저 열고(바깥), 닫을 때는 기울임이 열려 있으면 그것부터 닫는다(안쪽). 굵게만 열려
 		// 있는데 셋이 오면 통째로 닫는 마커다 — 둘만 집으면 별표 하나가 남는다.
 		take := runLen(line, i, c)
-		// 레거시 mrkdwn 입력 표기 — `*굵게*` · `_기울임_` · `~취소~`. 별표는 몇 개든 굵게, 물결은
-		// 하나든 둘이든 취소선이다. 표준 표기가 섞여도 같은 뜻으로 읽는다.
-		mrkdwn := in.dialect == SlackMrkdwn
-		if c != '~' && take == 3 && !mrkdwn {
+		if c != '~' && take == 3 {
 			switch {
 			case in.hasOpen(emphItalic):
 				take = 1
@@ -211,15 +204,13 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		switch {
 		case c == '~':
 			e = emphStrike
-		case c == '*' && mrkdwn:
-			e = emphBold
 		case take == 1:
 			e = emphItalic
 		default:
 			e = emphBold
 		}
 		// 취소선은 `~~` 다. 홀로 선 `~` 는 글자다 — `~40km`, `5~6월`.
-		if c == '~' && take < 2 && !mrkdwn {
+		if c == '~' && take < 2 {
 			in.textChar(c, out, v)
 			i++
 			continue
@@ -251,13 +242,8 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			continue
 		}
 
-		// mrkdwn 의 홑 `~` 는 한국어에서 근사값·범위로 흔하다(`약 ~40km`, `5~6월`). 글자 뒤나
-		// 숫자 앞에서는 열지 않고, 영숫자 앞에서는 닫지 않으며, 안 닫히면 글자로 되돌린다.
-		soft := mrkdwn && c == '~' && take == 1
-		softBlockedOpen := soft && ((prev != noChar && isWordChar(prev)) || (next >= '0' && next <= '9'))
-		softBlockedClose := soft && next != noChar && next < 0x80 && isASCIIAlnum(next)
-		left := canOpen(prev, next) && !intraword && !softBlockedOpen
-		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, soft: soft, before: prev, split: split}
+		left := canOpen(prev, next) && !intraword
+		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, before: prev, split: split}
 
 		switch {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
@@ -270,9 +256,6 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고 이쪽을 연다.
 		case same >= 0 && in.open[same].guess:
 			in.reopenAt(same, out, v, fresh)
-		// mrkdwn 홑 `~` 가 영숫자 앞에 왔다 — 닫는 자리가 아니라 글자다(`5~6`).
-		case same >= 0 && !afterSpace && softBlockedClose:
-			in.textChar(c, out, v)
 		// 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
 		case same >= 0 && !afterSpace:
 			in.afterClose = next
@@ -416,7 +399,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 
 	// 내용이 비었으면 태그를 만들지 않는다. `<b></b>` 는 아무에게도 쓸모가 없다.
 	empty := len(*out) == o.at
-	if o.guess || empty || (o.soft && !matched) {
+	if o.guess || empty {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		if o.afterSpace || o.run == 1 || o.split {
@@ -783,7 +766,7 @@ func (in *inline) renderImage(alt, url []rune, out *[]byte, v vocab) {
 func (in *inline) renderTarget(text, url []rune, out *[]byte, v vocab, image bool) {
 	scratch := in.scratch[:0]
 	// 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
-	nested := newInline(in.dialect)
+	nested := newInline()
 	nested.render(text, &scratch, v)
 	nested.finishBlock(&scratch, v)
 	in.repairs.add(nested.repairs)

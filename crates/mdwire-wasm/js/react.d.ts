@@ -8,10 +8,8 @@ export type MdComponents = Partial<Record<MdTag, ElementType>>;
 export interface MarkdownProps {
   /** 에이전트가 쓴 마크다운(완성된 글). 스트리밍은 `Streamer` + `toElements` 로 — 누적본을 매번 넘기면 처음부터 다시 변환한다. */
   text: string;
-  /** 입력 표기. 슬랙 레거시 mrkdwn 이면 "slack-mrkdwn". */
-  from?: "markdown" | "slack-mrkdwn";
   components?: MdComponents;
-  /** 코어에 넘길 옵션 — `html` 정책(줄바꿈·이미지·스킴)이 여기 든다. `from` 은 위 것이 이긴다. */
+  /** 코어에 넘길 옵션 — `html` 정책(줄바꿈·이미지·스킴)이 여기 든다. */
   options?: RenderOptions;
 }
 
@@ -19,7 +17,6 @@ export interface MarkdownProps {
 export function Markdown(props: MarkdownProps): ReactElement;
 
 export interface MarkdownStreamOptions {
-  from?: "markdown" | "slack-mrkdwn";
   components?: MdComponents;
   options?: RenderOptions;
   /** 붙든 것(열린 강조·표 행·코드 스팬)도 먼저 그린다. 기본 `true`. `false` 면 확정된 것만. */

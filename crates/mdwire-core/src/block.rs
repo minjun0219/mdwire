@@ -23,7 +23,7 @@ use crate::inline::Inline;
 use crate::sink::Sink;
 use crate::vocab::{Emph, Vocab};
 use crate::width::str_width;
-use crate::{Channel, Dialect, Options, Repairs};
+use crate::{Channel, Options, Repairs};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -73,8 +73,6 @@ pub(crate) struct Engine {
     cr: bool,
     /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
     closed_fence: usize,
-    /// 입력 표기. 표 셀을 읽을 때도 문서를 따른다.
-    dialect: Dialect,
     /// 열린 목록들 — (항목 들여쓰기, 번호 목록인가). 바깥부터. **HTML 채널만 쓴다** — 다른
     /// 채널은 목록을 글자(`- `·`• `)로 그려서 중첩을 태그로 여닫을 일이 없다.
     lists: Vec<(usize, bool)>,
@@ -96,7 +94,7 @@ impl Engine {
     pub fn new(channel: Channel, options: &Options) -> Self {
         Self {
             v: Vocab::from_options(channel, options),
-            inline: Inline::new(options.from),
+            inline: Inline::new(),
             pending: Vec::new(),
             line_open: false,
             kind: LineKind::Para,
@@ -112,7 +110,6 @@ impl Engine {
             fence: FenceState::default(),
             cr: false,
             closed_fence: 0,
-            dialect: options.from,
             lists: Vec::new(),
             list_gap: false,
         }
@@ -617,7 +614,7 @@ impl Engine {
             State::Table => {
                 let mut table = std::mem::take(&mut self.table);
                 self.start_line();
-                let breaks = table.render(&self.v, self.dialect, &mut self.inline.repairs, &mut self.out);
+                let breaks = table.render(&self.v, &mut self.inline.repairs, &mut self.out);
                 table.clear();
                 self.table = table;
                 // 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보내 분할기가 표 한가운데를
@@ -1162,7 +1159,7 @@ impl Table {
     /// 한글이 든 표는 반드시 어긋난다(`SPEC.md` 7절).
     ///
     /// 돌려주는 것은 표를 여럿으로 나눈 자리(`out` 의 바이트 위치)다 — 노션 표가 한도를 넘을 때만 있다.
-    fn render(&mut self, v: &Vocab, dialect: Dialect, repairs: &mut Repairs, out: &mut String) -> Vec<usize> {
+    fn render(&mut self, v: &Vocab, repairs: &mut Repairs, out: &mut String) -> Vec<usize> {
         let cols = self.align.len();
         // 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다.
         // **표를 직접 그리는 채널은 예외다** — 거기서는 셀도 그 채널 표기로 낸다.
@@ -1170,9 +1167,9 @@ impl Table {
         let cell_vocab = if v.tables_native() { v } else { &plain };
         let rows = std::mem::take(&mut self.rows);
         let mut cells: Vec<Vec<String>> = Vec::with_capacity(rows.len());
-        // 셀 안의 입력 표기는 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의
-        // `**x` 를 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
-        let mut inline = Inline::new(dialect);
+        // 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를 닫아 주면 세는데, 같은 것이
+        // 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
+        let mut inline = Inline::new();
         inline.in_cell = true;
         let mut chars: Vec<char> = Vec::new();
         for row in &rows {

@@ -22,7 +22,7 @@ Every [release](https://github.com/minjun0219/mdwire/releases) also carries a bi
 cat agent-output.md | mdwire --channel telegram-html            # parts separated by NUL
 cat agent-output.md | mdwire --channel slack-markdown --stream  # emit as it arrives
 cat agent-output.md | mdwire --channel plain --limit 4096       # plain fallback into Telegram
-cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
 ## Flags
@@ -30,7 +30,6 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 | Flag | |
 |---|---|
 | `--channel <name>` | Required. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` |
-| `--from <dialect>` | Input dialect: `markdown` (default) · `slack-mrkdwn` |
 | `--limit <chars>` | Part limit. Defaults to the channel's. |
 | `--html-line-breaks <br\|space>` | `html` only. Default `br`. |
 | `--html-images <link\|load>` | `html` only. Default `link`. |
@@ -42,7 +41,7 @@ cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --repo
 
 A flag that takes a value also takes `--name=value` (`--channel=slack-markdown`).
 
-Channels, dialects and options are explained on [Concepts](/docs/).
+Channels and options are explained on [Concepts](/docs/).
 
 ## Output
 

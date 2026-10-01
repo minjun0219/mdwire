@@ -88,22 +88,6 @@ func telegramBalanced(part string) bool {
 	return len(stack) == 0
 }
 
-type channelDialect struct {
-	ch   Channel
-	from Dialect
-}
-
-// channelDialects 는 채널 × 입력 표기 전부다.
-func channelDialects() []channelDialect {
-	var out []channelDialect
-	for _, ch := range Channels() {
-		for _, d := range []Dialect{Markdown, SlackMrkdwn} {
-			out = append(out, channelDialect{ch, d})
-		}
-	}
-	return out
-}
-
 func fuzzRounds() int {
 	if v := os.Getenv("MDWIRE_FUZZ_ROUNDS"); v != "" {
 		n := 0
@@ -123,8 +107,8 @@ func TestRandomInputNeverBreaksTheInvariants(t *testing.T) {
 	failures := 0
 	for round := 0; round < fuzzRounds() && failures < 10; round++ {
 		input := fuzzDoc(&r)
-		for _, c := range channelDialects() {
-			ch, opts := c.ch, Options{From: c.from}
+		for _, ch := range Channels() {
+			opts := Options{}
 			rendered := RenderWith(input, ch, opts)
 			parts := rendered.Parts
 			for _, p := range parts {
@@ -148,13 +132,13 @@ func TestRandomInputNeverBreaksTheInvariants(t *testing.T) {
 				}
 				s.FinishTo(&got)
 				if string(got) != parts[0] {
-					t.Errorf("#%d %s %s 조각 %d: 스트리밍이 다르다\n  입력: %q\n  완성본: %q\n  스트리밍: %q", round, ch.Name(), c.from.Name(), size, input, parts[0], got)
+					t.Errorf("#%d %s 조각 %d: 스트리밍이 다르다\n  입력: %q\n  완성본: %q\n  스트리밍: %q", round, ch.Name(), size, input, parts[0], got)
 					failures++
 					break
 				}
 				// 고친 것도 조각 크기와 무관하게 같아야 한다.
 				if s.Repairs() != rendered.Repairs {
-					t.Errorf("#%d %s %s 조각 %d: 고친 것이 다르다 %+v ≠ %+v\n  입력: %q", round, ch.Name(), c.from.Name(), size, s.Repairs(), rendered.Repairs, input)
+					t.Errorf("#%d %s 조각 %d: 고친 것이 다르다 %+v ≠ %+v\n  입력: %q", round, ch.Name(), size, s.Repairs(), rendered.Repairs, input)
 					failures++
 					break
 				}
@@ -175,8 +159,8 @@ func TestParityWithRustCore(t *testing.T) {
 	failures := 0
 	for round := 0; round < rounds && failures < 10; round++ {
 		input := fuzzDoc(&r)
-		for _, c := range channelDialects() {
-			cmd := exec.Command(bin, "--channel", c.ch.Name(), "--from", c.from.Name(), "--report")
+		for _, ch := range Channels() {
+			cmd := exec.Command(bin, "--channel", ch.Name(), "--report")
 			cmd.Stdin = strings.NewReader(input)
 			var stderr strings.Builder
 			cmd.Stderr = &stderr
@@ -184,10 +168,10 @@ func TestParityWithRustCore(t *testing.T) {
 			if err != nil {
 				t.Fatalf("러스트 CLI 실행 실패: %v", err)
 			}
-			rendered := RenderWith(input, c.ch, Options{From: c.from})
+			rendered := RenderWith(input, ch, Options{})
 			got := strings.Join(rendered.Parts, "\x00")
 			if got != string(want) {
-				t.Errorf("#%d %s %s: 러스트와 다르다\n  입력: %q\n  go   %q\n  rust %q", round, c.ch.Name(), c.from.Name(), input, got, want)
+				t.Errorf("#%d %s: 러스트와 다르다\n  입력: %q\n  go   %q\n  rust %q", round, ch.Name(), input, got, want)
 				failures++
 			}
 			r := rendered.Repairs
@@ -196,7 +180,7 @@ func TestParityWithRustCore(t *testing.T) {
 				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
 				r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 			if report != strings.TrimSpace(stderr.String()) {
-				t.Errorf("#%d %s %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, c.ch.Name(), c.from.Name(), input, report, stderr.String())
+				t.Errorf("#%d %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, ch.Name(), input, report, stderr.String())
 				failures++
 			}
 		}
@@ -368,8 +352,8 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 	if gh.EscapedChar != 1 || gh.TagEmphasis != 1 || gh.StrippedHTML != 1 || gh.RewrittenBullet != 1 || gh.RewrittenTable != 1 || gh.ConvertedMarker != 0 {
 		t.Errorf("github: %+v", gh)
 	}
-	slack := RenderWith("*굵게* _기울임_ ~취소~ <https://a.com|링크>\n• 항목", SlackMarkdown, Options{From: SlackMrkdwn}).Repairs
-	if slack.ConvertedMarker != 4 || slack.RewrittenBullet != 1 {
+	slack := RenderWith("_기울임_ __굵게__ <https://a.com|링크>\n• 항목", SlackMarkdown, Options{}).Repairs
+	if slack.ConvertedMarker != 3 || slack.RewrittenBullet != 1 {
 		t.Errorf("slack: %+v", slack)
 	}
 	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r.Changed() {
@@ -381,7 +365,7 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 	if r := RenderWith("<br>\n**x**", GithubMarkdown, Options{}).Repairs; r.StrippedHTML != 1 {
 		t.Errorf("줄 첫머리 태그를 두 번 셌다: %+v", r)
 	}
-	if r := RenderWith("<https://a.com|l~x>", GithubMarkdown, Options{From: SlackMrkdwn}).Repairs; r.EscapedChar != 1 {
+	if r := RenderWith("<https://a.com|l~x>", GithubMarkdown, Options{}).Repairs; r.EscapedChar != 1 {
 		t.Errorf("라벨 이스케이프를 안 셌다: %+v", r)
 	}
 	if r := RenderWith("1) a\n2) b", SlackMarkdown, Options{}).Repairs; r.RewrittenBullet != 2 {

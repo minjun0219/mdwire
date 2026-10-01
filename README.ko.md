@@ -33,9 +33,7 @@ LLM 마크다운  →  정규화  →  채널별 렌더링  →  안전한 분�
 3. **분할.** 채널의 길이 제한을 지키되 마크업 한가운데를 자르지 않습니다. 스트리밍도 마찬가지로,
    청크 경계가 `**굵게**` 안에 걸리면 안 됩니다.
 
-이 흐름에 옵션이 두 가지 있습니다. **입력 표기:** 슬랙 문서로 슬랙을 배운 에이전트는 레거시
-`mrkdwn`(`*굵게*`, `~취소~`, `<url|텍스트>`)으로 씁니다. `--from slack-mrkdwn` 을 주면 표준
-마크다운 대신 그 표기로 읽습니다. **정규화 보고:** 정규화가 대신 고친 횟수(닫히지 않은 강조,
+이 흐름에 옵션이 하나 있습니다. **정규화 보고:** 정규화가 대신 고친 횟수(닫히지 않은 강조,
 닫히지 않은 펜스, 짝 없는 백틱, 버린 마커)와 채널에 맞춰 바꿔 쓴 횟수(이스케이프한 글자, 태그로
 출력한 강조, 제거한 HTML, 불릿, 표, 바꾼 마커)를 셉니다. 모델이 자기 서식을 얼마나 자주 깨는지 기록하고,
 채널을 도입하기 전에 그 채널 때문에 무엇이 바뀌는지 확인할 수 있습니다.
@@ -47,10 +45,9 @@ cat agent-output.md | mdwire --channel telegram-html          # 조각은 NUL �
 cat agent-output.md | mdwire --channel slack-markdown --stream # 받는 대로 바로 출력
 cat agent-output.md | mdwire --channel plain --limit 4096      # 텔레그램으로 보내는 평문 폴백
 
-# 에이전트가 슬랙 레거시 mrkdwn(*굵게*, ~취소~)으로 썼다면 --from 으로 알려 줍니다. --report 는
-# 정규화가 고치고 바꾼 것(닫히지 않은 강조, 이스케이프한 `~`, 제거한 태그, …)을 stderr 에
-# JSON 한 줄로 출력합니다.
-cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+# --report 는 정규화가 고치고 바꾼 것(닫히지 않은 강조, 이스케이프한 `~`, 제거한 태그, …)을
+# stderr 에 JSON 한 줄로 출력합니다.
+cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
 ```rust
@@ -65,7 +62,7 @@ s.finish_into(&mut out);       // 남은 출력을 내보내고 열린 마크업
 import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — 번들러, Node, Bun
 
 const parts = render(markdown, "telegram-html");
-const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+const { repairs } = renderWithReport(markdown, "slack-markdown");
 
 // 메시지 전체를 다시 쓰는 채널(텔레그램 edit): acc 에 미리보기를 붙여 보냅니다. 보류 중인
 // 내용(열린 굵게, 표의 행, 코드 스팬)을 입력이 여기서 끝난 것처럼 렌더링하며, acc 자체는
@@ -182,7 +179,7 @@ s := mdwire.NewStreamer(mdwire.SlackMarkdown)
 s.PushTo(chunk, &out)   // 청크마다 할당 없음
 s.FinishTo(&out)
 
-out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{})
 log.Printf("%+v", out.Repairs)
 ```
 

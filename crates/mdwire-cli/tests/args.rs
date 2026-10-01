@@ -19,8 +19,8 @@ fn run(args: &[&str], input: &str) -> String {
 
 #[test]
 fn equals_form_is_the_same_as_two_args() {
-    let spaced = run(&["--channel", "slack-markdown", "--from", "slack-mrkdwn"], "*굵게* ~취소~");
-    let equals = run(&["--channel=slack-markdown", "--from=slack-mrkdwn"], "*굵게* ~취소~");
-    assert_eq!(spaced, "**굵게** ~~취소~~");
+    let spaced = run(&["--channel", "slack-markdown", "--limit", "300"], "_기울임_ __굵게__");
+    let equals = run(&["--channel=slack-markdown", "--limit=300"], "_기울임_ __굵게__");
+    assert_eq!(spaced, "*기울임* **굵게**");
     assert_eq!(equals, spaced);
 }

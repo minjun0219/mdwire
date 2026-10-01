@@ -43,13 +43,6 @@ func loadCases(t *testing.T) []corpusCase {
 			continue
 		}
 		c := corpusCase{name: e.Name(), input: string(input), expected: map[string]string{}}
-		if b, err := os.ReadFile(filepath.Join(dir, e.Name(), "from")); err == nil {
-			d, ok := ParseDialect(strings.TrimSpace(string(b)))
-			if !ok {
-				t.Fatalf("%s: 모르는 입력 표기 %q", e.Name(), b)
-			}
-			c.opts.From = d
-		}
 		for _, ch := range Channels() {
 			b, err := os.ReadFile(filepath.Join(dir, e.Name(), ch.Name()+".txt"))
 			if err == nil {

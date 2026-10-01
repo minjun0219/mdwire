@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Concepts
-description: Channels, input dialects, options, the repair report and the streaming contract — shared by every mdwire API.
+description: Channels, options, the repair report and the streaming contract — shared by every mdwire API.
 ---
 import Next from "../../components/Next.astro";
 
@@ -32,23 +32,10 @@ A channel is where the output goes. Its name is the same string everywhere.
 The limit is a character count on the rendered output. The sender can set its own (see
 [options](#options)) — `plain` sent to Telegram has to fit 4,096.
 
-## Input dialects
-
-What the agent wrote, chosen separately from the channel.
-
-| Name | Reads |
-|---|---|
-| `markdown` | Standard Markdown (CommonMark · GFM). The default. |
-| `slack-mrkdwn` | Slack's legacy `mrkdwn`: any run of `*` is bold, one or two `~` is strikethrough, `<url\|text>` is a link. Standard spellings mixed in mean the same. |
-
-An agent that learned Slack from its docs writes `mrkdwn`. Read as standard Markdown, `*bold*`
-becomes italic and `~strike~` stays as text — declare it.
-
 ## Options
 
 | Option | Default | Meaning |
 |---|---|---|
-| from | `markdown` | The input dialect. |
 | limit | the channel's limit | Characters per part. Values below 256 are raised to 256 — every part needs room to close and reopen markup. Streaming never splits, and neither does `html`. |
 | html · line breaks | `br` | A line break inside a block: `<br>`, or `space` to let the browser fold it (for prose wrapped at 80 columns). |
 | html · images | `link` | `![alt](url)` as a link that loads nothing until clicked, or `load` for `<img>` (allowed schemes only). |
@@ -77,7 +64,7 @@ The other six are **channel rewrites** — what the channel needed changed befor
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
 | rewritten table | Tables rewritten (separator and cell spacing, or down to monospace). |
-| converted marker | Emphasis and links respelled — `mrkdwn` `*bold*` → `**bold**`, `<url\|text>` → `[text](url)`. Markdown channels only. |
+| converted marker | Emphasis and links respelled — `_italic_` → `*italic*`, `__bold__` → `**bold**`, `<url\|text>` → `[text](url)`. Markdown channels only. |
 
 ## The streaming contract
 

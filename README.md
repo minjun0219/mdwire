@@ -38,13 +38,11 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
 
-Two options around that pipeline. **Input dialect:** an agent that learned Slack from its
-docs writes legacy `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`); `--from slack-mrkdwn`
-reads it as such instead of as standard Markdown. **Change report:** how many times the
-normalizer stepped in — unclosed emphasis, unclosed fence, unpaired backticks, dropped
-markers — and what it rewrote for the channel — escaped characters, tags for emphasis,
-stripped HTML, bullets, tables, converted markers — so you can log how often the model
-breaks its own formatting and see what a channel changes before you adopt it.
+One option around that pipeline. **Change report:** how many times the normalizer stepped
+in — unclosed emphasis, unclosed fence, unpaired backticks, dropped markers — and what it
+rewrote for the channel — escaped characters, tags for emphasis, stripped HTML, bullets,
+tables, converted markers — so you can log how often the model breaks its own formatting
+and see what a channel changes before you adopt it.
 
 ## Use it
 
@@ -53,10 +51,9 @@ cat agent-output.md | mdwire --channel telegram-html          # parts separated 
 cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arrives
 cat agent-output.md | mdwire --channel plain --limit 4096      # plain fallback into Telegram
 
-# The agent wrote Slack's legacy mrkdwn (*bold*, ~strike~)? Say so. --report prints what
-# the normalizer fixed and rewrote (unclosed emphasis, escaped `~`, stripped tags, …) as one
-# JSON line on stderr.
-cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
+# --report prints what the normalizer fixed and rewrote (unclosed emphasis, escaped `~`,
+# stripped tags, …) as one JSON line on stderr.
+cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
 ```rust
@@ -71,7 +68,7 @@ s.finish_into(&mut out);       // flush, closing anything left open
 import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — bundlers, Node, Bun
 
 const parts = render(markdown, "telegram-html");
-const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+const { repairs } = renderWithReport(markdown, "slack-markdown");
 
 // A channel that rewrites the whole message (Telegram edit): send acc plus the preview —
 // what is still held (open bold, table rows, a code span) drawn as if the input ended here.
@@ -189,7 +186,7 @@ s := mdwire.NewStreamer(mdwire.SlackMarkdown)
 s.PushTo(chunk, &out)   // no allocation per chunk
 s.FinishTo(&out)
 
-out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{})
 log.Printf("%+v", out.Repairs)
 ```
 

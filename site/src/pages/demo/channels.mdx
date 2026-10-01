@@ -31,7 +31,7 @@ each output say what the normalizer repaired and what it rewrote for the channel
 import { renderWithReport } from "@minjun0219/mdwire";
 
 for (const channel of ["telegram-html", "slack-markdown"]) {
-  const out = renderWithReport(input, channel, { from: "markdown" }); // or "slack-mrkdwn"
+  const out = renderWithReport(input, channel);
   out.parts;   // what you send — one string unless the limit splits it
   out.repairs; // closedEmphasis · closedFence · … · convertedMarker — ten counts
   out.free();  // the result lives in WASM memory; free it when done

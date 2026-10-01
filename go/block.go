@@ -113,8 +113,6 @@ type engine struct {
 	cr bool
 	// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
 	closedFence int
-	// 입력 표기. 표 셀을 읽을 때도 문서를 따른다.
-	dialect Dialect
 	// 열린 목록들 — 바깥부터. HTML 채널만 쓴다 — 다른 채널은 목록을 글자(`- `·`• `)로 그려서
 	// 중첩을 태그로 여닫을 일이 없다. 블록이 닫혀도 슬라이스는 재사용한다.
 	lists []listLevel
@@ -130,7 +128,7 @@ type listLevel struct {
 }
 
 func newEngine(ch Channel, o Options) *engine {
-	return &engine{v: newVocab(ch, o), inline: newInline(o.From), dialect: o.From}
+	return &engine{v: newVocab(ch, o), inline: newInline()}
 }
 
 // repairs 는 지금까지 정규화가 고친 것이다.
@@ -618,7 +616,7 @@ func (e *engine) closeBlock(s sink) {
 		e.blockCloseMarkup(&e.out)
 	case stateTable:
 		e.startLine()
-		breaks := e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
+		breaks := e.table.render(e.v, &e.inline.repairs, &e.out)
 		e.table.clear()
 		// 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보낸다(노션).
 		if len(breaks) > 0 {
@@ -1190,7 +1188,7 @@ func (t *table) countRewrite(written []byte, repairs *Repairs) {
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
 // 표는 반드시 어긋난다(SPEC 7절). 표를 직접 그리는 채널은 GFM 그대로 낸다.
-func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int {
+func (t *table) render(v vocab, repairs *Repairs, out *[]byte) []int {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
@@ -1198,9 +1196,9 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	if v.tablesNative() {
 		cellVocab = v
 	}
-	// 셀 안의 입력 표기는 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
-	// 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
-	in := newInline(d)
+	// 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를 닫아 주면 세는데, 같은 것이 셀 안에
+	// 있다고 빠지면 표가 든 문서만 덜 센다.
+	in := newInline()
 	in.inCell = true
 	cells := make([][]string, 0, len(t.rows))
 	for _, row := range t.rows {

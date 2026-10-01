@@ -28,7 +28,7 @@ parts := mdwire.Render(input, mdwire.TelegramHTML) // []string
 ## `RenderWith`
 
 ```go
-out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{From: mdwire.SlackMrkdwn})
+out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{Limit: 4096})
 out.Parts                  // []string
 out.Repairs.ClosedEmphasis // 아래 Repairs 참고
 ```
@@ -39,7 +39,6 @@ out.Repairs.ClosedEmphasis // 아래 Repairs 참고
 
 ```go
 type Options struct {
-	From  Dialect     // Markdown(제로 값) | SlackMrkdwn
 	Limit int         // 0 = 채널의 Limit(). MinLimit(256) 보다 작으면 올림
 	HTML  HTMLOptions // HTML 채널에서만
 }
@@ -74,11 +73,10 @@ s.FinishTo(&out)
 
 계약은 [Concepts](/ko/docs/#스트리밍-계약)에 있습니다.
 
-## `Channel` 과 `Dialect`
+## `Channel`
 
 ```go
 const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown )
-const ( Markdown Dialect = iota; SlackMrkdwn )
 ```
 
 상수의 숫자 값은 `Channels()` 의 순서와 다릅니다. 채널을 저장하거나 주고받을 때는 이름을 쓰세요.
@@ -88,7 +86,6 @@ const ( Markdown Dialect = iota; SlackMrkdwn )
 | `Channels() []Channel` | 모든 채널. |
 | `(Channel) Name() string` · `ParseChannel(string) (Channel, bool)` | 문자열 이름. |
 | `(Channel) Limit() int` | 조각 길이 제한. |
-| `(Dialect) Name() string` · `ParseDialect(string) (Dialect, bool)` | `"markdown"`, `"slack-mrkdwn"`. |
 
 ## `Repairs`
 

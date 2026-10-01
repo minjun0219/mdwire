@@ -1,3 +1,3 @@
-<p><strong>배포 전에 <code>cache.clear()</code> 를 꼭 부른다</strong> — 안 부르면 <strong><code>stale</code> 값이 남는다</strong>.</p>
+<p><em>배포 전에 <code>cache.clear()</code> 를 꼭 부른다</em> — 안 부르면 <em><code>stale</code> 값이 남는다</em>.</p>
 
-<p><strong>설정은 <code>config.yml</code> 에</strong> 있고 <del>예전 경로</del> 는 지웠다.</p>
+<p><em>설정은 <code>config.yml</code> 에</em> 있고 ~예전 경로~ 는 지웠다.</p>
