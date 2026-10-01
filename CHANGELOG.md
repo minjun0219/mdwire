@@ -2,6 +2,29 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.9 — 2026-10-01
+
+### 새로 할 수 있는 것
+
+- **core** — 보고가 채널에 맞춰 바꾼 것도 센다 ([#66](https://github.com/minjun0219/mdwire/pull/66))
+- **core** — 노션에는 표를 table 태그로 낸다 ([#63](https://github.com/minjun0219/mdwire/pull/63))
+- **core** — 노션에서 강조를 줄마다 닫는다 ([#62](https://github.com/minjun0219/mdwire/pull/62))
+- **core** — 노션 페이지 채널을 더한다 ([#61](https://github.com/minjun0219/mdwire/pull/61))
+
+### 고친 것
+
+- **core** — GitHub 에서 줄 첫머리 인라인 태그를 살린다 ([#65](https://github.com/minjun0219/mdwire/pull/65))
+- **cli** — --이름=값 형식도 받는다 ([#64](https://github.com/minjun0219/mdwire/pull/64))
+
+### 문서
+
+- 한국어 문구를 다듬고 용어를 맞춘다 ([#76](https://github.com/minjun0219/mdwire/pull/76))
+- **spec** — 불릿과 표를 다시 쓰는 이유를 적는다 ([#67](https://github.com/minjun0219/mdwire/pull/67))
+
+### 유지
+
+- **release** — 배포물이 바뀐 커밋으로만 판을 낸다 ([#73](https://github.com/minjun0219/mdwire/pull/73))
+
 ## 0.1.8 — 2026-09-30
 
 ### 새로 할 수 있는 것
