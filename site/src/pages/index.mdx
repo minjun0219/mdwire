@@ -3,29 +3,37 @@ layout: ../layouts/Doc.astro
 title: LLM Markdown for Telegram, Slack and GitHub
 description: Send LLM-generated Markdown to Telegram, Slack and GitHub without it breaking — repaired, rendered for each channel and split within its limit, streaming included. Rust, npm (WASM), Go and a CLI.
 ---
+import Badges from "../components/Badges.astro";
 
 # Send LLM Markdown to chat channels without it breaking
 
-mdwire is a **bridge, not a renderer.** It takes the Markdown an agent wrote and hands each
-channel the syntax that channel actually accepts — repaired, escaped, and split within its
-length limit. Drawing it is still the channel's job.
+mdwire does not turn Markdown into finished output. It **tailors the Markdown an agent wrote to
+each channel**: repaired, rewritten into the syntax that channel accepts, and split within its
+length limit. Rendering is still the channel's job.
 
 ```
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
 ```
 
-1. **Normalize.** Agent output is not well-formed: unpaired `**`, emphasis that spans a line
-   break in wrapped prose, unclosed code fences. Repair before rendering.
+1. **Normalize.** Agent-written Markdown may not render correctly through a standard
+   Markdown converter: unpaired `**`, emphasis that spans a line break in wrapped prose, unclosed
+   code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel accepts. Telegram HTML allows nine tags; Slack
    `markdown_text` takes standard Markdown directly.
 3. **Split.** Respect the channel's limit and never cut through markup — including while
    streaming, where a chunk boundary must not land inside `**bold**`.
 
+## Why another one
+
+We found three gaps in existing tools: emphasis spanning lines is common, common Korean notation collides
+with Markdown, and chat-channel converters ignore streaming. [Why another one](/why/) goes into each, and
+[Cases](/why/cases/) shows the real failures.
+
 ## Targets
 
 Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain
-text, and HTML for the browser — from a Rust core, a CLI, an npm package (WASM), and a Go port held to the same
-corpus.
+text, and HTML for the browser — from a Rust core, a CLI, an npm package (WASM), and a Go implementation held to
+the same test cases.
 
 ## Try it
 
@@ -35,6 +43,8 @@ The [demos](/demo/) run the npm package in your browser: one agent answer
 [before and after repair](/demo/repair/).
 
 ## Install
+
+<Badges />
 
 ```sh
 npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun

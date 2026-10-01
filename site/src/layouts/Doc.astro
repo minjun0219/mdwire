@@ -4,6 +4,8 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
 import SectionNav from "../components/SectionNav.astro";
+// 한국어 본문 글꼴. 유니코드 범위로 나뉜 woff2 라 페이지에 쓰인 글자의 조각만 받는다 — 영어 페이지는 받지 않는다.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "../styles/global.css";
 
 interface Props {
@@ -24,13 +26,14 @@ const href = (page: string) => getRelativeLocaleUrl(lang, page);
 const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
+  { page: "why", label: t.nav.why },
   { page: "demo", label: t.nav.demo },
   { page: "docs", label: t.nav.docs },
 ];
 // `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
 const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
-// 문서 · 데모 묶음은 왼쪽에 그 묶음의 목차를 둔다.
-const section = isCurrent("docs") ? "docs" : isCurrent("demo") ? "demo" : undefined;
+// 배경 · 문서 · 데모 묶음은 왼쪽에 그 묶음의 목차를 둔다.
+const section = isCurrent("docs") ? "docs" : isCurrent("demo") ? "demo" : isCurrent("why") ? "why" : undefined;
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
 const summary = description ?? t.tagline;
 
@@ -136,7 +139,12 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
       </main>
     </div>
     <footer class="site-footer">
-      {t.footer} <a href="https://github.com/minjun0219/mdwire">{t.source}</a>
+      <p class="footer-links">
+        <a href="https://github.com/minjun0219/mdwire">GitHub</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/minjun0219/mdwire/blob/main/LICENSE">{t.license}</a>
+      </p>
+      <p class="footer-by">by <a href="https://minjun.kim">minjun.kim</a></p>
     </footer>
   </body>
 </html>

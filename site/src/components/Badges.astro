@@ -1,0 +1,60 @@
+---
+// 레지스트리 배지 줄(shields.io). 홈은 전부, 언어별 문서는 그 언어 것만 싣는다. 이미지는 방문자 브라우저가
+// shields.io 에서 받는다 — 버전 숫자를 손으로 고치지 않아도 된다.
+type Kind = "npm" | "downloads" | "crates" | "go";
+
+interface Props {
+  only?: Kind[];
+}
+
+const all: Record<Kind, { href: string; src: string; alt: string }> = {
+  npm: {
+    href: "https://www.npmjs.com/package/@minjun0219/mdwire",
+    src: "https://img.shields.io/npm/v/@minjun0219/mdwire?style=flat-square&label=npm&color=0f766e",
+    alt: "npm version",
+  },
+  downloads: {
+    href: "https://www.npmjs.com/package/@minjun0219/mdwire",
+    src: "https://img.shields.io/npm/dm/@minjun0219/mdwire?style=flat-square",
+    alt: "npm monthly downloads",
+  },
+  crates: {
+    href: "https://crates.io/crates/mdwire-core",
+    src: "https://img.shields.io/crates/v/mdwire-core?style=flat-square&label=crates.io&color=0f766e",
+    alt: "crates.io version",
+  },
+  go: {
+    href: "https://pkg.go.dev/github.com/minjun0219/mdwire/go",
+    src: "https://img.shields.io/badge/go-reference-0f766e?style=flat-square&logo=go&logoColor=white",
+    alt: "Go reference",
+  },
+};
+
+const kinds = Astro.props.only ?? (Object.keys(all) as Kind[]);
+---
+
+<p class="badges">
+  {
+    kinds.map((k) => (
+      <a href={all[k].href}>
+        <img src={all[k].src} alt={all[k].alt} height="20" loading="lazy" decoding="async" />
+      </a>
+    ))
+  }
+</p>
+
+<style>
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.75rem 0 1rem;
+  }
+  .badges a {
+    display: inline-flex;
+  }
+  .badges img {
+    display: block;
+    height: 20px;
+  }
+</style>

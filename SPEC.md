@@ -223,7 +223,7 @@ CLI는 `mdwire --channel telegram-html [--limit N] [--stream] [--report]`,
 
 | 필드 | 뜻 |
 |---|---|
-| `closed_emphasis` | 블록이 끝나도록 안 닫혀서 닫아 준 강조 |
+| `closed_emphasis` | 블록이 끝날 때까지 안 닫혀서 닫아 준 강조 |
 | `closed_fence` | 문서 끝까지 안 닫혀서 닫아 준 코드펜스 |
 | `reverted_code_span` | 짝이 없어 글자로 되돌린 백틱 런 |
 | `dropped_marker` | 짝 잃은 채 버린 `**` |

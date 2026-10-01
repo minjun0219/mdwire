@@ -1,0 +1,160 @@
+---
+layout: ../../../layouts/Doc.astro
+title: 사례
+description: 에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장과 mdwire 가 대신 보내는 결과를 모았습니다.
+---
+
+# 사례
+
+에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장을 모았습니다. 모두
+[테스트 케이스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에 입력과 채널별 기대 출력이 있고,
+Rust 코어, npm 패키지, Go 구현, CLI 가 모두 같은 결과를 출력합니다. 여기 없는 사례도 테스트 케이스에 있습니다.
+
+## 줄을 넘는 강조
+
+한 줄을 80자로 접어 쓴 글은 강조가 다음 줄로 넘어가기 쉽습니다. 실제 문서 60개 중 44개에 있었습니다.
+정규식 기반 변환기는 짝을 잃은 `**` 를 뒤의 `**` 와 잘못 짝지어 강조 범위를 뒤집었습니다. 그래도 채널은
+HTTP 200 을 돌려줘서 아무도 알아채지 못했습니다.
+
+```text
+입력
+  공개 채널**이다. 글 내용이 아니라
+  **신분 공개 + 시점의 조합**이 판단 대상
+깨진 결과
+  공개 채널<b>이다. 글 내용이 아니라
+  </b>신분 공개 …
+mdwire
+  공개 채널이다. 글 내용이 아니라
+  <b>신분 공개 + 시점의 조합</b>이 판단 대상
+```
+
+짝을 잃은 `**` 는 버리고, 줄 첫머리의 `**` 는 여는 마커로 읽습니다. CommonMark 와 슬랙도 이렇게
+읽습니다. 테스트 케이스: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-across-linebreak),
+[`emphasis-wraps-line`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-wraps-line)
+
+## 기호로 끝나는 굵게 뒤의 조사
+
+한국어는 강조 바로 뒤에 조사가 붙습니다. 굵게가 괄호, 따옴표, 백틱, 마침표로 끝나면 CommonMark
+규칙상 닫는 `**` 가 닫히지 않습니다. GitHub 에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이 엇갈려
+범위가 뒤집힙니다.
+
+```text
+입력
+  마감 전에 **설정(config)**을 바꾸고, **"배포 금지"**는 금요일까지 유지한다.
+GitHub
+  마감 전에 <strong>설정(config)</strong>을 바꾸고, <strong>"배포 금지"</strong>는 금요일까지 유지한다.
+텔레그램
+  마감 전에 <b>설정(config)</b>을 바꾸고, <b>"배포 금지"</b>는 금요일까지 유지한다.
+```
+
+mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 내보냅니다. 태그는 이 규칙과
+상관없이 렌더링되기 때문입니다. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+
+## 범위와 근사값의 물결표
+
+한국어는 범위(`5~6월`)와 근사값(`~40km`)에 물결표를 자주 씁니다. GitHub(GFM)은 홑 `~` 도 취소선으로
+읽어서, 한 문단에 물결표가 둘 이상 있으면 그 사이를 통째로 긋습니다.
+
+```text
+입력
+  주행 가능 거리는 ~40km 남았고 보정까지 ~22km 부족하다. 충전은 5~6월에 한다.
+GitHub
+  주행 가능 거리는 \~40km 남았고 보정까지 \~22km 부족하다. 충전은 5\~6월에 한다.
+```
+
+GitHub 으로는 글자로 쓴 `~` 를 `\~` 로 이스케이프합니다. 화면에는 `~` 로 보입니다. 진짜 취소선인
+`~~취소~~` 는 그대로 둡니다. 테스트 케이스: [`tilde-is-not-strikethrough`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/tilde-is-not-strikethrough)
+
+## 마스킹한 번호의 별표
+
+카드번호처럼 별표로 가린 숫자가 기울임으로 읽혀서, 번호 일부가 통째로 기울어지거나 별표가 사라졌습니다.
+
+```text
+입력
+  결제 수단: 신한카드 1***-****-****-001* (본인 명의)
+GitHub
+  결제 수단: 신한카드 1\*\*\*-\*\*\*\*-\*\*\*\*-001\* (본인 명의)
+```
+
+강조를 열 수 없는 자리의 별표는 글자로 보고, 별표를 구문으로 읽는 GitHub 과 노션으로는 이스케이프합니다.
+테스트 케이스: [`masked-number-asterisks`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/masked-number-asterisks)
+
+## 짝 없는 백틱
+
+짝 없는 연속된 백틱이 코드 스팬을 열고 블록 끝까지 삼켰습니다. 뒤에 오던 강조가 통째로 코드 안에 갇힙니다.
+
+```text
+입력
+  앞부분 ``` 뒤에 **굵게** 가 온다
+깨진 결과
+  앞부분 <code> 뒤에 **굵게** 가 온다</code>
+텔레그램
+  앞부분 ``` 뒤에 <b>굵게</b> 가 온다
+```
+
+블록이 끝날 때까지 닫는 백틱이 오지 않으면 그 백틱은 글자로 되돌리고, 삼켰던 내용을 다시 읽어 강조를
+살립니다. 테스트 케이스: [`unpaired-backtick-run`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unpaired-backtick-run)
+
+## 닫히지 않은 코드펜스
+
+토큰 한도에 걸려 출력이 잘리거나 마지막 펜스를 빠뜨리면 코드펜스가 열린 채 끝납니다. 그대로 보내면
+채널이 메시지를 거절하거나(400), 뒤의 텍스트를 통째로 코드로 삼킵니다.
+
+````text
+입력
+  ```sh
+  tail -f app.log | grep ERROR
+텔레그램
+  <pre><code class="language-sh">tail -f app.log | grep ERROR</code></pre>
+````
+
+내보내기 직전에 펜스를 닫습니다. 테스트 케이스: [`unclosed-code-fence`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unclosed-code-fence)
+
+## 한글이 든 표
+
+텔레그램에는 표 문법이 없어서 고정폭 블록으로 보내야 합니다. 이때 열 너비를 글자 수로 맞추면 한글이 든
+표는 반드시 어긋납니다. 한글, 한자, 이모지는 화면에서 두 칸을 차지하기 때문입니다.
+
+```text cells
+환경     |  재현  | 응답 시간
+-------- | ------ | ---------
+스테이징 |   예   |     120ms
+프로덕션 |   예   |     340ms
+로컬     | 아니오 |      15ms
+```
+
+
+열 너비를 표시 폭으로 재고, `:---:` 같은 정렬 지정도 지킵니다. 슬랙과 GitHub 으로는 표를 그대로 보냅니다.
+테스트 케이스: [`korean-table`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/korean-table)
+
+## 조각 경계에 걸린 태그
+
+긴 답을 길이 제한에 맞춰 나눌 때, 자르는 자리가 `<a href="…">` 같은 태그 한가운데에 떨어졌습니다.
+조각 하나가 메시지 하나라서 양쪽 다 깨진 HTML 이 되고, 채널은 메시지를 통째로 거절합니다. 실제 문서
+2,289건 중 8건이 여기에 걸렸습니다.
+
+```text
+조각 0 끝
+  … 주소의 뒤집힌 꼴을 돌려준다 <a
+조각 1 시작
+  href="https://…">src</a>
+```
+
+자를 지점은 렌더링 결과가 아니라 문서 구조에서 고릅니다. 열린 마크업이 없는 지점만 경계가 될 수 있고,
+없으면 그 앞에서 닫고 다음 조각에서 다시 엽니다. 테스트 케이스: [`tag-across-part-boundary`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/tag-across-part-boundary)
+
+## 꺾쇠로 감싼 링크
+
+슬랙에서 복사해 온 글에는 `<https://…>` 나 `<url|텍스트>` 꼴 링크가 흔합니다. 실제 문서 256건 중
+124건에 있었습니다. 텔레그램 HTML 로 보내면서 `<` 를 이스케이프만 하면 꺾쇠째 글자로 보입니다.
+
+```text
+입력
+  슬랙에서 긁어 온 글은 <https://example.com/p|문서 보기> 꼴이다.
+텔레그램
+  슬랙에서 긁어 온 글은 <a href="https://example.com/p">문서 보기</a> 꼴이다.
+슬랙
+  슬랙에서 긁어 온 글은 [문서 보기](https://example.com/p) 꼴이다.
+```
+
+꺾쇠 링크는 링크로 내보냅니다. `|` 뒤에 글이 있으면 그것을 링크 텍스트로 씁니다. 테스트 케이스: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)

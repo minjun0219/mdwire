@@ -30,7 +30,7 @@ type Output = { parts: string[]; repairs: Repairs; limit: number } | { error: st
 
 const text = {
   en: {
-    sample: "Example from the corpus",
+    sample: "Example from the test cases",
     input: "Agent output (Markdown)",
     parts: (n: number, max: number) => `${n} ${n === 1 ? "part" : "parts"} · limit ${max.toLocaleString("en")}`,
     noRepairs: "Nothing repaired or rewritten",
@@ -49,18 +49,18 @@ const text = {
     empty: "(empty)",
   },
   ko: {
-    sample: "코퍼스의 예시",
+    sample: "테스트 케이스 예시",
     input: "에이전트 출력 (마크다운)",
-    parts: (n: number, max: number) => `조각 ${n}개 · 한도 ${max.toLocaleString("ko")}`,
+    parts: (n: number, max: number) => `조각 ${n}개 · 길이 제한 ${max.toLocaleString("ko")}`,
     noRepairs: "고치거나 바꾼 것 없음",
     repairs: {
       closedEmphasis: "닫아 준 강조",
       closedFence: "닫아 준 코드펜스",
-      revertedCodeSpan: "글자로 되돌린 백틱",
+      revertedCodeSpan: "텍스트로 되돌린 백틱",
       droppedMarker: "짝이 없어 버린 **",
       escapedChar: "이스케이프한 글자",
-      tagEmphasis: "태그로 낸 강조",
-      strippedHtml: "걷어 낸 HTML",
+      tagEmphasis: "태그로 출력한 강조",
+      strippedHtml: "제거한 HTML",
       rewrittenBullet: "바꿔 쓴 불릿",
       rewrittenTable: "다시 쓴 표",
       convertedMarker: "바꿔 쓴 마커",

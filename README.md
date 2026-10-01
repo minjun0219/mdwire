@@ -22,8 +22,9 @@ deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
 ```
 
-1. **Normalize.** Agent output is not well-formed. Unpaired `**`, emphasis that spans a
-   line break in wrapped prose, unclosed code fences. Repair before rendering.
+1. **Normalize.** Agent-written Markdown may not render correctly through a standard
+   Markdown converter. Unpaired `**`, emphasis that spans a line break in wrapped prose,
+   unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
    tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
@@ -123,17 +124,26 @@ never held — a renderer that waits for a newline is not streaming.
 
 ## Why another one
 
-Three gaps in what exists today, each measured rather than assumed:
+We found three gaps in existing tools:
 
-- **Broken input is the normal case.** In a sample of 60 agent-generated documents,
+- **Emphasis spanning lines is common.** In a sample of 60 agent-generated documents,
   44 contained emphasis spanning a line break. A regex-based converter mispaired those
   into *inverted* emphasis ranges — and the channel returned HTTP 200, so nothing caught it.
-- **CJK is guessed at.** One converter pads emphasis with U+200B next to Korean text;
-  another does not. Neither measured the channel. We did: Slack `markdown_text` follows
-  CommonMark, so `_italic_` dies next to a Korean particle and `*italic*` lives. mdwire
-  emits `*` and pads nothing.
-- **Streaming has no answer.** Every converter is batch: parse the whole document, build an
-  AST, render. When tokens arrive incrementally, markup splits across chunk boundaries.
+- **Common Korean notation collides with Markdown.**
+  - In `**설정(config)**을` or `**52%**다`, the bold ends in a symbol and a particle follows right
+    after. Under CommonMark's rules the bold does not close and the `**` shows as text. GitHub and
+    browser renderers follow those rules.
+  - In `약 ~40km, 5~6월`, tildes mark an approximation and a range. With two of them in one
+    paragraph, GitHub (GFM), which reads a single `~` as strikethrough, pairs them and strikes
+    everything in between (`40km, 5`).
+
+  Existing converters guess at Korean-adjacent emphasis (one pads it with U+200B, another leaves it
+  alone) and neither checked the channel. mdwire measured each channel: on GitHub it writes just that
+  bold as `<strong>` and escapes a literal `~` as `\~`.
+- **Chat-channel converters ignore streaming.** Some browser renderers, like Streamdown, patch
+  unclosed syntax while tokens stream in. The Telegram and Slack converters we looked at all
+  take the whole document and convert it in one pass. When tokens arrive incrementally,
+  markup splits across chunk boundaries.
 
 ## Design
 

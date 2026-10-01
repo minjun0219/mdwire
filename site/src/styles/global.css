@@ -9,7 +9,10 @@
   --accent: #0f766e;
   --accent-soft: #e6f4f2;
   --warn: #b45309;
-  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* 영문은 Menlo(없으면 각 OS 의 고정폭), 한글은 본문과 같은 Pretendard — 글꼴을 따로 더 받지 않는다.
+     Pretendard 는 비례폭이라, 영문이 거기까지 내려가지 않게 OS 마다 깔린 고정폭을 앞에 모두 둔다. */
+  --mono: Menlo, ui-monospace, "SFMono-Regular", Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Courier New",
+    "Pretendard Variable", Pretendard, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   /* 고정 머리글의 높이 — 문서 사이드바가 그 아래에 붙고, 앵커로 뛸 때 헤딩이 그 밑에 가리지 않는다. */
   --header-h: 3.5rem;
@@ -17,6 +20,33 @@
 
 html {
   scroll-padding-top: calc(var(--header-h) + 1rem);
+}
+
+/* 한국어 페이지: Pretendard 에 한글이 읽히는 줄 간격 · 자간. 낱말 가운데서 줄을 바꾸지 않고(keep-all),
+   그래도 넘치는 긴 토큰만 끊는다. */
+html:lang(ko) {
+  --sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo",
+    "Noto Sans KR", sans-serif;
+}
+
+html:lang(ko) body {
+  line-height: 1.75;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+html:lang(ko) .doc :is(h1, h2, h3) {
+  letter-spacing: -0.02em;
+}
+
+html:lang(ko) .doc :is(p, li) {
+  text-wrap: pretty;
+}
+
+/* 표 칸은 좁아서 본문보다 줄 간격을 조금 줄인다. */
+html:lang(ko) .doc > table {
+  line-height: 1.6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -169,11 +199,33 @@ pre {
 }
 
 .site-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 2.5rem;
   border-top: 1px solid var(--line);
-  padding: 1.25rem;
+  padding: 2rem 1.25rem 2.5rem;
   color: var(--muted);
   font-size: 0.875rem;
-  text-align: center;
+}
+.site-footer p {
+  margin: 0;
+}
+.footer-links {
+  display: flex;
+  gap: 0.75rem;
+}
+.footer-by {
+  font-size: 0.75rem;
+}
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+.site-footer a:hover {
+  color: var(--fg);
+  text-decoration: underline;
 }
 
 /* 지금 올라간 판에는 없고 main 에만 있는 것. */
@@ -197,6 +249,11 @@ pre {
   margin: 1rem 0;
   display: block;
   overflow-x: auto;
+}
+
+/* 첫 칸은 이름(`telegram-html`, `closedEmphasis` …)이라 하이픈에서 줄을 바꾸지 않는다. */
+.doc > table td:first-child code {
+  white-space: nowrap;
 }
 
 .doc > table th,
@@ -242,4 +299,12 @@ details.code p {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 14%, transparent);
   border-radius: 3px;
+}
+
+/* ```text cells 블록의 전각 글자(astro.config.mjs 의 wideCells). 글꼴과 상관없이 영문 두 칸을 차지해서
+   표시 폭으로 맞춘 표가 화면에서도 맞는다. */
+.astro-code .wide {
+  display: inline-block;
+  width: 2ch;
+  text-align: center;
 }

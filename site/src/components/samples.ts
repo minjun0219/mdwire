@@ -14,7 +14,7 @@ export const samples: Sample[] = [
     id: "chat-bot-answer",
     note: {
       en: "A real bot answer: bold next to a Korean particle, bold across a line break, unclosed bold, unclosed fence.",
-      ko: "실제 봇 답: 조사 옆 굵게, 줄을 넘는 굵게, 닫히지 않은 굵게, 닫히지 않은 코드펜스.",
+      ko: "실제 봇 답변입니다. 조사 옆 굵게, 줄을 넘는 굵게, 닫히지 않은 굵게, 닫히지 않은 코드펜스가 들어 있습니다.",
     },
     input: "**상품 상세 화면**은 `web-app` 에 있어요.\n**첫 줄 설명이\n둘째 줄까지** 이어져요.\n\n**영향 범위: 세 화면\n예시:\n```ts\nconst a = 1;\n\n| 화면 | 경로 |\n|---|---|\n| 상품 상세 | /items/[id] |\n",
   },
@@ -22,7 +22,7 @@ export const samples: Sample[] = [
     id: "emphasis-across-linebreak",
     note: {
       en: "Emphasis wrapped across lines. A regex converter pairs the stray ** with the next one and inverts the range.",
-      ko: "줄을 넘는 강조. 정규식 변환기는 짝 잃은 ** 를 뒤의 것과 짝지어 범위를 뒤집는다.",
+      ko: "줄을 넘는 강조입니다. 정규식 기반 변환기는 짝 없는 ** 를 뒤의 것과 짝지어 범위를 뒤집습니다.",
     },
     input: "공개 채널**이다. 글 내용이 아니라\n**신분 공개 + 시점의 조합**이 판단 대상\n",
   },
@@ -30,7 +30,7 @@ export const samples: Sample[] = [
     id: "cjk-adjacent-emphasis",
     note: {
       en: "** right next to Korean text. Nothing is padded in.",
-      ko: "한글 바로 옆에 붙은 **. 사이에 공백을 끼우지 않는다.",
+      ko: "한글 바로 옆에 붙은 ** 입니다. 사이에 공백을 끼워 넣지 않습니다.",
     },
     input: "배포는 **금요일**에 하지 않는다. `main` 브랜치에 **직접 커밋**하지도 않는다.\n",
   },
@@ -38,7 +38,7 @@ export const samples: Sample[] = [
     id: "unclosed-code-fence",
     note: {
       en: "The agent stopped before closing the fence. It is closed right before output.",
-      ko: "에이전트가 펜스를 닫지 않고 끝냈다. 출력 직전에 닫는다.",
+      ko: "에이전트가 코드펜스를 닫지 않고 끝냈습니다. 출력 직전에 닫습니다.",
     },
     input: "로그는 이렇게 본다.\n\n```sh\ntail -f app.log | grep ERROR\n",
   },
@@ -46,7 +46,7 @@ export const samples: Sample[] = [
     id: "korean-table",
     note: {
       en: "Telegram has no tables, so it goes out as a monospace block — columns aligned by display width, where Hangul takes two cells.",
-      ko: "텔레그램에는 표가 없어 고정폭 블록으로 나간다 — 한글을 두 칸으로 재서 열을 맞춘다.",
+      ko: "텔레그램에는 표가 없어서 고정폭 블록으로 나갑니다. 한글을 두 칸 너비로 계산해 열을 맞춥니다.",
     },
     input: "| 환경 | 재현 | 응답 시간 |\n|---|:---:|---:|\n| 스테이징 | 예 | 120ms |\n| 프로덕션 | 예 | 340ms |\n| 로컬 | 아니오 | 15ms |\n",
   },
@@ -54,7 +54,7 @@ export const samples: Sample[] = [
     id: "table-cell-overflow",
     note: {
       en: "A | inside a code span splits the table cell — and GFM silently drops the cell that no longer fits.",
-      ko: "코드 스팬 안의 | 가 표 칸을 가른다 — GFM 은 넘친 칸을 소리 없이 버린다.",
+      ko: "코드 스팬 안의 | 가 표 칸을 나눕니다. GFM 은 넘치는 칸을 아무 경고 없이 버립니다.",
     },
     input: "| 바이트 | 필드 | 뜻 | 비고 |\n| --- | --- | --- | --- |\n| `[3]` | `side` | 사이드 플래그 | 비트필드 |\n| `[4]` | `vol|wlv` | 볼륨/물수위 | 상위4비트=볼륨, 하위4비트=물수위 |\n",
   },
@@ -62,7 +62,7 @@ export const samples: Sample[] = [
     id: "unpaired-backtick-run",
     note: {
       en: "A ``` with no partner in the middle of a line. Opened as a code span, it would swallow the bold after it.",
-      ko: "줄 가운데의 짝 없는 ```. 코드 스팬으로 열면 뒤의 굵게까지 삼킨다.",
+      ko: "줄 가운데에 있는 짝 없는 ``` 입니다. 코드 스팬으로 열면 뒤의 굵게까지 삼킵니다.",
     },
     input: "- Candidate: left_set = data[7] & 0x7F ``` 다음 발견 - **매트는 단일 연결 지원** - **bleak timeout=30s** 설정\n\n짝이 맞는 `코드 스팬` 과 **굵게** 는 그대로다.\n",
   },

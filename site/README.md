@@ -11,6 +11,8 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 데모는 `/demo/` 아래 페이지 하나에 하나씩 둔다(목록은 `src/components/SectionNav.astro`). 예시
   (`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다. 정규화 전후 데모는 그중 npm
   에 올라간 판에서 정규화 보고가 0 이 아닌 케이스만 쓴다.
+- 사례(`src/pages/why/cases.mdx`)는 `corpus/cases/` 중 대표 케이스의 입력과 기대 출력을 옮기고 `why.md` 를 풀어 쓴 것이다.
+  옮긴 케이스의 기대 출력이 바뀌면 같이 고친다.
 - API 문서(`src/pages/docs/`)는 `main` 을 따른다. 코어·바인딩·CLI 의 공개 API 가 바뀌면 같은 PR 에서 문서도
   고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 달고, 릴리스가 나가면 그 표시를 지운다.
 - 스트리밍 데모(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
@@ -20,7 +22,15 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
+- 레지스트리 배지(`src/components/Badges.astro`)는 shields.io 이미지라 버전을 손으로 고치지 않는다. 홈은 전부, 언어별
+  문서는 그 언어 것만 싣는다. 마크다운 사본에서는 뺀다.
 - 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.
+
+한국어 페이지의 본문 글꼴은 Pretendard 다(`pretendard` 패키지, OFL-1.1). `layouts/Doc.astro` 가 유니코드 범위로 나뉜
+woff2 를 싣고 `html:lang(ko)` 에만 쓴다 — 영어 페이지는 본문 글꼴을 받지 않는다.
+코드 글꼴은 영문이 Menlo(없으면 각 OS 의 고정폭), 한글이 본문과 같은 Pretendard 다 — 글꼴을 따로 더 받지 않는다.
+고정폭 표처럼 칸을 맞춰야 하는 블록은 ```` ```text cells ```` 로 쓴다. `astro.config.mjs` 의 shiki 변환기가 전각 글자를
+정확히 영문 두 칸(`2ch`)으로 감싸서, 한글 폭이 영문의 두 배가 아닌 글꼴에서도 열이 맞는다.
 
 패키지 매니저는 pnpm 이다(버전은 `package.json` 의 `packageManager`).
 

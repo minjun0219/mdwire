@@ -1,17 +1,17 @@
 ---
 layout: ../../../layouts/Doc.astro
-title: 텔레그램 대 슬랙
-description: 에이전트 답 하나를 브라우저에서 텔레그램 HTML 과 슬랙 markdown_text 로 옮겨 본다 — 채널로 나가는 글자 그대로.
+title: Telegram vs Slack
+description: 에이전트 답변 하나를 브라우저에서 텔레그램 HTML 과 슬랙 markdown_text 로 변환해 봅니다. 채널로 나가는 텍스트를 그대로 보여 줍니다.
 ---
 import ChannelCompare from "../../../components/ChannelCompare.tsx";
 
-# 텔레그램 대 슬랙
+# Telegram vs Slack
 
-에이전트 답 하나를 두 채널로 옮긴다. 보이는 것이 채널로 나가는 글자 그대로다 — 텔레그램에
-`parse_mode: "HTML"` 로 넘길 본문, 슬랙에 `markdown_text` 로 넘길 본문.
+에이전트 답변 하나를 두 채널용으로 변환합니다. 화면에 보이는 것이 채널로 나가는 텍스트 그대로입니다.
+텔레그램에는 `parse_mode: "HTML"` 로, 슬랙에는 `markdown_text` 로 넘기는 본문입니다.
 
-예시는 [코퍼스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔다 —
-전부 실제로 겪은 고장이다. 입력을 직접 고쳐 봐도 된다.
+예시는 [테스트 케이스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔고, 모두 실제로
+겪은 문제입니다. 입력을 직접 고쳐 봐도 됩니다.
 
 <div class="wide">
   <ChannelCompare client:only="react" lang="ko">
@@ -19,10 +19,10 @@ import ChannelCompare from "../../../components/ChannelCompare.tsx";
   </ChannelCompare>
 </div>
 
-텔레그램은 태그를 받는다 — HTML 모드에는 헤딩도 표도 없어서 표는 고정폭 블록으로 나간다.
-슬랙 `markdown_text` 는 표준 마크다운을 읽으니 출력도 마크다운이다 — 고친 뒤의 마크다운. 두
-채널 모두 닫히지 않은 강조와 코드펜스는 보내기 전에 닫고, 출력 아래의 숫자는 정규화가 고친 것과
-채널에 맞춰 바꾼 것을 보여 준다.
+텔레그램은 태그를 받습니다. HTML 모드에는 헤딩도 표도 없어서 표는 고정폭 블록으로 나갑니다. 슬랙
+`markdown_text` 는 표준 마크다운을 읽으므로 출력도 고친 뒤의 마크다운입니다. 두
+채널 모두 닫히지 않은 강조와 코드펜스는 보내기 전에 닫습니다. 출력 아래의 숫자는 정규화가 고친 것과
+채널에 맞춰 바꾼 것을 보여 줍니다.
 
 <details class="code">
 <summary>이 데모의 코드</summary>
@@ -32,9 +32,9 @@ import { renderWithReport } from "@minjun0219/mdwire";
 
 for (const channel of ["telegram-html", "slack-markdown"]) {
   const out = renderWithReport(input, channel);
-  out.parts;   // 보낼 것 — 한도에 걸리지 않으면 문자열 하나
-  out.repairs; // closedEmphasis · closedFence · … · convertedMarker — 열 가지 수
-  out.free();  // 결과는 WASM 메모리에 있다. 다 쓰면 놓는다
+  out.parts;   // 보낼 텍스트. 길이 제한을 넘지 않으면 문자열 하나
+  out.repairs; // closedEmphasis · closedFence · … · convertedMarker, 모두 열 가지
+  out.free();  // 결과는 WASM 메모리에 있으므로 다 쓰면 해제
 }
 ```
 

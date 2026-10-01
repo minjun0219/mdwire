@@ -5,23 +5,23 @@ export type Locale = (typeof locales)[number];
 export const ui = {
   en: {
     tagline: "A bridge that carries LLM Markdown to chat channels without breaking it.",
-    nav: { home: "Overview", demo: "Demo", docs: "Docs" },
+    nav: { home: "Overview", why: "Why", demo: "Demo", docs: "Docs" },
+    why: { index: "Why another one", cases: "Cases" },
     docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
     demo: { index: "All demos", channels: "Telegram vs Slack", streaming: "Streaming", repair: "Before and after repair" },
     next: "next release",
     switchTo: "한국어",
-    source: "Source",
-    footer: "MIT licensed.",
+    license: "MIT License",
   },
   ko: {
-    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 옮기는 브릿지.",
-    nav: { home: "개요", demo: "데모", docs: "문서" },
-    docs: { index: "개념", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
-    demo: { index: "데모 목록", channels: "텔레그램 대 슬랙", streaming: "스트리밍", repair: "정규화 전후" },
+    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환하는 브리지.",
+    nav: { home: "소개", why: "배경", demo: "데모", docs: "문서" },
+    why: { index: "왜 또 만들었나", cases: "사례" },
+    docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
+    demo: { index: "데모 목록", channels: "Telegram vs Slack", streaming: "Streaming", repair: "깨진 마크다운 고치기" },
     next: "다음 릴리스",
     switchTo: "English",
-    source: "소스",
-    footer: "MIT 라이선스.",
+    license: "MIT 라이선스",
   },
 } as const satisfies Record<Locale, unknown>;
 
