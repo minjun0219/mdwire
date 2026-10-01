@@ -64,7 +64,7 @@ pub(crate) struct Inline {
     /// `Vec<char>` 인 것은 다시 읽을 때 `render` 에 그대로 넘기기 위해서다 — `String`
     /// 으로 두면 되돌릴 때마다 글자 벡터를 새로 만들어야 한다.
     code_src: Vec<char>,
-    /// 입력 방언. 마커를 무엇으로 읽을지가 여기서 갈린다.
+    /// 입력 표기. 마커를 무엇으로 읽을지가 여기서 갈린다.
     dialect: Dialect,
     /// 정규화가 고친 것. 블록이 끝날 때 닫은 강조, 글자로 되돌린 코드 스팬, 버린 마커.
     pub repairs: Repairs,
@@ -106,7 +106,7 @@ impl Inline {
         self.stripped_tags.clear();
     }
 
-    /// 본문 글자 하나를 적는다. 채널이 탈출하는 글자면 센다([`Repairs::escaped_char`]).
+    /// 본문 글자 하나를 적는다. 채널이 이스케이프하는 글자면 센다([`Repairs::escaped_char`]).
     fn text_char(&mut self, c: char, out: &mut String, v: &Vocab) {
         if v.escapes(c) {
             self.repairs.escaped_char += 1;
@@ -208,7 +208,7 @@ impl Inline {
                 }
             }
 
-            // **역슬래시 탈출.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다. 안 보면
+            // **역슬래시 이스케이프.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다. 안 보면
             // `TEST\_VCLEFT\_FRONT` 가 기울임이 되고 역슬래시까지 출력에 남는다 —
             // 실제 문서에서 그러고 있었다.
             if c == '\\' {
@@ -251,7 +251,7 @@ impl Inline {
             // 출력에 남고, 남은 마커는 곧 실패다. 중첩 강조를 살리는 것보다
             // 마커를 안 남기는 것이 먼저다 — 실측에서 중첩 강조는 나오지 않았다.
             let take = run_len(line, i, c);
-            // **레거시 mrkdwn 방언.** `*굵게*` · `_기울임_` · `~취소~` — 별표는 몇 개든 굵게,
+            // **레거시 mrkdwn 입력 표기.** `*굵게*` · `_기울임_` · `~취소~` — 별표는 몇 개든 굵게,
             // 물결은 하나든 둘이든 취소선이다. 에이전트가 슬랙용으로 쓰면 흔히 이 표기가
             // 표준 마크다운과 섞여 나온다(`**굵게**` 도 굵게로 읽는다).
             let mrkdwn = self.dialect == Dialect::SlackMrkdwn;
@@ -636,7 +636,7 @@ impl Inline {
             href.extend(url.iter());
             let mut text = std::mem::take(&mut self.scratch);
             text.clear();
-            // 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 탈출(GitHub 의 `\~`)을 하면
+            // 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 이스케이프(GitHub 의 `\~`)을 하면
             // 주소와 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
             for &c in label {
                 if bare {
@@ -679,7 +679,7 @@ impl Inline {
         // 하나만 남는다(`<br><!-- x -->`). 공백은 GFM 처럼 스페이스와 탭만 친다.
         //
         // `details`·`summary` 는 GitHub 이 그리지만 **블록** 태그라 벗긴다(내용은 남는다). 줄 첫머리
-        // `<details>` 는 HTML 블록을 열어 그 안의 마크다운과 우리 탈출(`\~`)이 글자로 보이고, 안 닫히면
+        // `<details>` 는 HTML 블록을 열어 그 안의 마크다운과 우리 이스케이프(`\~`)이 글자로 보이고, 안 닫히면
         // 코멘트 끝까지 접힌다 — 살리려면 블록 층이 HTML 블록을 통째로 통과시켜야 한다(SPEC 4절).
         //
         // **브라우저 채널은 자리와 상관없이 살린다** — 마크다운으로 다시 읽히지 않는다.
@@ -859,7 +859,7 @@ fn wrap_per_line(out: &mut String, at: usize, marker: (&str, &str), code: bool, 
     }
 }
 
-/// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 탈출을 따른다 —
+/// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 이스케이프를 따른다 —
 /// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
 fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab, repairs: &mut Repairs) {
     let escaped = v.escapes(c);

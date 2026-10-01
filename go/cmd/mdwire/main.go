@@ -71,7 +71,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			i++
 			n, err := strconv.Atoi(args[i])
 			if err != nil || n < 1 {
-				return fmt.Errorf("--limit 은 1 이상의 정수다: %s", args[i])
+				return fmt.Errorf("--limit 은 1 이상의 정수여야 한다: %s", args[i])
 			}
 			opts.Limit = n
 		case "--html-line-breaks":
@@ -85,7 +85,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			case "space":
 				opts.HTML.LineBreaks = mdwire.LineBreaksSpace
 			default:
-				return fmt.Errorf("--html-line-breaks 는 br · space 다: %s", args[i])
+				return fmt.Errorf("--html-line-breaks 는 br 또는 space 여야 한다: %s", args[i])
 			}
 		case "--html-images":
 			if i+1 >= len(args) {
@@ -98,7 +98,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			case "load":
 				opts.HTML.Images = mdwire.ImagesLoad
 			default:
-				return fmt.Errorf("--html-images 는 link · load 다: %s", args[i])
+				return fmt.Errorf("--html-images 는 link 또는 load 여야 한다: %s", args[i])
 			}
 		case "--html-schemes":
 			if i+1 >= len(args) {
@@ -120,7 +120,7 @@ func runWith(args []string, in io.Reader, out, errOut io.Writer) error {
 			i++
 			d, ok := mdwire.ParseDialect(args[i])
 			if !ok {
-				return fmt.Errorf("모르는 방언: %q (markdown · slack-mrkdwn)", args[i])
+				return fmt.Errorf("모르는 입력 표기: %q (markdown · slack-mrkdwn)", args[i])
 			}
 			opts.From = d
 		case "-h", "--help":

@@ -437,7 +437,7 @@ mod gate {
         assert_eq!(counts.allocs, 0, "산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
 
-    /// **GitHub 만 도는 경로도 할당하지 않는다** — `~`·`<` 탈출, 글자로 되돌린 `~~`, 마커
+    /// **GitHub 만 도는 경로도 할당하지 않는다** — `~`·`<` 이스케이프, 글자로 되돌린 `~~`, 마커
     /// 대신 내는 `<strong>`. 위 게이트의 산문에는 이 셋이 없다.
     #[test]
     fn github_prose_streaming_is_allocation_free_once_warm() {
@@ -463,7 +463,7 @@ mod gate {
         assert_eq!(counts.allocs, 0, "GitHub 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
 
-    /// **노션만 도는 경로도 할당하지 않는다** — `*`·`\` 탈출, 줄마다 닫는 강조(인용·목록 안 포함),
+    /// **노션만 도는 경로도 할당하지 않는다** — `*`·`\` 이스케이프, 줄마다 닫는 강조(인용·목록 안 포함),
     /// 살려 둔 `<br>`. 위 게이트의 산문에는 이 셋이 없다.
     #[test]
     fn notion_prose_streaming_is_allocation_free_once_warm() {

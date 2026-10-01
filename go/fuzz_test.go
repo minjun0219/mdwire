@@ -93,7 +93,7 @@ type channelDialect struct {
 	from Dialect
 }
 
-// channelDialects 는 채널 × 입력 방언 전부다.
+// channelDialects 는 채널 × 입력 표기 전부다.
 func channelDialects() []channelDialect {
 	var out []channelDialect
 	for _, ch := range Channels() {
@@ -328,7 +328,7 @@ func TestNotionSplitsLongTablesIntoWholeTables(t *testing.T) {
 	}
 }
 
-// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로, 칸의 태그 모양은 탈출 — 러스트 쪽
+// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로, 칸의 태그 모양은 이스케이프 — 러스트 쪽
 // notion_splits_long_tables_into_whole_tables 의 뒷부분.
 func TestNotionTableLongRowAndTagLikeCell(t *testing.T) {
 	long := "| 머리 | 둘 |\n|---|---|\n| 짧음 | 가 |\n| " + strings.Repeat("긴칸", 200) + " | 나 |\n| 짧음2 | 다 |"
@@ -352,12 +352,12 @@ func TestNotionTableLongRowAndTagLikeCell(t *testing.T) {
 func TestNotionTableCellAnglesAndHeaderKept(t *testing.T) {
 	cells := strings.Join(Render("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", NotionMarkdown), "")
 	if !strings.Contains(cells, "<td>i<n 일 때<br>반복</td>") || !strings.Contains(cells, "<td>`Option<T>` 와 `x\\<\\/td\\>y`</td>") {
-		t.Fatalf("칸 탈출이 틀렸다: %q", cells)
+		t.Fatalf("칸 이스케이프가 틀렸다: %q", cells)
 	}
 	only := "| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | " + strings.Repeat("가 ", 200) + " |"
 	out := strings.Join(RenderWith(only, NotionMarkdown, Options{Limit: 256}).Parts, "")
 	if !strings.HasPrefix(out, "이름 | 설명\n\\# 제목처럼 | 가 가") {
-		t.Fatalf("머리글이 사라졌거나 첫머리가 탈출되지 않았다: %q", out)
+		t.Fatalf("머리글이 사라졌거나 첫머리가 이스케이프되지 않았다: %q", out)
 	}
 }
 
@@ -376,13 +376,13 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 		t.Errorf("바꿀 것이 없는데 셌다: %+v", r)
 	}
 	if r := RenderWith("약 ~40km", GithubMarkdown, Options{}).Repairs; !r.Changed() || r.Repaired() {
-		t.Errorf("탈출 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)
+		t.Errorf("이스케이프 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)
 	}
 	if r := RenderWith("<br>\n**x**", GithubMarkdown, Options{}).Repairs; r.StrippedHTML != 1 {
 		t.Errorf("줄 첫머리 태그를 두 번 셌다: %+v", r)
 	}
 	if r := RenderWith("<https://a.com|l~x>", GithubMarkdown, Options{From: SlackMrkdwn}).Repairs; r.EscapedChar != 1 {
-		t.Errorf("라벨 탈출을 안 셌다: %+v", r)
+		t.Errorf("라벨 이스케이프를 안 셌다: %+v", r)
 	}
 	if r := RenderWith("1) a\n2) b", SlackMarkdown, Options{}).Repairs; r.RewrittenBullet != 2 {
 		t.Errorf("번호 기호를 안 셌다: %+v", r)

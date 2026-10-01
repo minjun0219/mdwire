@@ -274,7 +274,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
     while i < ch.len() {
         let c = ch[i];
 
-        // **역슬래시 탈출이 먼저다.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
+        // **역슬래시 이스케이프가 먼저다.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
         // 코어가 그렇게 읽으므로 참조 구현도 같이 읽어야 한다.
         if c == '\\' {
             if let Some(&next) = ch.get(i + 1) {
@@ -737,7 +737,7 @@ pub(crate) fn parse_entity(ch: &[char], at: usize) -> Option<(char, usize)> {
         }
     }
     // **숫자 엔티티도 읽는다** — `&#x27;` · `&#39;`. React 의 정적 렌더가 따옴표를 이렇게
-    // 적는데, 못 읽으면 다른 구현의 멀쩡한 escape 를 누락으로 신고한다.
+    // 적는데, 못 읽으면 다른 구현의 멀쩡한 이스케이프를 누락으로 신고한다.
     if ch.get(at + 1) != Some(&'#') {
         return None;
     }

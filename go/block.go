@@ -113,7 +113,7 @@ type engine struct {
 	cr bool
 	// 문서 끝까지 안 닫혀서 닫아 준 코드펜스 수.
 	closedFence int
-	// 입력 방언. 표 셀을 읽을 때도 문서를 따른다.
+	// 입력 표기. 표 셀을 읽을 때도 문서를 따른다.
 	dialect Dialect
 	// 열린 목록들 — 바깥부터. HTML 채널만 쓴다 — 다른 채널은 목록을 글자(`- `·`• `)로 그려서
 	// 중첩을 태그로 여닫을 일이 없다. 블록이 닫혀도 슬라이스는 재사용한다.
@@ -933,7 +933,7 @@ func safeCut(p []rune, memo *holdMemo) int {
 		}
 	}
 	// 마커는 맨 마지막에 붙든다 — 위에서 `[` 나 `<` 를 붙들고 나면 그 앞의 마커가 다시 끝에
-	// 서기 때문이다. 역슬래시도 붙든다. 다음 글자를 봐야 탈출인지 글자인지가 갈린다.
+	// 서기 때문이다. 역슬래시도 붙든다. 다음 글자를 봐야 이스케이프인지 글자인지가 갈린다.
 	// `!` 도 붙든다 — 다음 글자가 `[` 면 이미지다(`![alt](url)`). 먼저 나가면 완성본과 갈린다.
 	for k > 0 {
 		switch p[k-1] {
@@ -1198,7 +1198,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 	if v.tablesNative() {
 		cellVocab = v
 	}
-	// 셀 안의 방언은 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
+	// 셀 안의 입력 표기는 문서를 따른다. 셀에서 고친 것도 문서의 것으로 센다 — 본문의 `**x` 를
 	// 닫아 주면 세는데, 같은 것이 셀 안에 있다고 빠지면 표가 든 문서만 덜 센다.
 	in := newInline(d)
 	in.inCell = true
@@ -1283,7 +1283,7 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 
 // writeNotionTable 은 표를 노션 <table> 로 낸다 — 러스트 쪽 write_notion_table. 파이프 표로 내면
 // 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버리고, 칸에 글자로 적힌 태그 모양은
-// 탈출한다(< 가 든 칸만 그 자리에서 바꾼다). 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고,
+// 이스케이프한다(< 가 든 칸만 그 자리에서 바꾼다). 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고,
 // 머리글과 함께 한도에 안 드는 행은 표 밖의 글로 내린다 — 머리글이 아직 안 나갔으면 머리글도 글로
 // 먼저 낸다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게 내린다. 나눈 자리(다음 조각을 여는 빈
 // 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록 경계로 내보낸다.
@@ -1377,7 +1377,7 @@ func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
 }
 
 // writeTextRow 는 표 밖으로 내린 행을 글 한 줄로 적는다 — 러스트 쪽 write_text_row. 줄 첫머리가
-// #·>·-·+·* 나 1. 이면 노션이 블록 구문으로 읽어서 탈출한다.
+// #·>·-·+·* 나 1. 이면 노션이 블록 구문으로 읽어서 이스케이프한다.
 func writeTextRow(out *[]byte, row []string) {
 	for k, cell := range row {
 		if k > 0 {
@@ -1399,10 +1399,10 @@ func writeTextRow(out *[]byte, row []string) {
 	}
 }
 
-// notionCell 은 노션 표 칸 하나를 탈출한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
+// notionCell 은 노션 표 칸 하나를 이스케이프한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
 // 칸을 닫는 태그로 읽는다(실측). \<\/td\> 로 / 와 > 까지 막아야 글자로 남았다. 태그로 보는 것은 <
 // 뒤에 글자가 오고 다음 < 보다 앞에 > 가 있을 때뿐이고, <br> 은 둔다. 코드 스팬 안은 표 구조
-// 태그(td tr th table)만 막는다 — 코드 안의 탈출은 글자로 보인다.
+// 태그(td tr th table)만 막는다 — 코드 안의 이스케이프는 글자로 보인다.
 func notionCell(cell string) string {
 	var b strings.Builder
 	code, closeAt := 0, -1
@@ -1473,7 +1473,7 @@ func boolInt(b bool) int {
 	return 0
 }
 
-// writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.
+// writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 이스케이프·렌더된 것을 받는다.
 func writeHTMLTable(out *[]byte, cells [][]string, al []align) {
 	*out = append(*out, "<table>"...)
 	for r, row := range cells {

@@ -605,16 +605,16 @@ fn a_row_with_extra_cells_keeps_them() {
     assert!(plain.contains("하나") && plain.contains("둘"), "{plain}");
 }
 
-/// **역슬래시 탈출.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
+/// **역슬래시 이스케이프.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
 #[test]
 fn a_backslash_escape_makes_the_next_character_plain() {
     assert_eq!(one(r"TEST\_VCLEFT\_FRONT", Channel::TelegramHtml), "TEST_VCLEFT_FRONT");
     assert_eq!(one(r"2 \* 3 과 **굵게**", Channel::TelegramHtml), "2 * 3 과 <b>굵게</b>");
-    // 탈출된 대괄호는 링크를 열지 않는다.
+    // 이스케이프된 대괄호는 링크를 열지 않는다.
     assert_eq!(one(r"new createError\[code\](\[msg\])", Channel::Plain), "new createError[code]([msg])");
-    // 코드 스팬 안에서는 탈출이 없다. 역슬래시도 내용이다.
+    // 코드 스팬 안에서는 이스케이프가 없다. 역슬래시도 내용이다.
     assert_eq!(one(r"`코드\_안`", Channel::TelegramHtml), r"<code>코드\_안</code>");
-    // 마크다운을 그대로 내보내는 채널은 탈출을 지킨다 — 벗기면 뜻이 바뀐다.
+    // 마크다운을 그대로 내보내는 채널은 이스케이프를 지킨다 — 벗기면 뜻이 바뀐다.
     assert_eq!(one(r"2 \* 3", Channel::SlackMarkdown), r"2 \* 3");
 }
 
@@ -654,7 +654,7 @@ fn slack_markdown_text_keeps_tables_as_gfm() {
 }
 
 /// **`<https://…>` 오토링크.** mrkdwn 습관이 남은 LLM 이 자주 쓴다(한 표본에서 124건).
-/// 텔레그램은 `&lt;` 로 escape 하면 화면에 꺾쇠가 글자로 보인다 — 링크로 낸다.
+/// 텔레그램은 `&lt;` 로 이스케이프하면 화면에 꺾쇠가 글자로 보인다 — 링크로 낸다.
 #[test]
 fn angle_autolink_becomes_a_link() {
     let input = "주소는 <https://a.com/x_y_z?q=1&r=2> 다";
@@ -688,8 +688,8 @@ fn known_html_tags_are_stripped_and_unknown_angles_kept() {
 }
 
 /// **GitHub 은 홑 `~` 를 취소선으로, `<T>` 를 태그로 읽는다**(실측 2026-09-30, `POST /markdown`).
-/// 글자로 남은 둘은 탈출해 낸다 — `약 ~40km, 5~6월` 이 그어지고 `Vec<T>` 의 `T` 가 지워지던
-/// 것이다. 코드 안은 탈출이 글자로 보이니 그대로 두고, 진짜 취소선 `~~` 도 그대로다.
+/// 글자로 남은 둘은 이스케이프해 낸다 — `약 ~40km, 5~6월` 이 그어지고 `Vec<T>` 의 `T` 가 지워지던
+/// 것이다. 코드 안은 이스케이프가 글자로 보이니 그대로 두고, 진짜 취소선 `~~` 도 그대로다.
 #[test]
 fn github_escapes_tilde_and_angle_outside_code() {
     let g = |s| one(s, Channel::GithubMarkdown);
@@ -697,11 +697,11 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g("Vec<T> 와 1 < 2"), r"Vec\<T> 와 1 \< 2");
     assert_eq!(g("~~취소~~가 `a~b <T>`"), "~~취소~~가 `a~b <T>`");
     assert_eq!(g("```\nx ~ <y>\n```"), "```\nx ~ <y>\n```");
-    // 저자가 탈출해 둔 것은 한 번만 탈출한다.
+    // 저자가 이스케이프해 둔 것은 한 번만 이스케이프한다.
     assert_eq!(g(r"5\~6월 \<T>"), r"5\~6월 \<T>");
     // 표 칸도 본문이다.
     assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
-    // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 탈출한다.
+    // mrkdwn 의 안 닫힌 홑 `~` 는 글자로 되돌리는데, 되돌린 것도 이스케이프한다.
     let out = mdwire::render_with("~40km 전", Channel::GithubMarkdown, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
     assert_eq!(out.parts.join(""), r"\~40km 전");
     // 오토링크·링크 주소는 건드리지 않는다.
@@ -712,7 +712,7 @@ fn github_escapes_tilde_and_angle_outside_code() {
 
 /// **노션은 GitHub 과 같은 마크다운에서 출발하되 반대로 가는 곳이 있다**(실측 2026-10-01, 커넥터로
 /// 페이지를 만들고 되읽었다). 조사 앞 강조는 노션이 그대로 그려 `<strong>` 으로 바꾸지 않고, 인라인
-/// HTML 은 글자로 보여서 벗긴다. 마스킹 번호의 `*` 와 홀로 쓴 `\` 는 노션이 먹어서 탈출하고,
+/// HTML 은 글자로 보여서 벗긴다. 마스킹 번호의 `*` 와 홀로 쓴 `\` 는 노션이 먹어서 이스케이프하고,
 /// `~`·`<` 는 글자로 그려 둔다. `<url>` 은 꺾쇠가 글자로 남아 링크 문법으로 쓴다.
 #[test]
 fn notion_escapes_what_it_eats_and_strips_tags() {
@@ -722,7 +722,7 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
     assert_eq!(n("카드 1***-****-001* 끝"), r"카드 1\*\*\*-\*\*\*\*-001\* 끝");
     assert_eq!(n(r"백슬래시 \ 하나"), r"백슬래시 \\ 하나");
     assert_eq!(n("약 ~40km, Vec<T>"), "약 ~40km, Vec<T>");
-    // 저자가 탈출해 둔 것은 한 번만, 코드 안은 그대로.
+    // 저자가 이스케이프해 둔 것은 한 번만, 코드 안은 그대로.
     assert_eq!(n(r"\*별\* `a*b\c`"), r"\*별\* `a*b\c`");
     assert_eq!(n("<https://a.com/x_y>"), r"[https://a.com/x\_y](https://a.com/x_y)");
     assert_eq!(n("##### 다섯\n\n* 별표 목록"), "#### 다섯\n\n- 별표 목록");
@@ -733,13 +733,13 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
         n("| a |\n|---|\n| 줄<br>바꿈 |"),
         "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>줄<br>바꿈</td>\n</tr>\n</table>"
     );
-    // 줄 끝 역슬래시는 글자로 둔다(탈출한다) — 노션에 하드 브레이크 문법이 없고, 지우면 문단 끝의
+    // 줄 끝 역슬래시는 글자로 둔다(이스케이프한다) — 노션에 하드 브레이크 문법이 없고, 지우면 문단 끝의
     // `C:\` 같은 글자까지 사라진다.
     assert_eq!(n("foo\\\nbar"), "foo\\\\\nbar");
     assert_eq!(n(r"path C:\"), r"path C:\\");
     // `\$` 는 지킨다 — 벗기면 `$x$` 가 수식이 된다.
     assert_eq!(n(r"\$x\$ 와 $5"), r"\$x\$ 와 $5");
-    // 오토링크 라벨의 마커 글자는 탈출하고, 주소의 괄호는 퍼센트로.
+    // 오토링크 라벨의 마커 글자는 이스케이프하고, 주소의 괄호는 퍼센트로.
     assert_eq!(n("<https://a.com/*x*>"), r"[https://a.com/\*x\*](https://a.com/*x*)");
     assert_eq!(n("<https://a.com/x)>"), "[https://a.com/x)](https://a.com/x%29)");
 }
@@ -766,7 +766,7 @@ fn notion_closes_emphasis_at_each_line() {
 }
 
 /// **노션에는 표를 `<table>` 로 낸다**(실측 2026-10-01). 파이프 표로 내면 칸 안의 `|` 가 — 코드
-/// 스팬 안이든 `\|` 로 탈출했든 — 칸을 갈라 뒤의 내용이 사라졌다. `<table>` 에서는 글자다.
+/// 스팬 안이든 `\|` 로 이스케이프했든 — 칸을 갈라 뒤의 내용이 사라졌다. `<table>` 에서는 글자다.
 #[test]
 fn notion_writes_tables_as_xml() {
     let out = one("| 항목 | 비고 |\n|:--|--:|\n| **마통** | a \\| b |", Channel::NotionMarkdown);
@@ -800,17 +800,17 @@ fn notion_splits_long_tables_into_whole_tables() {
         assert_eq!(p.matches("<table ").count(), p.matches("</table>").count(), "{p}");
     }
     assert!(parts.concat().contains("긴칸긴칸 | 나"));
-    // 칸에 글자로 적힌 태그 모양은 탈출한다 — `</td>` 가 칸을 닫았다.
+    // 칸에 글자로 적힌 태그 모양은 이스케이프한다 — `</td>` 가 칸을 닫았다.
     assert_eq!(
         one("| a |\n|---|\n| x </td> y <br> z |", Channel::NotionMarkdown),
         "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
     );
     // 두 번째 자체 리뷰: 닫히지 않는 꺾쇠(`i<n`)는 태그가 아니라 뒤의 `<br>` 을 건드리지 않고, 코드
-    // 안의 `<T>` 는 그대로(코드 안의 탈출은 글자로 보인다) — 칸을 깨는 `</td>` 만 막는다.
+    // 안의 `<T>` 는 그대로(코드 안의 이스케이프는 글자로 보인다) — 칸을 깨는 `</td>` 만 막는다.
     let cells = one("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", Channel::NotionMarkdown);
     assert!(cells.contains("<td>i<n 일 때<br>반복</td>"), "{cells}");
     assert!(cells.contains(r"<td>`Option<T>` 와 `x\<\/td\>y`</td>"), "{cells}");
-    // 행이 전부 글로 내려가도 머리글은 남고, 글로 내린 줄의 첫머리는 탈출한다.
+    // 행이 전부 글로 내려가도 머리글은 남고, 글로 내린 줄의 첫머리는 이스케이프한다.
     let only = format!("| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | {} |", "가 ".repeat(200));
     let opts = mdwire::Options { limit: Some(256), ..Default::default() };
     let out = mdwire::render_with(&only, Channel::NotionMarkdown, opts).parts.concat();
@@ -842,12 +842,12 @@ fn report_counts_what_the_channel_rewrote() {
     assert_eq!((slack.converted_marker, slack.rewritten_bullet), (4, 1), "{slack:?}");
     // 바꿀 것이 없으면 0 이다 — 이미 채널의 모양인 글.
     assert!(!r("**굵게** 와 `코드`\n\n- 하나", Channel::SlackMarkdown, mdwire::Dialect::Markdown).changed());
-    // `any()` 는 고친 것만 본다 — 탈출 하나로 "모델이 서식을 깼다"가 되지 않는다.
+    // `any()` 는 고친 것만 본다 — 이스케이프 하나로 "모델이 서식을 깼다"가 되지 않는다.
     let tilde = r("약 ~40km", Channel::GithubMarkdown, mdwire::Dialect::Markdown);
     assert!(tilde.changed() && !tilde.any(), "{tilde:?}");
     // 줄 첫머리에서 벗긴 태그는 한 번씩 센다(두 번 세던 것).
     assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown, mdwire::Dialect::Markdown).stripped_html, 1);
-    // `<url|텍스트>` 라벨의 탈출도 센다.
+    // `<url|텍스트>` 라벨의 이스케이프도 센다.
     assert_eq!(r("<https://a.com|l~x>", Channel::GithubMarkdown, mdwire::Dialect::SlackMrkdwn).escaped_char, 1);
     // 번호 목록 기호를 다시 쓴 것도 센다(`1)` → `1.`).
     assert_eq!(r("1) a\n2) b", Channel::SlackMarkdown, mdwire::Dialect::Markdown).rewritten_bullet, 2);
@@ -888,7 +888,7 @@ fn github_keeps_inline_tags_unless_the_line_is_only_tags() {
     // 태그뿐인지는 출력으로 본다 — 뒤에 주석만 있으면 `<br>` 혼자 남아 HTML 블록이 된다.
     assert_eq!(g("<br><!-- x -->\n**굵게**"), "**굵게**");
     // `ins` 도 살린다. 블록 태그 `details` 는 벗긴다 — 줄 첫머리 `<details>` 는 HTML 블록을 열어 그
-    // 안의 탈출이 글자로 보인다(내용은 남는다).
+    // 안의 이스케이프가 글자로 보인다(내용은 남는다).
     assert_eq!(g("<ins>새</ins> 글"), "<ins>새</ins> 글");
     assert_eq!(g("<details><summary>약 ~40ms</summary>"), r"약 \~40ms");
     // 다른 채널은 그대로 벗긴다.
@@ -959,7 +959,7 @@ fn a_long_space_free_span_is_cut_within_the_limit() {
     }
 }
 
-// ── 입력 방언 · 고친 것 ─────────────────────────────────────────────────
+// ── 입력 표기 · 고친 것 ─────────────────────────────────────────────────
 
 fn mrkdwn(input: &str, channel: Channel) -> String {
     let out = mdwire::render_with(input, channel, mdwire::Options { from: mdwire::Dialect::SlackMrkdwn, ..Default::default() });
@@ -1118,7 +1118,7 @@ fn html_nests_lists_by_indent() {
     assert_eq!(h("- a\n\n문단"), "<ul><li>a</li></ul>\n\n<p>문단</p>");
 }
 
-/// **`innerHTML` 로 들어가는 출력이다.** 글자는 escape 하고, `javascript:` 링크는 글로
+/// **`innerHTML` 로 들어가는 출력이다.** 글자는 이스케이프하고, `javascript:` 링크는 글로
 /// 떨어뜨리고, 원문 태그는 속성을 버린 이름만 살린다. 짝이 안 맞는 원문 태그는 강조와 같은
 /// 스택에서 맞춘다 — 퍼즈가 `<sub>` 만 열고 끝난 입력에서 잡았다.
 #[test]

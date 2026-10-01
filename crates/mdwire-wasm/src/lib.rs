@@ -134,7 +134,7 @@ pub struct Repairs {
     /// 짝 잃은 채 버린 `**`.
     #[wasm_bindgen(js_name = droppedMarker)]
     pub dropped_marker: usize,
-    /// 채널이 구문으로 읽을 글자를 탈출한 수(GitHub 의 `\~`·`\<`·`\*`).
+    /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
     /// 마커 대신 태그로 낸 강조(GitHub 의 `<strong>`).
@@ -263,7 +263,7 @@ fn parse_channel(name: &str) -> Result<Channel, JsError> {
 }
 
 fn dialect_of(name: &str) -> Result<Dialect, String> {
-    Dialect::parse(name).ok_or_else(|| format!("모르는 방언: {name}"))
+    Dialect::parse(name).ok_or_else(|| format!("모르는 입력 표기: {name}"))
 }
 
 fn parse_options(options: Option<RenderOptions>) -> Result<Options, JsError> {
@@ -279,12 +279,12 @@ fn parse_options(options: Option<RenderOptions>) -> Result<Options, JsError> {
         out.html.line_breaks = match html.line_breaks().as_deref() {
             None | Some("br") => mdwire::LineBreaks::Br,
             Some("space") => mdwire::LineBreaks::Space,
-            Some(v) => return Err(JsError::new(&format!("html.lineBreaks 는 br · space 다: {v}"))),
+            Some(v) => return Err(JsError::new(&format!("html.lineBreaks 는 br 또는 space 여야 한다: {v}"))),
         };
         out.html.images = match html.images().as_deref() {
             None | Some("link") => mdwire::Images::Link,
             Some("load") => mdwire::Images::Load,
-            Some(v) => return Err(JsError::new(&format!("html.images 는 link · load 다: {v}"))),
+            Some(v) => return Err(JsError::new(&format!("html.images 는 link 또는 load 여야 한다: {v}"))),
         };
         out.html.schemes = html.schemes();
     }
@@ -297,7 +297,7 @@ fn limit_of(n: f64) -> Result<usize, String> {
     if n.is_finite() && n >= 1.0 && n.fract() == 0.0 && n <= u32::MAX as f64 {
         Ok(n as usize)
     } else {
-        Err(format!("limit 은 1 이상의 정수다: {n}"))
+        Err(format!("limit 은 1 이상의 정수여야 한다: {n}"))
     }
 }
 

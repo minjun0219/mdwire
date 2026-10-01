@@ -9,7 +9,7 @@ func Render(input string, ch Channel) []string {
 	return RenderWith(input, ch, Options{}).Parts
 }
 
-// Dialect 는 입력 방언 — 에이전트가 무슨 표기로 썼는가다. 기본은 표준 마크다운이다. 슬랙에
+// Dialect 는 입력 표기 — 에이전트가 무슨 표기로 썼는가다. 기본은 표준 마크다운이다. 슬랙에
 // 답하는 에이전트는 흔히 레거시 mrkdwn(`*굵게*` · `_기울임_` · `~취소~`)으로 쓴다.
 type Dialect int
 
@@ -29,7 +29,7 @@ func (d Dialect) Name() string {
 	return "markdown"
 }
 
-// ParseDialect 는 이름으로 방언을 찾는다.
+// ParseDialect 는 이름으로 입력 표기를 찾는다.
 func ParseDialect(name string) (Dialect, bool) {
 	for _, d := range []Dialect{Markdown, SlackMrkdwn} {
 		if d.Name() == name {
@@ -44,7 +44,7 @@ func ParseDialect(name string) (Dialect, bool) {
 // < · b · ></b>). 러스트 쪽 MIN_LIMIT 과 같다.
 const MinLimit = 256
 
-// Options 는 변환 옵션이다 — 입력 방언, 조각 한도, 브라우저 채널의 정책. 영값이 기본값이다.
+// Options 는 변환 옵션이다 — 입력 표기, 조각 한도, 브라우저 채널의 정책. 영값이 기본값이다.
 type Options struct {
 	From Dialect
 	// Limit 은 한 조각의 한도(렌더한 출력의 글자 수)다. 0 이면 채널의 Limit().
@@ -93,7 +93,7 @@ const (
 )
 
 // Repairs 는 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수다. 앞 넷(고친 것)은 모델이 얼마나 자주
-// 서식을 깨는지를, 뒤 여섯(바꾼 것)은 붙이기 전에 채널이 무엇을 바꾸는지를 재는 데 쓴다 — 둘을 따로
+// 서식을 깨는지를, 뒤 여섯(바꾼 것)은 채널을 들이기 전에 그 채널이 무엇을 바꾸는지를 재는 데 쓴다 — 둘을 따로
 // 물으려면 Repaired·Changed.
 type Repairs struct {
 	// ClosedEmphasis 는 블록이 끝나도록 안 닫혀서 닫아 준 강조다.
@@ -104,7 +104,7 @@ type Repairs struct {
 	RevertedCodeSpan int
 	// DroppedMarker 는 짝 잃은 채 버린 `**` 다.
 	DroppedMarker int
-	// EscapedChar 는 채널이 구문으로 읽을 글자를 탈출한 수다(GitHub 의 \~·\<·\*).
+	// EscapedChar 는 채널이 구문으로 읽을 글자를 이스케이프한 수다(GitHub 의 \~·\<·\*).
 	EscapedChar int
 	// TagEmphasis 는 마커 대신 태그로 낸 강조다(GitHub 의 <strong>).
 	TagEmphasis int
@@ -174,7 +174,7 @@ func NewStreamer(ch Channel) *Streamer {
 	return NewStreamerWith(ch, Options{})
 }
 
-// NewStreamerWith 는 옵션을 주고 만든다 — 입력 방언 따위.
+// NewStreamerWith 는 옵션을 주고 만든다 — 입력 표기 따위.
 func NewStreamerWith(ch Channel, o Options) *Streamer {
 	return &Streamer{e: newEngine(ch, o), dirty: true, revised: true}
 }

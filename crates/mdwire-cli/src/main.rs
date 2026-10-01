@@ -24,15 +24,15 @@ const USAGE: &str = "\
 mdwire — 에이전트 마크다운을 채팅 채널로 안전하게 내보낸다
 
 사용법:
-  mdwire --channel <채널> [--from <방언>] [--stream] [--report]
-  mdwire --channel <채널> [--from <방언>] --batch jsonl
+  mdwire --channel <채널> [--from <표기>] [--stream] [--report]
+  mdwire --channel <채널> [--from <표기>] --batch jsonl
 
 채널:
   telegram-html · slack-markdown · github-markdown · notion-markdown · plain · html
 
 옵션:
   --channel <이름>      필수
-  --from <방언>         입력 표기. markdown(기본) · slack-mrkdwn
+  --from <표기>         입력 표기. markdown(기본) · slack-mrkdwn
   --limit <글자 수>     조각 한도. 기본은 채널의 한도 — plain 을 텔레그램에 보내면 4096
   --html-line-breaks <br|space>   html: 블록 안 줄바꿈. 기본 br
   --html-images <link|load>       html: 이미지를 링크로만(기본) · <img> 로 불러오기
@@ -101,14 +101,14 @@ fn run() -> Result<(), String> {
                 options.html.line_breaks = match value()?.as_str() {
                     "br" => LineBreaks::Br,
                     "space" => LineBreaks::Space,
-                    v => return Err(format!("--html-line-breaks 는 br · space 다: {v}")),
+                    v => return Err(format!("--html-line-breaks 는 br 또는 space 여야 한다: {v}")),
                 };
             }
             "--html-images" => {
                 options.html.images = match value()?.as_str() {
                     "link" => Images::Link,
                     "load" => Images::Load,
-                    v => return Err(format!("--html-images 는 link · load 다: {v}")),
+                    v => return Err(format!("--html-images 는 link 또는 load 여야 한다: {v}")),
                 };
             }
             "--html-schemes" => {
@@ -117,13 +117,13 @@ fn run() -> Result<(), String> {
             }
             "--limit" => {
                 let v = value()?;
-                let n: usize = v.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("--limit 은 1 이상의 정수다: {v}"))?;
+                let n: usize = v.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("--limit 은 1 이상의 정수여야 한다: {v}"))?;
                 options.limit = Some(n);
             }
             "--from" => {
                 let v = value()?;
                 options.from =
-                    Dialect::parse(&v).ok_or_else(|| format!("모르는 방언: {v}\n\n{USAGE}"))?;
+                    Dialect::parse(&v).ok_or_else(|| format!("모르는 입력 표기: {v}\n\n{USAGE}"))?;
             }
             "--channel" => {
                 let v = value()?;

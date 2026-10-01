@@ -6,7 +6,7 @@ import (
 )
 
 // innerHTML 로 들어가는 출력이다 — 러스트 쪽 html_output_is_safe_for_inner_html 과 같은 단언.
-// 글자는 escape 하고, javascript: 링크는 글로 떨어뜨리고, 원문 태그는 속성을 버린 이름만 살린다.
+// 글자는 이스케이프하고, javascript: 링크는 글로 떨어뜨리고, 원문 태그는 속성을 버린 이름만 살린다.
 func TestHTMLOutputIsSafeForInnerHTML(t *testing.T) {
 	cases := [][2]string{
 		{"1 < 2 & `a<b>`", "<p>1 &lt; 2 &amp; <code>a&lt;b&gt;</code></p>"},

@@ -111,7 +111,7 @@ func TestBlocksMatchRustCore(t *testing.T) {
 	}
 }
 
-// 입력 방언 — 레거시 mrkdwn 으로 쓴 입력. 기대값은 러스트 CLI `--from slack-mrkdwn` 에서 뽑았다.
+// 입력 표기 — 레거시 mrkdwn 으로 쓴 입력. 기대값은 러스트 CLI `--from slack-mrkdwn` 에서 뽑았다.
 func TestMrkdwnMatchesRustCore(t *testing.T) {
 	inputs := readCases(t, "mrkdwn-input.txt")
 	for _, ch := range Channels() {

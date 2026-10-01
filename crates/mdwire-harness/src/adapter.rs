@@ -15,15 +15,15 @@ use std::process::{Command as Proc, Stdio};
 pub trait Renderer {
     /// 표에 찍힐 이름.
     fn name(&self) -> String;
-    /// 입력을 채널용으로 변환한다. 조각이 여럿이면 NUL 로 잇는다. `from` 은 입력 방언이다.
+    /// 입력을 채널용으로 변환한다. 조각이 여럿이면 NUL 로 잇는다. `from` 은 입력 표기이다.
     fn render(&self, input: &str, channel: Channel, from: Dialect) -> Result<String, String>;
     /// 입력을 `chunk` 글자씩 흘려 넣고, 돌려받은 것을 **이어 붙이기만** 한 결과.
     /// 스트리밍이 없는 구현은 `None` 이다 — 그러면 스트리밍 불일치는 재지 않는다.
     fn stream(&self, _input: &str, _channel: Channel, _from: Dialect, _chunk: usize) -> Option<String> {
         None
     }
-    /// 이 입력 방언을 받는가. **못 받는 구현에 그 케이스를 먹이지 않는다** — 표준으로 읽고
-    /// 틀렸다고 채점하면 방언을 모르는 것과 변환이 틀린 것이 구분되지 않는다.
+    /// 이 입력 표기를 받는가. **못 받는 구현에 그 케이스를 먹이지 않는다** — 표준으로 읽고
+    /// 틀렸다고 채점하면 입력 표기를 모르는 것과 변환이 틀린 것이 구분되지 않는다.
     fn supports(&self, from: Dialect) -> bool {
         from == Dialect::Markdown
     }
@@ -62,9 +62,9 @@ impl Renderer for Mdwire {
 
 /// 외부 구현. stdin 으로 넣고 stdout 으로 받는다.
 ///
-/// `argv` 안의 `{channel}` 은 채널 이름으로, `{from}` 은 입력 방언 이름(`markdown` ·
+/// `argv` 안의 `{channel}` 은 채널 이름으로, `{from}` 은 입력 표기 이름(`markdown` ·
 /// `slack-mrkdwn`)으로 치환된다. 예: `--cmd "node tools/convert.js --target {channel}"`.
-/// `{from}` 이 없으면 표준 마크다운만 받는 구현으로 보고 방언 케이스는 건너뛴다.
+/// `{from}` 이 없으면 표준 마크다운만 받는 구현으로 보고 입력 표기 케이스는 건너뛴다.
 pub struct Command {
     pub label: String,
     pub argv: Vec<String>,

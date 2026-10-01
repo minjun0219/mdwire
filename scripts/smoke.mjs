@@ -37,7 +37,7 @@ for (const channel of ["telegram-html", "slack-markdown", "github-markdown", "no
   assert.equal(appended, render(input, channel).join(""), `${channel}: 이어 붙인 것이 완성본과 다르다`);
 }
 
-// 입력 방언 — 레거시 mrkdwn 으로 쓴 에이전트 출력. 옵션은 객체 하나다.
+// 입력 표기 — 레거시 mrkdwn 으로 쓴 에이전트 출력. 옵션은 객체 하나다.
 assert.deepEqual(
   render("*굵게* ~취소~ <https://x.io|링크>", "slack-markdown", { from: "slack-mrkdwn" }),
   ["**굵게** ~~취소~~ [링크](https://x.io)"],
@@ -50,14 +50,14 @@ assert.ok(capped.length > 1 && capped.every((p) => [...p].length <= 4096), "limi
 assert.throws(() => render(long, "plain", { limit: 0 }), /limit/);
 const ms = new Streamer("telegram-html", { from: "slack-mrkdwn" });
 assert.equal(ms.push("*굵") + ms.push("게*") + ms.finish(), "<b>굵게</b>");
-assert.throws(() => render("x", "plain", { from: "mrkdwn" }), /모르는 방언/);
+assert.throws(() => render("x", "plain", { from: "mrkdwn" }), /모르는 입력 표기/);
 
 // 정규화가 고친 것.
 const report = renderWithReport("**영향 범위\n```ts\nconst a = 1;", "telegram-html");
 assert.equal(report.parts.length, 1);
 assert.equal(report.repairs.closedEmphasis, 1);
 assert.equal(report.repairs.closedFence, 1);
-// 채널에 맞춰 바꾼 것도 센다 — GitHub 의 `\~` 탈출.
+// 채널에 맞춰 바꾼 것도 센다 — GitHub 의 `\~` 이스케이프.
 assert.equal(renderWithReport("약 ~40km", "github-markdown").repairs.escapedChar, 1);
 const rs = new Streamer("slack-markdown");
 rs.push("**열고 안 닫힘");
