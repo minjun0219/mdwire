@@ -137,8 +137,14 @@ pre {
 }
 
 .header-end {
+  align-items: center;
   margin-left: auto;
   font-size: 0.9rem;
+}
+
+/* 머리글의 GitHub 는 글자 대신 아이콘. */
+.header-github {
+  display: inline-flex;
 }
 
 /* 좁은 화면에서도 한 줄 — 줄바꿈되면 고정 머리글이 화면을 너무 먹는다. 영문 메뉴가 더 길어서 375px 에서
