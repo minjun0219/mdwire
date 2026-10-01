@@ -13,12 +13,20 @@ const channels = [
   { id: "slack-markdown", name: "Slack markdown_text", via: "chat.postMessage · markdown_text" },
 ] as const;
 
-interface Repairs {
-  closedEmphasis: number;
-  closedFence: number;
-  revertedCodeSpan: number;
-  droppedMarker: number;
-}
+// 정규화 보고의 열 가지 수 — 앞 넷은 고친 것, 뒤 여섯은 채널에 맞춰 바꾼 것.
+const keys = [
+  "closedEmphasis",
+  "closedFence",
+  "revertedCodeSpan",
+  "droppedMarker",
+  "escapedChar",
+  "tagEmphasis",
+  "strippedHtml",
+  "rewrittenBullet",
+  "rewrittenTable",
+  "convertedMarker",
+] as const;
+type Repairs = Record<(typeof keys)[number], number>;
 
 type Output = { parts: string[]; repairs: Repairs; limit: number } | { error: string };
 
@@ -30,12 +38,18 @@ const text = {
     fromMarkdown: "Markdown",
     fromMrkdwn: "Slack legacy mrkdwn",
     parts: (n: number, max: number) => `${n} ${n === 1 ? "part" : "parts"} · limit ${max.toLocaleString("en")}`,
-    noRepairs: "Nothing to repair",
+    noRepairs: "Nothing repaired or rewritten",
     repairs: {
       closedEmphasis: "closed emphasis",
       closedFence: "closed code fence",
       revertedCodeSpan: "backtick run kept as text",
       droppedMarker: "stray ** dropped",
+      escapedChar: "character escaped",
+      tagEmphasis: "emphasis sent as a tag",
+      strippedHtml: "HTML stripped",
+      rewrittenBullet: "bullet rewritten",
+      rewrittenTable: "table rewritten",
+      convertedMarker: "marker converted",
     },
     empty: "(empty)",
   },
@@ -46,12 +60,18 @@ const text = {
     fromMarkdown: "마크다운",
     fromMrkdwn: "슬랙 레거시 mrkdwn",
     parts: (n: number, max: number) => `조각 ${n}개 · 한도 ${max.toLocaleString("ko")}`,
-    noRepairs: "고친 것 없음",
+    noRepairs: "고치거나 바꾼 것 없음",
     repairs: {
       closedEmphasis: "닫아 준 강조",
       closedFence: "닫아 준 코드펜스",
       revertedCodeSpan: "글자로 되돌린 백틱",
       droppedMarker: "짝이 없어 버린 **",
+      escapedChar: "이스케이프한 글자",
+      tagEmphasis: "태그로 낸 강조",
+      strippedHtml: "걷어 낸 HTML",
+      rewrittenBullet: "바꿔 쓴 불릿",
+      rewrittenTable: "다시 쓴 표",
+      convertedMarker: "바꿔 쓴 마커",
     },
     empty: "(비어 있음)",
   },
@@ -62,12 +82,7 @@ function convert(input: string, channel: string, from: From): Output {
     // wasm 쪽 객체라 읽고 나서 바로 놓는다.
     const out = renderWithReport(input, channel, { from });
     const r = out.repairs;
-    const repairs = {
-      closedEmphasis: r.closedEmphasis,
-      closedFence: r.closedFence,
-      revertedCodeSpan: r.revertedCodeSpan,
-      droppedMarker: r.droppedMarker,
-    };
+    const repairs = Object.fromEntries(keys.map((k) => [k, r[k]])) as Repairs;
     const parts = out.parts;
     r.free();
     out.free();
@@ -149,7 +164,7 @@ export default function ChannelCompare({ lang }: { lang: Locale }) {
 
 function RepairList({ repairs, lang }: { repairs: Repairs; lang: Locale }) {
   const t = text[lang];
-  const fixed = (Object.keys(t.repairs) as (keyof Repairs)[]).filter((k) => repairs[k] > 0);
+  const fixed = keys.filter((k) => repairs[k] > 0);
   if (fixed.length === 0) return <p className={styles.repairs}>{t.noRepairs}</p>;
   return (
     <ul className={styles.repairs}>

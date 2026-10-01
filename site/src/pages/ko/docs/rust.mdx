@@ -3,7 +3,6 @@ layout: ../../../layouts/Doc.astro
 title: Rust
 description: mdwire-core 크레이트 — render, render_with, Options, Streamer, Channel, Dialect, Repairs.
 ---
-import Next from "../../../components/Next.astro";
 
 
 # Rust — `mdwire-core`
@@ -97,8 +96,6 @@ pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, 
 pub enum Dialect { Markdown, SlackMrkdwn }
 ```
 
-`NotionMarkdown` <Next />
-
 | | |
 |---|---|
 | `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …). |
@@ -114,7 +111,7 @@ pub struct Repairs {
     pub closed_fence: usize,
     pub reverted_code_span: usize,
     pub dropped_marker: usize,
-    // 채널에 맞춰 바꾼 것 — 다음 릴리스
+    // 채널에 맞춰 바꾼 것
     pub escaped_char: usize,
     pub tag_emphasis: usize,
     pub stripped_html: usize,
@@ -124,7 +121,7 @@ pub struct Repairs {
 }
 ```
 
-`any()` — 하나라도 고쳤는가(앞 넷). `changed()` <Next /> — 고쳤든 바꿨든 하나라도 했는가. 각 필드가 세는 것:
+`any()` — 하나라도 고쳤는가(앞 넷). `changed()` — 고쳤든 바꿨든 하나라도 했는가. 각 필드가 세는 것:
 [개념](/ko/docs/#정규화-보고).
 
 ## `mdwire::width`

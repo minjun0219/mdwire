@@ -23,8 +23,9 @@ a repair actually happens. Edit the input to break it your own way.
 
 The repair report says how often the model broke its own formatting. Logged per answer, it shows how
 much an agent leans on the normalizer — the CLI's `--batch jsonl` does the same over hundreds of
-answers. The four counters are the ones in 0.1.8; the next release also counts what each channel
-rewrote ([concepts](/docs/#the-repair-report)).
+answers. The first four counters are repairs; the other six count what the channel needed rewritten
+— on `table-cell-overflow` the table is rewritten as well, except on Notion, which gets a `<table>`
+([concepts](/docs/#the-repair-report)).
 
 <details class="code">
 <summary>This demo's code</summary>
@@ -39,6 +40,7 @@ r.closedEmphasis;   // emphasis closed at the end of its block
 r.closedFence;      // fence closed at the end of the document
 r.revertedCodeSpan; // backtick run with no partner, kept as text
 r.droppedMarker;    // stray ** dropped
+r.rewrittenTable;   // … and six counts of what the channel needed rewritten
 r.free();           // both live in WASM memory — free them when done
 out.free();
 ```

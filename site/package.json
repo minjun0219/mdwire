@@ -11,7 +11,7 @@
   "dependencies": {
     "@astrojs/mdx": "^8.0.2",
     "@astrojs/react": "^7.0.0",
-    "@minjun0219/mdwire": "0.1.8",
+    "@minjun0219/mdwire": "0.1.9",
     "astro": "^7.3.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

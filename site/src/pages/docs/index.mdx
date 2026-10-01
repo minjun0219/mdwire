@@ -13,8 +13,8 @@ inputs and gives the same answers; they are held to the same
 [corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases). This page covers what they
 share. The per-language pages list the exact names.
 
-These docs follow `main`. Anything marked <Next /> is not in 0.1.8, the current release on npm,
-crates.io and Go; it ships with the next one.
+These docs follow `main`. Anything marked <Next /> is not in the current release on npm, crates.io
+and Go yet; it ships with the next one.
 
 ## Channels
 
@@ -25,7 +25,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 | `telegram-html` | Telegram `parse_mode: "HTML"`. Nine tags (`b i u s code pre a blockquote tg-spoiler`), no headings or tables — a table goes out as a monospace block. | 4,096 |
 | `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; what is left is repair and splitting. | 12,000 |
 | `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold GFM would not close (before a Korean particle) goes out as `<strong>`. | 65,536 |
-| `notion-markdown` <Next /> | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
+| `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
 | `plain` | Plain text — every marker removed. The fallback. | 12,000 |
 | `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
 
@@ -68,7 +68,7 @@ its own formatting:
 | reverted code span | A backtick run with no partner, kept as text. |
 | dropped marker | A stray `**` dropped (`tail**`, where text comes before it). |
 
-The other six are **channel rewrites** <Next /> — what the channel needed changed before posting:
+The other six are **channel rewrites** — what the channel needed changed before posting:
 
 | Field | Counts |
 |---|---|
@@ -88,7 +88,7 @@ A streamer takes the output token by token and returns what is safe to send now.
   document is long enough to be split into parts.
 - **It holds back only what it must:** a prefix it cannot classify yet, a marker run at the end of
   a chunk, and the inside of emphasis that has not closed. Paragraphs are never held.
-- **Streaming does not split by the limit.** One exception <Next />: a Notion table over the limit
+- **Streaming does not split by the limit.** One exception: a Notion table over the limit
   goes out as several tables with the header repeated, and streaming does the same.
 
 Two ways to send while streaming, depending on the channel:

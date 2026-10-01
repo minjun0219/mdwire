@@ -22,7 +22,7 @@ each one is a failure that actually happened. Edit the input to try your own.
 Telegram gets tags — its HTML mode has no headings or tables, so a table goes out as a
 monospace block. Slack `markdown_text` reads standard Markdown, so the output stays Markdown,
 repaired. In both, unclosed emphasis and fences are closed before sending, and the counts under
-each output say how often the normalizer stepped in.
+each output say what the normalizer repaired and what it rewrote for the channel.
 
 <details class="code">
 <summary>This demo's code</summary>
@@ -33,7 +33,7 @@ import { renderWithReport } from "@minjun0219/mdwire";
 for (const channel of ["telegram-html", "slack-markdown"]) {
   const out = renderWithReport(input, channel, { from: "markdown" }); // or "slack-mrkdwn"
   out.parts;   // what you send — one string unless the limit splits it
-  out.repairs; // closedEmphasis · closedFence · revertedCodeSpan · droppedMarker
+  out.repairs; // closedEmphasis · closedFence · … · convertedMarker — ten counts
   out.free();  // the result lives in WASM memory; free it when done
 }
 ```

@@ -3,7 +3,6 @@ layout: ../../../layouts/Doc.astro
 title: Go
 description: Go 이식 — Render, RenderWith, Options, Streamer, Channel, Repairs. 표준 라이브러리만.
 ---
-import Next from "../../../components/Next.astro";
 
 
 # Go — `github.com/minjun0219/mdwire/go`
@@ -81,7 +80,7 @@ const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML;
 const ( Markdown Dialect = iota; SlackMrkdwn )
 ```
 
-`NotionMarkdown` <Next />. 숫자 값은 `Channels()` 의 순서와 다르다 — 채널을 저장하거나 주고받을 땐
+숫자 값은 `Channels()` 의 순서와 다르다 — 채널을 저장하거나 주고받을 땐
 이름을 쓴다.
 
 | | |
@@ -96,12 +95,12 @@ const ( Markdown Dialect = iota; SlackMrkdwn )
 ```go
 type Repairs struct {
 	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker int
-	// 채널에 맞춰 바꾼 것 — 다음 릴리스
+	// 채널에 맞춰 바꾼 것
 	EscapedChar, TagEmphasis, StrippedHTML, RewrittenBullet, RewrittenTable, ConvertedMarker int
 }
 ```
 
-`Repaired()` <Next /> — 하나라도 고쳤는가(앞 넷). `Changed()` <Next /> — 고쳤든 바꿨든 하나라도 했는가.
+`Repaired()` — 하나라도 고쳤는가(앞 넷). `Changed()` — 고쳤든 바꿨든 하나라도 했는가.
 각 필드가 세는 것: [개념](/ko/docs/#정규화-보고).
 
 ## 표시 폭

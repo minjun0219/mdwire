@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: Go
 description: The Go port — Render, RenderWith, Options, Streamer, Channel and Repairs. Standard library only.
 ---
-import Next from "../../components/Next.astro";
 
 
 # Go — `github.com/minjun0219/mdwire/go`
@@ -82,7 +81,7 @@ const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML;
 const ( Markdown Dialect = iota; SlackMrkdwn )
 ```
 
-`NotionMarkdown` <Next />. The numeric values are not the order of `Channels()`; use names to
+The numeric values are not the order of `Channels()`; use names to
 store or send a channel.
 
 | | |
@@ -97,12 +96,12 @@ store or send a channel.
 ```go
 type Repairs struct {
 	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker int
-	// channel rewrites — next release
+	// channel rewrites
 	EscapedChar, TagEmphasis, StrippedHTML, RewrittenBullet, RewrittenTable, ConvertedMarker int
 }
 ```
 
-`Repaired()` <Next /> — did it repair anything (the first four). `Changed()` <Next /> — did it repair
+`Repaired()` — did it repair anything (the first four). `Changed()` — did it repair
 or rewrite anything. What each field counts: [Concepts](/docs/#the-repair-report).
 
 ## Widths

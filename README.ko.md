@@ -10,8 +10,8 @@ LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보낸다.
 CommonMark 라고 가정하고 한 번에 한 채널만 본다. 에이전트 출력에는 두 가정이 다 맞지
 않는다.
 
-**상태: v0.1.9.** 정규화·렌더·분할·스트리밍이 여섯 대상 — Telegram HTML, Slack
-`markdown_text`, GitHub 코멘트(GFM), 노션 페이지, 평문, 브라우저 HTML — 에서 돈다. Rust 코어, CLI, npm 패키지(WASM), Go 이식이 있다.
+**상태: v0.1.9.** 정규화·렌더·분할·스트리밍이 여섯 대상에서 돈다 — Telegram HTML,
+Slack `markdown_text`, GitHub 코멘트(GFM), 노션 페이지, 평문, 브라우저 HTML. Rust 코어, CLI, npm 패키지(WASM), Go 이식이 있다.
 v0.1 에 든 것과 일부러 미룬 것은 `SPEC.md` 에 있다.
 
 ## 하는 일
@@ -156,7 +156,7 @@ cargo install mdwire-cli           # `mdwire` CLI
 레지스트리를 거치지 않으려면 릴리스마다 붙는 산출물을 바로 받아도 된다.
 
 ```sh
-# npm 패키지 (번들러에서도, 맨 Node 에서도 돈다)
+# npm 패키지 (번들러에서도, 번들러 없는 Node 에서도 돈다)
 npm install https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-0.1.9.tgz
 
 # CLI 바이너리 — macOS(Apple silicon) 또는 Linux(x86_64)
