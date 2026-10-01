@@ -3,10 +3,13 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
+import DocsNav from "../components/DocsNav.astro";
 import "../styles/global.css";
 
 interface Props {
   frontmatter: { title: string; description?: string };
+  // MDX 가 레이아웃에 넘기는 헤딩 목록 — 문서 사이드바의 절 목록이 된다.
+  headings?: { depth: number; slug: string; text: string }[];
 }
 
 const { title, description } = Astro.props.frontmatter;
@@ -26,6 +29,7 @@ const nav = [
 ];
 // `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
 const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
+const isDocs = isCurrent("docs");
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
 const summary = description ?? t.tagline;
 
@@ -124,9 +128,12 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         <a href="https://github.com/minjun0219/mdwire">GitHub</a>
       </div>
     </header>
-    <main class="doc">
-      <slot />
-    </main>
+    <div class:list={["page", { "with-sidebar": isDocs }]}>
+      {isDocs && <DocsNav headings={Astro.props.headings} />}
+      <main class="doc">
+        <slot />
+      </main>
+    </div>
     <footer class="site-footer">
       {t.footer} <a href="https://github.com/minjun0219/mdwire">{t.source}</a>
     </footer>

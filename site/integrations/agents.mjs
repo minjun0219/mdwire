@@ -2,7 +2,7 @@
 //
 // - `sitemap.xml` — 빌드된 페이지 전부, 영어·한국어 짝을 hreflang 으로 묶어서.
 // - 문서의 마크다운 사본 — `/docs/npm/` 은 `/docs/npm.md`. llmstxt.org 의 관례대로 HTML 을 긁지
-//   않고 원문을 읽게 한다. MDX 원본에서 import · 컴포넌트를 걷어 낸 것이다.
+//   않고 원문을 읽게 한다. MDX 원본에서 import 를 걷어 내고 컴포넌트를 글로 바꾼 것이다.
 // - `llms-full.txt` — 영어 문서 사본을 한 파일로. 한 번 받아서 컨텍스트에 넣는 쪽.
 //
 // 사본이 있는 페이지의 규칙은 `src/markdownCopies.ts` — 레이아웃도 같은 규칙으로 `rel="alternate"` 를 단다.
@@ -28,7 +28,7 @@ function toMarkdown(source, { lang, site, url }) {
   for (const line of body.split("\n")) {
     if (line.startsWith("```")) inFence = !inFence;
     if (!inFence) {
-      if (/^import\s/.test(line) || /^<DocsNav\s*\/>$/.test(line.trim())) continue;
+      if (/^import\s/.test(line)) continue;
       lines.push(
         line
           .replaceAll(/<Next\s*\/>/g, `(${ui[lang].next})`)
