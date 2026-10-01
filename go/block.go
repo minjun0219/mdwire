@@ -185,6 +185,7 @@ func (e *engine) clone() *engine {
 	in.scratch = slices.Clone(in.scratch)
 	in.codeSrc = slices.Clone(in.codeSrc)
 	in.strippedTags = slices.Clone(in.strippedTags)
+	in.wrap = nil
 	c.inline = &in
 	c.pending = slices.Clone(e.pending)
 	c.out = slices.Clone(e.out)

@@ -141,6 +141,11 @@ impl Vocab {
         self.channel == Channel::NotionMarkdown
     }
 
+    /// 강조를 줄마다 닫고 다시 여는가. 노션만 그렇다 — 줄을 넘는 마커의 짝을 못 맞춘다.
+    pub fn line_emphasis(&self) -> bool {
+        self.channel == Channel::NotionMarkdown
+    }
+
     /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 —
     /// 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
     pub fn html_emphasis(&self) -> bool {

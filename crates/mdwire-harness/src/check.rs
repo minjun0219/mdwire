@@ -701,7 +701,24 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
         // 마크업을 지우는 채널이라 잴 것이 없다. 여기서 억지로 재면 규칙이 거짓말을 한다.
         return;
     }
-    let want = emphasis::scan_markdown(input, Mode::Repair).spans;
+    let wanted = emphasis::scan_markdown(input, Mode::Repair);
+    let mut want = wanted.spans;
+    // **노션은 강조를 줄마다 닫는다** — 코어가 `**줄을\n넘는**` 을 `**줄을**\n**넘는**` 으로 낸다. 출력을
+    // 이어 붙여 재면 원래 줄마다 따로 쓴 `**a**\n**b**` 까지 하나로 붙어 거짓 실패가 나고, 한 범위로
+    // 보면 줄 사이가 어긋나도 통과한다. 원문 범위를 줄에서 나눠 줄마다 잰다.
+    if channel == Channel::NotionMarkdown {
+        want = want
+            .into_iter()
+            .zip(wanted.raw)
+            .flat_map(|(w, raw)| {
+                raw.split('\n')
+                    .map(emphasis::normalize_ws)
+                    .filter(|t| !t.is_empty())
+                    .map(|text| Span { kind: w.kind, text })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+    }
     if want.is_empty() {
         return;
     }
@@ -1638,4 +1655,17 @@ mod tests {
         assert!(f.iter().any(|x| x.rule == Rule::StrayMarker), "{f:?}");
     }
 
+
+    /// 노션은 원문 범위를 줄에서 나눠 잰다 — 코어가 강조를 줄마다 닫는다.
+    #[test]
+    fn notion_measures_emphasis_per_line() {
+        let f = check("**줄을\n넘는 굵게**", "**줄을**\n**넘는 굵게**", Channel::NotionMarkdown);
+        assert!(f.is_empty(), "{f:?}");
+        // 원래 줄마다 따로 쓴 강조는 그대로 통과한다(한 범위로 이으면 거짓 실패였다).
+        let f = check("**a**\n**b**", "**a**\n**b**", Channel::NotionMarkdown);
+        assert!(f.is_empty(), "{f:?}");
+        // 한 줄의 강조를 잃으면 잡는다.
+        let f = check("**줄을\n넘는 굵게**", "**줄을**\n넘는 굵게", Channel::NotionMarkdown);
+        assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+    }
 }

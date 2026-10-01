@@ -176,6 +176,9 @@ func (v vocab) htmlEmphasis() bool { return v.channel == GithubMarkdown }
 // 그린다. \n 으로 바꾸면 인용이 둘로 갈리고 강조가 줄을 넘는다.
 func (v vocab) keepsBr() bool { return v.channel == NotionMarkdown }
 
+// lineEmphasis 는 강조를 줄마다 닫고 다시 여는가다. 노션만 — 줄을 넘는 마커의 짝을 못 맞춘다.
+func (v vocab) lineEmphasis() bool { return v.channel == NotionMarkdown }
+
 func (v vocab) openHTML(e emph) string {
 	if e >= emphTag {
 		return inlineTags[e-emphTag][1]

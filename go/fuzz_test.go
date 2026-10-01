@@ -275,3 +275,22 @@ func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 		}
 	}
 }
+
+// 노션은 강조를 줄마다 닫는다 — 러스트 쪽 notion_closes_emphasis_at_each_line.
+func TestNotionClosesEmphasisAtEachLine(t *testing.T) {
+	cases := [][2]string{
+		{"**줄을\n넘는 굵게**와 끝", "**줄을**\n**넘는 굵게**와 끝"},
+		{"> **인용\n> 안의** 굵게", "> **인용**\n> **안의** 굵게"},
+		{"- **항목\n  이어짐** 끝\n- 둘", "- **항목**\n  **이어짐** 끝\n- 둘"},
+		{"*기울임 **굵게\n이어짐** 끝*", "*기울임 **굵게***\n***이어짐** 끝*"},
+		{"`코드\n이어짐`", "`코드`\n`이어짐`"},
+		{"`a``\nb`", "``` a`` ```\n`b`"},
+		{"**[링크\n이어](http://x.com)**", "**[링크**\n**이어](http://x.com)**"},
+		{"**끝 \n다음**", "**끝**\n**다음**"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(Render(c[0], NotionMarkdown), ""); got != c[1] {
+			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+	}
+}

@@ -55,6 +55,9 @@ pub struct Scan {
     /// 마커 글자별로 **글자로 남긴** 개수. 참조 모델도 강조로 읽지 않은 별표(마스킹 번호
     /// `4***-****`)는 출력에 글자로 남아도 결함이 아니다 — 남은 마커 검사가 예산으로 쓴다.
     pub literal: std::collections::HashMap<char, usize>,
+    /// `spans` 와 같은 순서로, 공백을 접기 전의 범위 글. 줄바꿈이 남아 있다 — 강조를 줄마다 닫는
+    /// 채널(노션)은 원문 범위를 줄에서 나눠 재야 해서 둔다.
+    pub raw: Vec<String>,
 }
 
 /// 짝짓기 모드.
@@ -310,6 +313,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             let run = run_len(&ch, i, '`');
             if let Some(close) = find_run(&ch, i + run, '`', run) {
                 let text: String = ch[i + run..close].iter().collect();
+                scan.raw.push(text.to_string());
                 scan.spans.push(Span { kind: Kind::Code, text: normalize_ws(&text) });
                 push_text(&mut stack, &mut root, &text);
                 i = close + run;
@@ -407,6 +411,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 while stack.len() > at + 1 {
                     let inner = stack.pop().expect("at 보다 위에 있다");
                     if !inner.guess && !inner.buf.trim().is_empty() {
+                        scan.raw.push(inner.buf.to_string());
                         scan.spans.push(Span { kind: inner.kind, text: normalize_ws(&inner.buf) });
                     }
                     let text = if inner.guess { format!("{}{}", inner.marker, inner.buf) } else { inner.buf };
@@ -475,6 +480,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         } else {
             // SPEC 6절 — 안 닫힌 강조는 닫는다. 범위는 블록 끝까지다.
             if !open.buf.trim().is_empty() {
+                scan.raw.push(open.buf.to_string());
                 scan.spans.push(Span { kind: open.kind, text: normalize_ws(&open.buf) });
             }
             let buf = open.buf;
@@ -488,6 +494,7 @@ fn close_to(stack: &mut Vec<Open>, root: &mut String, at: usize, scan: &mut Scan
     while stack.len() > at + 1 {
         let inner = stack.pop().expect("at 보다 위에 있다");
         if !inner.guess && !inner.buf.trim().is_empty() {
+            scan.raw.push(inner.buf.to_string());
             scan.spans.push(Span { kind: inner.kind, text: normalize_ws(&inner.buf) });
         }
         let text = if inner.guess { format!("{}{}", inner.marker, inner.buf) } else { inner.buf };
@@ -495,6 +502,7 @@ fn close_to(stack: &mut Vec<Open>, root: &mut String, at: usize, scan: &mut Scan
     }
     let open = stack.pop().expect("at 은 유효한 인덱스다");
     if !open.buf.trim().is_empty() {
+        scan.raw.push(open.buf.to_string());
         scan.spans.push(Span { kind: open.kind, text: normalize_ws(&open.buf) });
     }
     let buf = open.buf;
@@ -684,6 +692,7 @@ pub fn scan_html(src: &str) -> Scan {
 fn record(scan: &mut Scan, kind: Option<Kind>, buf: &str) {
     if let Some(k) = kind {
         if !buf.trim().is_empty() {
+            scan.raw.push(buf.to_string());
             scan.spans.push(Span { kind: k, text: normalize_ws(buf) });
         }
     }

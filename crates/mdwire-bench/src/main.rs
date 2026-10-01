@@ -463,6 +463,32 @@ mod gate {
         assert_eq!(counts.allocs, 0, "GitHub 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
 
+    /// **노션만 도는 경로도 할당하지 않는다** — `*`·`\` 탈출, 줄마다 닫는 강조(인용·목록 안 포함),
+    /// 살려 둔 `<br>`. 위 게이트의 산문에는 이 셋이 없다.
+    #[test]
+    fn notion_prose_streaming_is_allocation_free_once_warm() {
+        let unit = "카드 1***-001* 과 백슬래시 \\ 하나. **배포를 금요일에\n하지 않는다** 이고\n\
+                    > **인용\n> 안의** 굵게와 줄<br>바꿈.\n\n- **항목\n  이어짐** 끝, `a``\nb` 코드\n\n";
+        let doc = unit.repeat(12);
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::NotionMarkdown);
+        let mut out = String::new();
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        assert!(out.contains("\\*\\*\\*") && out.contains("금요일에**\n**하지"), "재는 경로를 실제로 탔다: {out}");
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "노션 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
+
     /// **브라우저 채널만 도는 경로도 할당하지 않는다** — 문단·헤딩 태그, 목록 스택, `<br>`,
     /// 원문 인라인 태그. 위 두 게이트의 산문으로는 이 경로를 안 탄다.
     #[test]
