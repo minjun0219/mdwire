@@ -46,8 +46,8 @@ Workers Builds 설정(대시보드):
 | Root directory | `site` |
 | Build command | `pnpm run build` |
 | Deploy command | `npx wrangler deploy` (기본값) |
-| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview` |
-| Build watch paths | 포함 `site/**` — `*` 는 `/` 를 넘지 않아 최상위 파일만 잡는다 |
+| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview`. 프리뷰는 따로 기본 설정(Previews Base configuration)을 쓰니 거기에도 빌드 명령을 넣는다 |
+| Build watch paths | 포함 `site/**` (저장소 루트 기준) |
 | Production branch | `main` |
 
 빌드 명령은 대시보드에 꼭 넣는다 — `wrangler.jsonc` 의 `build.command` 는 로컬 `wrangler deploy` · `wrangler dev` 용이고,
