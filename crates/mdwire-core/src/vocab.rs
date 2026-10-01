@@ -158,6 +158,12 @@ impl Vocab {
         self.channel == Channel::GithubMarkdown
     }
 
+    /// 마커가 못 읽히는 자리에서 마커 안쪽에 워드 조이너를 끼우는가. 슬랙만 그렇다 — 태그를
+    /// 못 쓰고, 조이너를 끼우면 그 짝을 강조로 읽는다(실측 2026-10-01).
+    pub fn joiner_emphasis(&self) -> bool {
+        self.channel == Channel::SlackMarkdown
+    }
+
     pub fn open_html(&self, e: Emph) -> &'static str {
         match e {
             Emph::Bold => "<strong>",

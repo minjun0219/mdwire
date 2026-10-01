@@ -76,7 +76,7 @@ type Repairs struct {
 	DroppedMarker int
 	// EscapedChar 는 채널이 구문으로 읽을 글자를 이스케이프한 수다(GitHub 의 \~·\<·\*).
 	EscapedChar int
-	// TagEmphasis 는 마커 대신 태그로 낸 강조다(GitHub 의 <strong>).
+	// TagEmphasis 는 채널이 마커로 못 읽는 자리라 다르게 낸 강조다 — GitHub 의 <strong>, 슬랙의 워드 조이너.
 	TagEmphasis int
 	// StrippedHTML 은 벗긴 원문 HTML 이다 — 태그, 주석, 줄바꿈으로 바꾼 <br>.
 	StrippedHTML int
