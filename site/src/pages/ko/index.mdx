@@ -3,6 +3,7 @@ layout: ../../layouts/Doc.astro
 title: 텔레그램 · 슬랙 · GitHub 로 가는 LLM 마크다운
 description: LLM 이 쓴 마크다운을 깨지지 않게 텔레그램 · 슬랙 · GitHub 로 보냅니다. 고치고, 채널에 맞게 렌더링하고, 길이 제한 안에서 나눕니다. 스트리밍도 됩니다. Rust · npm(WASM) · Go · CLI.
 ---
+import Badges from "../../components/Badges.astro";
 
 # LLM 마크다운을 깨지지 않게 채팅 채널로
 
@@ -41,6 +42,8 @@ LLM 마크다운  →  정규화  →  채널별 렌더링  →  안전한 분�
 - [깨진 마크다운 고치기](/ko/demo/repair/): 깨진 에이전트 출력을 고치기 전과 후로 비교합니다.
 
 ## 설치
+
+<Badges />
 
 ```sh
 npm install @minjun0219/mdwire     # npm — 번들러, Node, Bun

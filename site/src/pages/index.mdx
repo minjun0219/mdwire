@@ -3,6 +3,7 @@ layout: ../layouts/Doc.astro
 title: LLM Markdown for Telegram, Slack and GitHub
 description: Send LLM-generated Markdown to Telegram, Slack and GitHub without it breaking — repaired, rendered for each channel and split within its limit, streaming included. Rust, npm (WASM), Go and a CLI.
 ---
+import Badges from "../components/Badges.astro";
 
 # Send LLM Markdown to chat channels without it breaking
 
@@ -42,6 +43,8 @@ The [demos](/demo/) run the npm package in your browser: one agent answer
 [before and after repair](/demo/repair/).
 
 ## Install
+
+<Badges />
 
 ```sh
 npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun

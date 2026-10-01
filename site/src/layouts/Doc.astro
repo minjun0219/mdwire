@@ -139,7 +139,12 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
       </main>
     </div>
     <footer class="site-footer">
-      {t.footer} <a href="https://github.com/minjun0219/mdwire">{t.source}</a>
+      <p class="footer-links">
+        <a href="https://github.com/minjun0219/mdwire">GitHub</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/minjun0219/mdwire/blob/main/LICENSE">{t.license}</a>
+      </p>
+      <p class="footer-by">by <a href="https://minjun.kim">minjun.kim</a></p>
     </footer>
   </body>
 </html>

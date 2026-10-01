@@ -22,6 +22,8 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
+- 레지스트리 배지(`src/components/Badges.astro`)는 shields.io 이미지라 버전을 손으로 고치지 않는다. 홈은 전부, 언어별
+  문서는 그 언어 것만 싣는다. 마크다운 사본에서는 뺀다.
 - 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.
 
 한국어 페이지의 본문 글꼴은 Pretendard 다(`pretendard` 패키지, OFL-1.1). `layouts/Doc.astro` 가 유니코드 범위로 나뉜

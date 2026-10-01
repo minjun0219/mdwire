@@ -31,6 +31,8 @@ function toMarkdown(source, { lang, site, url }) {
       if (/^import\s/.test(line)) continue;
       // 글꼴 같은 겉모양만 바꾸는 감싸개(`<div class="hangul-mono">`)는 사본에서 뺀다.
       if (/^<\/?div\b[^>]*>$/.test(line)) continue;
+      // 배지 줄은 이미지 링크뿐이라 사본에서 뺀다 — 패키지 주소는 본문에 있다.
+      if (/^<Badges\b.*\/>$/.test(line)) continue;
       lines.push(
         line
           .replaceAll(/<Next\s*\/>/g, `(${ui[lang].next})`)

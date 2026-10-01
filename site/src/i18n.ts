@@ -11,8 +11,7 @@ export const ui = {
     demo: { index: "All demos", channels: "Telegram vs Slack", streaming: "Streaming", repair: "Before and after repair" },
     next: "next release",
     switchTo: "한국어",
-    source: "Source",
-    footer: "MIT licensed.",
+    license: "MIT License",
   },
   ko: {
     tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환하는 브리지.",
@@ -22,8 +21,7 @@ export const ui = {
     demo: { index: "데모 목록", channels: "Telegram vs Slack", streaming: "Streaming", repair: "깨진 마크다운 고치기" },
     next: "다음 릴리스",
     switchTo: "English",
-    source: "소스",
-    footer: "MIT 라이선스.",
+    license: "MIT 라이선스",
   },
 } as const satisfies Record<Locale, unknown>;
 
