@@ -30,6 +30,24 @@ monospace block. Slack `markdown_text` reads standard Markdown, so the output st
 repaired. In both, unclosed emphasis and fences are closed before sending, and the counts under
 each output say how often the normalizer stepped in.
 
+<details class="code">
+<summary>This demo's code</summary>
+
+```ts
+import { renderWithReport } from "@minjun0219/mdwire";
+
+for (const channel of ["telegram-html", "slack-markdown"]) {
+  const out = renderWithReport(input, channel, { from: "markdown" }); // or "slack-mrkdwn"
+  out.parts;   // what you send — one string unless the limit splits it
+  out.repairs; // closedEmphasis · closedFence · revertedCodeSpan · droppedMarker
+  out.free();  // the result lives in WASM memory; free it when done
+}
+```
+
+Full component: [`site/src/components/ChannelCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/ChannelCompare.tsx).
+
+</details>
+
 <h2 id="streaming">Streaming</h2>
 
 The same answer, cut into the same tokens, streamed into five renderers at once. It starts when this
@@ -61,3 +79,32 @@ this sample at a 60 ms token interval the longest pause was 1,389 ms against 302
 preview — which is why the preview is the default. See the
 [bridge section of DESIGN.md](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md) (Korean).
 The sample answer is synthetic, but each of its shapes broke in real agent output.
+
+<details class="code">
+<summary>This demo's code</summary>
+
+```tsx
+import { Streamer } from "@minjun0219/mdwire";
+import { useMarkdownStream } from "@minjun0219/mdwire/react";
+import { Streamdown } from "streamdown";
+
+// the bridge — normalize with mdwire, draw with Streamdown
+const s = new Streamer("github-markdown");
+let done = "";
+for (const token of tokens) {
+  done += s.push(token);              // final; never rewritten
+  setText(done + s.preview());        // + what is still held, drawn as if the input ended here
+}
+done += s.finish();
+setText(done);
+// <Streamdown>{text}</Streamdown>
+
+// or draw straight from React, without innerHTML
+const live = useMarkdownStream();                     // draws held content early (default)
+const settled = useMarkdownStream({ eager: false });  // only what is final
+// tokens → live.push(token) … live.finish();  render {live.elements}
+```
+
+Full component: [`site/src/components/StreamCompare.tsx`](https://github.com/minjun0219/mdwire/blob/main/site/src/components/StreamCompare.tsx). The same comparison as a standalone Vite app, with the bundler settings for loading the WASM: [`examples/react-streaming`](https://github.com/minjun0219/mdwire/tree/main/examples/react-streaming).
+
+</details>
