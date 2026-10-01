@@ -561,6 +561,22 @@ impl Inline {
             out.push_str(v.close_html(open.emph));
             return;
         }
+        // **슬랙은 태그가 없어서 마커 안쪽에 U+2060(워드 조이너)을 끼운다.** 슬랙 `markdown_text` 도
+        // 같은 자리에서 별표째 글자로 남겼다(실측 2026-10-01). 닫는 마커 바로 앞 글자가 공백도
+        // 구두점도 아니면 닫히고, 워드 조이너가 그런 글자다 — 보이지 않고, U+200B 와 달리 그
+        // 자리에서 줄을 가르지 않는다. 못 읽는 쪽에만 넣는다.
+        if v.joiner_emphasis() && open.emph != Emph::Code {
+            let (left, right) = gfm_sides(open.before, &out[open.at..], after);
+            if !(left && right) {
+                self.repairs.tag_emphasis += 1;
+                if !right {
+                    out.push(WORD_JOINER);
+                }
+                if !left {
+                    out.insert(open.at, WORD_JOINER);
+                }
+            }
+        }
         // 마크다운을 내는 채널에서 원문과 다른 마커로 썼으면 센다 — `_기울임_` → `*`, `__굵게__` → `**`.
         if !v.html_out() && !v.is_plain() && open.emph != Emph::Code {
             let written = v.open(open.emph);
@@ -776,17 +792,27 @@ impl Inline {
 /// 붙은 태그나 주석이 벗겨지면(`**x.**<font>y`) 출력의 이웃은 그 너머 글자가 된다. 태그
 /// 너머를 보려면 조각을 더 붙들어야 해서, 그 자리는 판정 없이 태그로 낸다.
 fn gfm_pairs(before: Option<char>, body: &str, after: Option<char>) -> bool {
-    if before == Some('>') || after == Some('<') {
-        return false;
-    }
-    let punct = |c: char| !c.is_alphanumeric() && !c.is_whitespace();
-    let (Some(first), Some(last)) = (body.chars().next(), body.chars().next_back()) else {
-        return true;
-    };
-    let left = !first.is_whitespace() && (!punct(first) || before.is_none_or(|b| b.is_whitespace() || punct(b)));
-    let right = !last.is_whitespace() && (!punct(last) || after.is_none_or(|a| a.is_whitespace() || punct(a)));
+    let (left, right) = gfm_sides(before, body, after);
     left && right
 }
+
+/// [`gfm_pairs`] 를 양쪽으로 나눠 본다 — (여는 마커가 열리는가, 닫는 마커가 닫히는가).
+fn gfm_sides(before: Option<char>, body: &str, after: Option<char>) -> (bool, bool) {
+    let punct = |c: char| !c.is_alphanumeric() && !c.is_whitespace();
+    let (Some(first), Some(last)) = (body.chars().next(), body.chars().next_back()) else {
+        return (true, true);
+    };
+    let left = before != Some('>')
+        && !first.is_whitespace()
+        && (!punct(first) || before.is_none_or(|b| b.is_whitespace() || punct(b)));
+    let right = after != Some('<')
+        && !last.is_whitespace()
+        && (!punct(last) || after.is_none_or(|a| a.is_whitespace() || punct(a)));
+    (left, right)
+}
+
+/// 슬랙에서 마커가 못 읽히는 자리에 끼우는 글자. 보이지 않고 줄도 가르지 않는다.
+const WORD_JOINER: char = '\u{2060}';
 
 /// 강조 범위를 **줄마다** 감싼다 — `at` 부터 끝까지가 범위다. 줄 끝에서 닫고, 다음 줄은 블록 층이
 /// 쓴 접두사(`> `·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로 뺀다 — 공백 뒤의

@@ -176,6 +176,10 @@ func (v vocab) open(e emph) string {
 // 그렇다 — 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
 func (v vocab) htmlEmphasis() bool { return v.channel == GithubMarkdown }
 
+// joinerEmphasis 는 마커가 못 읽히는 자리에서 마커 안쪽에 워드 조이너를 끼우는가다. 슬랙만 —
+// 태그를 못 쓰고, 조이너를 끼우면 그 짝을 강조로 읽는다(실측 2026-10-01).
+func (v vocab) joinerEmphasis() bool { return v.channel == SlackMarkdown }
+
 // keepsBr 는 원문의 <br> 을 그대로 두는가다(칸 안이든 밖이든). 노션만 — 한 블록 안의 줄바꿈으로
 // 그린다. \n 으로 바꾸면 인용이 둘로 갈리고 강조가 줄을 넘는다.
 func (v vocab) keepsBr() bool { return v.channel == NotionMarkdown }

@@ -859,8 +859,11 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
     assert_eq!(g("**`코드`**였다"), "<strong>`코드`</strong>였다");
     // GFM 이 읽는 자리는 마커 그대로다 — 원문을 되도록 그대로 둔다.
     assert_eq!(g("**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤"), "**마통**이 · **(중요)** 다 · 앞 **\"인용\"** 뒤");
-    // 슬랙은 재 본 적이 없어 그대로 둔다.
-    assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)**을");
+    // 슬랙은 태그가 없어 못 읽히는 쪽 마커 안쪽에 U+2060 을 끼운다(실측 2026-10-01). 노션은 그대로 그린다.
+    assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)\u{2060}**을");
+    assert_eq!(one("①**\"인용\" 끝**", Channel::SlackMarkdown), "①**\u{2060}\"인용\" 끝**");
+    assert_eq!(one("**마통**이 · **(중요)** 다", Channel::SlackMarkdown), "**마통**이 · **(중요)** 다");
+    assert_eq!(one("**설정(config)**을", Channel::NotionMarkdown), "**설정(config)**을");
     // 마커에 붙은 태그·주석이 벗겨지면 출력의 이웃이 바뀐다 — 그 자리는 태그로 낸다.
     assert_eq!(g("**x.**<font color=red>y</font> 끝"), "<strong>x.</strong>y 끝");
     assert_eq!(g("a<!-- c -->**(x** 끝"), "a<strong>(x</strong> 끝");

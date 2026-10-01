@@ -132,7 +132,7 @@ pub struct Repairs {
     /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
-    /// 마커 대신 태그로 낸 강조(GitHub 의 `<strong>`).
+    /// 채널이 마커로 못 읽는 자리라 다르게 낸 강조(GitHub 의 `<strong>`, 슬랙의 U+2060).
     #[wasm_bindgen(js_name = tagEmphasis)]
     pub tag_emphasis: usize,
     /// 벗긴 원문 HTML(태그·주석·줄바꿈으로 바꾼 `<br>`).

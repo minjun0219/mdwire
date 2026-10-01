@@ -356,7 +356,7 @@ fn seam_words(output: &str) -> HashSet<String> {
 /// `금요일에` 한 낱말이라 사라진 것으로 잡힌다. 한국어는 조사가 붙어서 특히 그렇다.
 /// 마커이거나 우리가 끼운 글자. 낱말을 셀 때는 없는 셈 친다.
 fn is_marker(c: char) -> bool {
-    matches!(c, '*' | '_' | '~' | '`' | '\u{200b}')
+    matches!(c, '*' | '_' | '~' | '`' | '\u{200b}' | '\u{2060}')
 }
 
 fn bare(text: &str, seam: Seam) -> String {

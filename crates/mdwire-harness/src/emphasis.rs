@@ -85,7 +85,8 @@ pub fn normalize_ws(s: &str) -> String {
     for c in s.chars() {
         // 폭 없는 공백은 **지운다.** 공백으로 접으면 `굵은 것`+ZWSP+`이` 가
         // `굵은 것 이` 가 되어, CJK 패딩을 넣은 출력이 입력과 안 맞는 것으로 나온다.
-        if c == '\u{200b}' {
+        // 워드 조이너(U+2060)도 같다 — 슬랙에서 못 읽히는 마커 안쪽에 끼운다.
+        if matches!(c, '\u{200b}' | '\u{2060}') {
             continue;
         }
         if c.is_whitespace() {

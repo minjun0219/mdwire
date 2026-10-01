@@ -175,7 +175,8 @@ pub struct Repairs {
     pub dropped_marker: usize,
     /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
     pub escaped_char: usize,
-    /// 마커 대신 태그로 낸 강조 — GitHub 이 마커로 못 읽는 자리(`**「설정」**가`)의 `<strong>`.
+    /// 채널이 마커로 못 읽는 자리(`**「설정」**가`)라 다르게 낸 강조 — GitHub 은 `<strong>`, 슬랙은 마커 안쪽에
+    /// 끼운 U+2060.
     pub tag_emphasis: usize,
     /// 벗긴 원문 HTML — 그 채널이 못 그리는 태그, 주석, 줄바꿈으로 바꾼 `<br>`.
     pub stripped_html: usize,
