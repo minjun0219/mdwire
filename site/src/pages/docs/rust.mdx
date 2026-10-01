@@ -84,7 +84,7 @@ assert!(!s.revised());                                       // the last frame w
 | `push(&mut self, chunk) -> &str` | What is safe to send now; borrowed until the next call. |
 | `push_into(&mut self, chunk, out: &mut String)` | The same, appended to your buffer — no allocation per chunk. |
 | `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | The rest, with open markup closed. |
-| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | The tail to append when redrawing the whole message. Costs as much as the open block; call it when you draw. |
+| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | The tail to append when redrawing the whole message. Its cost grows with the open blocks; call it only when you redraw. |
 | `close_open(&self, out: &mut String)` | Appends only the closers for block markup already sent. |
 | `revised(&self) -> bool` | After `finish`: does the result differ from the last `preview`? `true` means "may differ". |
 | `repairs(&self) -> Repairs` | What was repaired so far. |

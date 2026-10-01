@@ -25,8 +25,8 @@ caught it.
   GitHub (GFM), which reads a single `~` as strikethrough, pairs them and strikes everything in between
   (`40km, 5`).
 
-Existing converters guess at Korean-adjacent emphasis (one pads it with U+200B, another leaves it alone) and
-neither checked the channel. mdwire measured each channel: on GitHub it writes just that bold as `<strong>`
+The two converters we compared disagree on Korean-adjacent emphasis (one pads it with U+200B, the other
+leaves it alone), and neither checked the channel. mdwire measured each channel: on GitHub it writes just that bold as `<strong>`
 and escapes a literal `~` as `\~`.
 
 ## Chat-channel converters ignore streaming

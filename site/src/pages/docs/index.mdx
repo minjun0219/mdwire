@@ -9,11 +9,11 @@ import Next from "../../components/Next.astro";
 # Concepts
 
 Every front end — the Rust core, the npm package, the Go implementation and the CLI — takes the same
-inputs and gives the same answers; they are held to the same
+inputs and produces the same output; they are held to the same
 [test cases](https://github.com/minjun0219/mdwire/tree/main/corpus/cases). This page covers what they
 share. The per-language pages list the exact names.
 
-These docs follow `main`. Anything marked <Next /> is not in the current release on npm, crates.io
+These docs track the `main` branch. Anything marked <Next /> is not in the current release on npm, crates.io
 and Go yet; it ships with the next one.
 
 ## Channels
@@ -23,14 +23,14 @@ A channel is where the output goes. Its name is the same string everywhere.
 | Name | Goes to | Limit |
 |---|---|---|
 | `telegram-html` | Telegram `parse_mode: "HTML"`. Nine tags (`b i u s code pre a blockquote tg-spoiler`), no headings or tables — a table goes out as a monospace block. | 4,096 |
-| `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; what is left is repair and splitting. | 12,000 |
-| `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold GFM would not close (before a Korean particle) goes out as `<strong>`. | 65,536 |
+| `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire only repairs and splits. | 12,000 |
+| `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold that GFM would not close (before a Korean particle) is written as `<strong>`. | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
 | `plain` | Plain text — every marker removed. The fallback. | 12,000 |
 | `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
 
 The limit is a character count on the rendered output. The sender can set its own (see
-[options](#options)) — `plain` sent to Telegram has to fit 4,096.
+[options](#options)). For example, `plain` sent to Telegram has to fit 4,096.
 
 ## Options
 
@@ -60,10 +60,10 @@ The other six are **channel rewrites** — what the channel needed changed befor
 | Field | Counts |
 |---|---|
 | escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`). |
-| tag emphasis | Emphasis written as a tag instead of markers — GitHub's `<strong>`. |
+| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's `<strong>`, or an invisible U+2060 inside Slack's markers <Next />. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
-| rewritten table | Tables rewritten (separator and cell spacing, or down to monospace). |
+| rewritten table | Tables rewritten (separator and cell spacing, or turned into a monospace block). |
 | converted marker | Emphasis and links respelled — `_italic_` → `*italic*`, `__bold__` → `**bold**`, `<url\|text>` → `[text](url)`. Markdown channels only. |
 
 ## The streaming contract
@@ -74,7 +74,7 @@ A streamer takes the output token by token and returns what is safe to send now.
   tail. So the pieces concatenated equal a one-shot render, whatever the chunk size — unless the
   document is long enough to be split into parts.
 - **It holds back only what it must:** a prefix it cannot classify yet, a marker run at the end of
-  a chunk, and the inside of emphasis that has not closed. Paragraphs are never held.
+  a chunk, and the inside of emphasis that has not closed. A whole paragraph is never held.
 - **Streaming does not split by the limit.** One exception: a Notion table over the limit
   goes out as several tables with the header repeated, and streaming does the same.
 

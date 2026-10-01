@@ -22,7 +22,7 @@ from disk, everything else gets the ESM bundler build. **Under a bundler** the W
 ES module — Vite needs `vite-plugin-wasm` and `build.target: "esnext"` (for the top-level `await`).
 See [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js).
 
-Channel names are the strings on [Concepts](/docs/).
+Channel names are the strings listed on [Concepts](/docs/).
 
 ## `render(input, channel, options?)`
 
@@ -124,7 +124,7 @@ const settled = useMarkdownStream({ eager: false });        // only what is fina
 | | |
 |---|---|
 | `<Markdown text components? options? />` | A finished answer. `components` maps a tag (`a`, `code`, …) to your component. |
-| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | Streaming. Returns `{ elements, push, finish }`. `eager` (default `true`) draws held content early; `false` shows only what is final. `onSettled(html, revised)` runs after `finish`. Read once, except `onSettled`. |
+| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | Streaming. Returns `{ elements, push, finish }`. `eager` (default `true`) draws held content early; `false` shows only what is final. `onSettled(html, revised)` runs after `finish`. Options are read once, except `onSettled`. |
 | `toElements(html, components?, schemes?)` | `html` channel output (streaming: accumulated output + `preview()`) to React nodes. Pass the same `schemes` you gave the core. |
 
 ## Events — `@minjun0219/mdwire/events`

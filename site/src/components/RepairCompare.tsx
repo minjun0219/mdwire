@@ -49,7 +49,7 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
     ko: "“채널” 뒤의 ** 는 짝이 없습니다. 정규식 기반 변환기는 이를 다음 ** 와 짝지어 굵게 범위를 뒤집습니다(표본 60개 중 28개). mdwire 는 짝 없는 마커를 버리고 진짜 굵게만 남깁니다.",
   },
   "unclosed-code-fence": {
-    en: "The answer ended inside a fence (cut off at the token limit). Sent as is, <pre> stays open: the channel rejects it or swallows whatever follows. Closed right before output.",
+    en: "The answer ended inside a fence (cut off at the token limit). Sent as is, <pre> stays open: the channel rejects it or swallows whatever follows. mdwire closes it right before output.",
     ko: "답이 코드펜스 안에서 끝났습니다(토큰 한도에서 잘림). 그대로 보내면 <pre> 가 열린 채라 채널이 거절하거나 뒤의 내용을 통째로 삼킵니다. mdwire 는 출력 직전에 닫습니다.",
   },
   "unpaired-backtick-run": {
@@ -79,7 +79,7 @@ const text = {
       revertedCodeSpan: ["revertedCodeSpan", "backtick run with no partner, kept as text"],
       droppedMarker: ["droppedMarker", "stray ** with nothing to pair with, dropped"],
       escapedChar: ["escapedChar", "characters the channel would read as syntax, escaped"],
-      tagEmphasis: ["tagEmphasis", "emphasis sent as a tag instead of markers (GitHub <strong>)"],
+      tagEmphasis: ["tagEmphasis", "emphasis the channel cannot read as markers, written another way (GitHub <strong>, Slack U+2060)"],
       strippedHtml: ["strippedHtml", "source HTML the channel cannot draw, stripped"],
       rewrittenBullet: ["rewrittenBullet", "list markers rewritten for the channel"],
       rewrittenTable: ["rewrittenTable", "tables rewritten (rows tidied, or a monospace block)"],
@@ -104,7 +104,7 @@ const text = {
       revertedCodeSpan: ["revertedCodeSpan", "짝 없는 연속된 백틱을 텍스트로 되돌렸습니다"],
       droppedMarker: ["droppedMarker", "짝이 없는 ** 를 버렸습니다"],
       escapedChar: ["escapedChar", "채널이 구문으로 읽을 글자를 이스케이프했습니다"],
-      tagEmphasis: ["tagEmphasis", "강조를 마커 대신 태그로 출력했습니다(GitHub 의 <strong>)"],
+      tagEmphasis: ["tagEmphasis", "마커로 읽히지 않는 강조를 다르게 출력했습니다(GitHub 의 <strong>, 슬랙의 U+2060)"],
       strippedHtml: ["strippedHtml", "채널이 렌더링하지 못하는 원문 HTML 을 제거했습니다"],
       rewrittenBullet: ["rewrittenBullet", "목록 기호를 채널에 맞게 바꿨습니다"],
       rewrittenTable: ["rewrittenTable", "표를 다시 썼습니다(줄 정리 또는 고정폭 블록)"],

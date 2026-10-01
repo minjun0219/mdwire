@@ -3,6 +3,7 @@ layout: ../../../layouts/Doc.astro
 title: 사례
 description: 에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장과 mdwire 가 대신 보내는 결과를 모았습니다.
 ---
+import Next from "../../../components/Next.astro";
 
 # 사례
 
@@ -35,20 +36,23 @@ mdwire
 ## 기호로 끝나는 굵게 뒤의 조사
 
 한국어는 강조 바로 뒤에 조사가 붙습니다. 굵게가 괄호, 따옴표, 백틱, 마침표로 끝나면 CommonMark
-규칙상 닫는 `**` 가 닫히지 않습니다. GitHub 에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이 엇갈려
-범위가 뒤집힙니다.
+규칙상 닫는 `**` 가 닫히지 않습니다. GitHub 과 슬랙에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이
+엇갈려 범위가 뒤집힙니다.
 
 ```text
 입력
   마감 전에 **설정(config)**을 바꾸고, **"배포 금지"**는 금요일까지 유지한다.
 GitHub
   마감 전에 <strong>설정(config)</strong>을 바꾸고, <strong>"배포 금지"</strong>는 금요일까지 유지한다.
+슬랙
+  마감 전에 **설정(config)⁠**을 바꾸고, **"배포 금지"⁠**는 금요일까지 유지한다.
 텔레그램
   마감 전에 <b>설정(config)</b>을 바꾸고, <b>"배포 금지"</b>는 금요일까지 유지한다.
 ```
 
 mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 내보냅니다. 태그는 이 규칙과
-상관없이 렌더링되기 때문입니다. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+상관없이 렌더링되기 때문입니다. 슬랙은 태그를 쓸 수 없어서 닫는 `**` 바로 앞에 보이지 않는 U+2060(워드
+조이너)을 넣습니다. 겉보기는 입력과 같지만 슬랙이 굵게로 렌더링합니다 <Next />. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## 범위와 근사값의 물결표
 

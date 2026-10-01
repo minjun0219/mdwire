@@ -10,7 +10,7 @@ import StreamCompare from "../../components/StreamCompare.tsx";
 The same answer, cut into the same tokens, streamed into five renderers at once. It starts when the
 panels scroll into view. Watch for three things: a half marker (`**bo`, an opening backtick)
 showing up as text and then vanishing, bold that ends right before a Korean particle
-(`**설정(config)**을`) never getting drawn, and emphasis or a table that freezes until it closes.
+(`**설정(config)**을`) never rendering as bold, and emphasis or a table that freezes until it closes.
 
 <div class="wide">
   <StreamCompare client:only="react" lang="en">
@@ -22,7 +22,7 @@ showing up as text and then vanishing, bold that ends right before a Korean part
   flickers in and out.
 - **Streamdown** redraws too, but repairs unclosed syntax first.
 - **mdwire → Streamdown** puts mdwire's streamer in front: Streamdown receives the normalized output
-  plus `preview()` — the bridge.
+  plus `preview()`, with mdwire in front of the renderer.
 - **mdwire** `useMarkdownStream()` draws what is still held (open bold, table rows) early, as if the
   input ended here.
 - **mdwire** `useMarkdownStream({ eager: false })` shows only what is final. Nothing it shows ever
@@ -30,8 +30,8 @@ showing up as text and then vanishing, bold that ends right before a Korean part
 
 `DESIGN.md` measured this on 347 Korean documents written by agents (Streamdown 2.6.0,
 react-markdown 10.1.0 + remark-gfm): putting mdwire's streamer in front of Streamdown cut changes to
-already-visible text by about 60% and stopped markers from showing as text, and mdwire's own `html`
-streamer, showing only what is final, had neither. Showing only what is final pauses, though: with
+already-visible text by about 60% and stopped markers from showing as text. mdwire's own `html`
+streamer, which shows only what is final, had neither problem. Showing only what is final has a cost: with
 this sample at a 60 ms token interval the longest pause was 1,389 ms against 302 ms with the
 preview — which is why the preview is the default. See the
 [bridge section of DESIGN.md](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md) (Korean).
@@ -45,7 +45,7 @@ import { Streamer } from "@minjun0219/mdwire";
 import { useMarkdownStream } from "@minjun0219/mdwire/react";
 import { Streamdown } from "streamdown";
 
-// the bridge — normalize with mdwire, draw with Streamdown
+// mdwire in front — normalize with mdwire, render with Streamdown
 const s = new Streamer("github-markdown");
 let done = "";
 for (const token of tokens) {
