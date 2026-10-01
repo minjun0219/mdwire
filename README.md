@@ -5,7 +5,7 @@ English | [한국어](README.ko.md)
 Send LLM-generated Markdown to chat channels without it breaking.
 Docs, API reference and a live demo: [mdwire.minjun.dev](https://mdwire.minjun.dev).
 
-Agents emit Markdown. Chat channels don't accept it — each has its own subset, its own
+Agents emit Markdown. Chat channels don't take it as is — each has its own subset, its own
 escaping rules, and its own length limit. Existing converters assume the input is
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
@@ -23,15 +23,15 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 ```
 
 1. **Normalize.** Agent-written Markdown may not render correctly through a standard
-   Markdown converter. Unpaired `**`, emphasis that spans a line break in wrapped prose,
-   unclosed code fences. Repair before rendering.
+   Markdown converter. Typical cases: unpaired `**`, emphasis that spans a line break in wrapped
+   prose, unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
    tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
-   character goes out escaped (`\~`, `\<`), and emphasis GFM would not close — `**(a)**`
-   followed directly by a Korean particle — goes out as `<strong>`. Notion draws that bold as is
+   character goes out escaped (`\~`, `\<`), and emphasis that GFM would not close (`**(a)**`
+   followed directly by a Korean particle) goes out as `<strong>`. Notion renders that bold as is
    but shows inline HTML as text, so `notion-markdown` strips the tags and escapes a literal `*`
-   or `\` instead. For the browser, `html` draws
+   or `\` instead. For the browser, `html` renders
    blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
    source keep no attributes, and only `http(s)`/`mailto` links become `<a>` — line breaks,
    images and allowed schemes are options. While streaming,
@@ -39,7 +39,7 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 3. **Split.** Respect the channel's limit — and never cut through markup. This also
    covers streaming: a chunk boundary must not land inside `**bold**`.
 
-One option around that pipeline. **Change report:** how many times the normalizer stepped
+The pipeline has one option. **Repair report:** how many times the normalizer stepped
 in — unclosed emphasis, unclosed fence, unpaired backticks, dropped markers — and what it
 rewrote for the channel — escaped characters, tags for emphasis, stripped HTML, bullets,
 tables, converted markers — so you can log how often the model breaks its own formatting
@@ -53,7 +53,7 @@ cat agent-output.md | mdwire --channel slack-markdown --stream # emit as it arri
 cat agent-output.md | mdwire --channel plain --limit 4096      # plain fallback into Telegram
 
 # --report prints what the normalizer fixed and rewrote (unclosed emphasis, escaped `~`,
-# stripped tags, …) as one JSON line on stderr.
+# stripped tags, …) to stderr as one JSON line.
 cat agent-output.md | mdwire --channel slack-markdown --report
 ```
 
@@ -119,7 +119,7 @@ every file one character and 64 characters at a time and reports any divergence.
 `SPEC.md` §8.2.
 
 The streamer holds back only what it must: a prefix it cannot classify yet, a marker run
-at the end of a chunk, and the inside of an emphasis that has not closed. Paragraphs are
+at the end of a chunk, and the inside of an emphasis that has not closed. A whole paragraph is
 never held — a renderer that waits for a newline is not streaming.
 
 ## Why another one
@@ -137,8 +137,8 @@ We found three gaps in existing tools:
     paragraph, GitHub (GFM), which reads a single `~` as strikethrough, pairs them and strikes
     everything in between (`40km, 5`).
 
-  Existing converters guess at Korean-adjacent emphasis (one pads it with U+200B, another leaves it
-  alone) and neither checked the channel. mdwire measured each channel: on GitHub it writes just that
+  The two converters we compared disagree on Korean-adjacent emphasis (one pads it with U+200B, the
+  other leaves it alone), and neither checked the channel. mdwire measured each channel: on GitHub it writes just that
   bold as `<strong>` and escapes a literal `~` as `\~`.
 - **Chat-channel converters ignore streaming.** Some browser renderers, like Streamdown, patch
   unclosed syntax while tokens stream in. The Telegram and Slack converters we looked at all
@@ -178,7 +178,7 @@ curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.
 curl -L https://github.com/minjun0219/mdwire/releases/download/v0.1.9/mdwire-v0.1.9-x86_64-unknown-linux-gnu.tar.gz | tar xz
 ```
 
-The release notes list a SHA-256 for every artifact — pin to it when installing by URL.
+The release notes list a SHA-256 for every artifact — verify the download against it when installing by URL.
 
 Or from source: `cargo install --path crates/mdwire-cli`.
 
@@ -207,7 +207,7 @@ log.Printf("%+v", out.Repairs)
 ./scripts/smoke.sh         # install it into a scratch project; call it from Node, Bun, and TypeScript
 ```
 
-The wasm binary is 111 KB, release with `wasm-opt`. The package carries two builds and
+The wasm binary is 111 KB (release build, after `wasm-opt`). The package carries two builds and
 picks by `exports` condition: `node` gets a CommonJS build that loads the wasm from disk,
 everything else gets the ESM bundler build. The script writes the root `package.json`
 itself: the crate has to stay `mdwire-wasm` because the core's library is already named
