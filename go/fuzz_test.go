@@ -262,7 +262,7 @@ func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 		{"<https://a.com/x_y>", `[https://a.com/x\_y](https://a.com/x_y)`},
 		{"##### 다섯\n\n* 별표 목록", "#### 다섯\n\n- 별표 목록"},
 		{"> **a<br>b** 끝", "> **a<br>b** 끝"},
-		{"| a |\n|---|\n| 줄<br>바꿈 |", "| a |\n| --- |\n| 줄<br>바꿈 |"},
+		{"| a |\n|---|\n| 줄<br>바꿈 |", "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>줄<br>바꿈</td>\n</tr>\n</table>"},
 		{"foo\\\nbar", "foo\\\\\nbar"},
 		{`path C:\`, `path C:\\`},
 		{`\$x\$ 와 $5`, `\$x\$ 와 $5`},
@@ -318,5 +318,25 @@ func TestNotionSplitsLongTablesIntoWholeTables(t *testing.T) {
 		if utf8.RuneCountInString(p) > 300 || !strings.HasPrefix(p, "<table header-row=\"true\">\n<tr>\n<td>a</td>") || !strings.HasSuffix(p, "</table>") {
 			t.Fatalf("온전한 표가 아니다: %q", p)
 		}
+	}
+}
+
+// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로, 칸의 태그 모양은 탈출 — 러스트 쪽
+// notion_splits_long_tables_into_whole_tables 의 뒷부분.
+func TestNotionTableLongRowAndTagLikeCell(t *testing.T) {
+	long := "| 머리 | 둘 |\n|---|---|\n| 짧음 | 가 |\n| " + strings.Repeat("긴칸", 200) + " | 나 |\n| 짧음2 | 다 |"
+	parts := RenderWith(long, NotionMarkdown, Options{Limit: 300}).Parts
+	for _, p := range parts {
+		if utf8.RuneCountInString(p) > 300 || strings.Count(p, "<table ") != strings.Count(p, "</table>") {
+			t.Fatalf("온전하지 않은 조각: %q", p)
+		}
+	}
+	if !strings.Contains(strings.Join(parts, ""), "긴칸긴칸 | 나") {
+		t.Fatal("긴 행이 글로 내려오지 않았다")
+	}
+	got := strings.Join(Render("| a |\n|---|\n| x </td> y <br> z |", NotionMarkdown), "")
+	want := "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
+	if got != want {
+		t.Fatalf("\n  got  %q\n  want %q", got, want)
 	}
 }

@@ -607,16 +607,13 @@ func (e *engine) closeBlock(s sink) {
 		e.table.clear()
 		// 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보낸다(노션).
 		if len(breaks) > 0 {
-			whole := append([]byte(nil), e.out...)
-			e.out = e.out[:0]
 			from := 0
 			for _, at := range breaks {
-				e.out = append(e.out, whole[from:at]...)
-				e.flushAll(s)
+				s.text(e.out[from:at])
 				s.boundary()
 				from = at
 			}
-			e.out = append(e.out, whole[from:]...)
+			e.out = append(e.out[:0], e.out[from:]...)
 		}
 	}
 	e.state = stateNone
@@ -1171,11 +1168,19 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int 
 }
 
 // writeNotionTable 은 표를 노션 <table> 로 낸다 — 러스트 쪽 write_notion_table. 파이프 표로 내면
-// 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버린다. 한도를 넘으면 머리글을 되풀이한
-// 표 여럿으로 내고, 나눈 자리(다음 표를 여는 빈 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록
-// 경계로 내보내 분할기가 표 한가운데를 자르지 않게 한다.
-func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
+// 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버리고, 칸에 글자로 적힌 태그 모양은
+// 탈출한다. 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고, 머리글과 함께 한도에 안 드는 행은
+// 표 밖의 글(칸을 " | " 로 이은 줄)로 내린다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게 내린다.
+// 나눈 자리(다음 조각을 여는 빈 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록 경계로 내보낸다.
+func writeNotionTable(out *[]byte, raw [][]string, limit int) []int {
 	const open, closeTag = `<table header-row="true">`, "\n</table>"
+	cells := make([][]string, len(raw))
+	for r, row := range raw {
+		cells[r] = make([]string, len(row))
+		for c, cell := range row {
+			cells[r][c] = notionCell(cell)
+		}
+	}
 	rowLen := func(row []string) int {
 		n := len("\n<tr>\n</tr>")
 		for _, c := range row {
@@ -1192,31 +1197,106 @@ func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
 		}
 		*out = append(*out, "\n</tr>"...)
 	}
+	writeText := func(row []string) {
+		for k, cell := range row {
+			if k > 0 {
+				*out = append(*out, " | "...)
+			}
+			*out = append(*out, cell...)
+		}
+	}
 	if len(cells) == 0 {
 		return nil
 	}
 	head, body := cells[0], cells[1:]
 	base := len(open) + len(closeTag) + rowLen(head)
+	if base > limit {
+		for r, row := range cells {
+			if r > 0 {
+				*out = append(*out, '\n')
+			}
+			writeText(row)
+		}
+		return nil
+	}
 	var breaks []int
-	*out = append(*out, open...)
-	writeRow(head)
-	used, rowsIn := base, 0
-	for _, row := range body {
-		n := rowLen(row)
-		if rowsIn > 0 && used+n > limit {
-			*out = append(*out, closeTag...)
+	wrote, opened, used := false, false, 0
+	piece := func() {
+		if wrote {
 			breaks = append(breaks, len(*out))
 			*out = append(*out, "\n\n"...)
+		}
+		wrote = true
+	}
+	for _, row := range body {
+		n := rowLen(row)
+		if base+n > limit {
+			if opened {
+				*out = append(*out, closeTag...)
+				opened = false
+			}
+			piece()
+			writeText(row)
+			continue
+		}
+		if opened && used+n > limit {
+			*out = append(*out, closeTag...)
+			opened = false
+		}
+		if !opened {
+			piece()
 			*out = append(*out, open...)
 			writeRow(head)
-			used, rowsIn = base, 0
+			opened, used = true, base
 		}
 		writeRow(row)
 		used += n
-		rowsIn++
 	}
-	*out = append(*out, closeTag...)
+	switch {
+	case opened:
+		*out = append(*out, closeTag...)
+	case !wrote:
+		// 머리글뿐인 표.
+		*out = append(*out, open...)
+		writeRow(head)
+		*out = append(*out, closeTag...)
+	}
 	return breaks
+}
+
+// notionCell 은 노션 표 칸 하나를 탈출한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
+// 칸을 닫는 태그로 읽는다(실측). \<\/td\> 로 / 와 > 까지 막아야 글자로 남았다. <br> 은 둔다.
+func notionCell(cell string) string {
+	var b strings.Builder
+	inTag := false
+	for i := 0; i < len(cell); i++ {
+		c := cell[i]
+		if inTag && c == '>' {
+			b.WriteString(`\>`)
+			inTag = false
+			continue
+		}
+		if c == '<' && !inTag {
+			slash := i+1 < len(cell) && cell[i+1] == '/'
+			nameAt := i + 1
+			if slash {
+				nameAt++
+			}
+			isBr := !slash && len(cell) >= i+4 && strings.EqualFold(cell[i:i+4], "<br>")
+			if !isBr && nameAt < len(cell) && (cell[nameAt]|0x20 >= 'a' && cell[nameAt]|0x20 <= 'z') {
+				if slash {
+					b.WriteString(`\<\/`)
+				} else {
+					b.WriteString(`\<`)
+				}
+				inTag = true
+				i = nameAt - 1
+				continue
+			}
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
 
 // writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.

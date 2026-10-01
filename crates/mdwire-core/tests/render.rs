@@ -729,7 +729,10 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
     // 자체 리뷰에서 나온 것들 — 노션에 다시 올려 재 봤다.
     // `<br>` 은 그린다(칸 안에서도) — `\n` 으로 바꾸면 인용이 갈린다.
     assert_eq!(n("> **a<br>b** 끝"), "> **a<br>b** 끝");
-    assert_eq!(n("| a |\n|---|\n| 줄<br>바꿈 |"), "| a |\n| --- |\n| 줄<br>바꿈 |");
+    assert_eq!(
+        n("| a |\n|---|\n| 줄<br>바꿈 |"),
+        "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>줄<br>바꿈</td>\n</tr>\n</table>"
+    );
     // 줄 끝 역슬래시는 글자로 둔다(탈출한다) — 노션에 하드 브레이크 문법이 없고, 지우면 문단 끝의
     // `C:\` 같은 글자까지 사라진다.
     assert_eq!(n("foo\\\nbar"), "foo\\\\\nbar");
@@ -788,6 +791,20 @@ fn notion_splits_long_tables_into_whole_tables() {
         assert!(p.chars().count() <= 300, "{p}");
         assert!(p.starts_with("<table header-row=\"true\">\n<tr>\n<td>a</td>") && p.ends_with("</table>"), "{p}");
     }
+    // 머리글과 함께 한도에 안 드는 행은 표 밖의 글로 내린다 — 표는 조각마다 온전하다.
+    let long = format!("| 머리 | 둘 |\n|---|---|\n| 짧음 | 가 |\n| {} | 나 |\n| 짧음2 | 다 |", "긴칸".repeat(200));
+    let opts = mdwire::Options { limit: Some(300), ..Default::default() };
+    let parts = mdwire::render_with(&long, Channel::NotionMarkdown, opts).parts;
+    for p in &parts {
+        assert!(p.chars().count() <= 300);
+        assert_eq!(p.matches("<table ").count(), p.matches("</table>").count(), "{p}");
+    }
+    assert!(parts.concat().contains("긴칸긴칸 | 나"));
+    // 칸에 글자로 적힌 태그 모양은 탈출한다 — `</td>` 가 칸을 닫았다.
+    assert_eq!(
+        one("| a |\n|---|\n| x </td> y <br> z |", Channel::NotionMarkdown),
+        "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
+    );
     // 스트리밍은 채널 한도(65,536)로 재므로 이 크기는 표 하나다.
     let mut s = mdwire::Streamer::new(Channel::NotionMarkdown);
     let mut acc = String::new();

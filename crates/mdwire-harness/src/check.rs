@@ -131,6 +131,15 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
             html_tags(part, allowed, &mut findings);
         }
     }
+    // **노션 표는 조각마다 온전해야 한다.** 분할기는 태그를 모르고 줄로 끊어서, 표 하나가 두 조각에
+    // 걸치면 앞은 `</table>` 없이 끝나고 뒤는 `<tr>` 로 시작한다 — 노션에는 XML 이 글자로 들어간다.
+    if channel == Channel::NotionMarkdown {
+        for part in output.split(PART_SEPARATOR) {
+            if part.matches("<table header-row=").count() != part.matches("</table>").count() {
+                findings.push(Finding { rule: Rule::UnclosedTag, detail: "조각 안에서 노션 표가 갈렸다".into() });
+            }
+        }
+    }
     tables(input, output, channel, &mut findings);
     // 번호 목록의 번호는 브라우저 채널에서 `<ol>` 이 그린다 — 글자로 안 나온다.
     let input = if channel == Channel::Html {
