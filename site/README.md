@@ -41,9 +41,11 @@ Workers Builds 설정(대시보드):
 |---|---|
 | Root directory | `site` |
 | Build command | `pnpm run build` |
-| Deploy command | `pnpm exec wrangler deploy` |
-| Preview builds | 켠다 — Preview command 는 `pnpm exec wrangler preview` |
+| Deploy command | `npx wrangler deploy` (기본값) |
+| Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview` |
 | Build watch paths | `site/` 아래 변경만 포함 |
 | Production branch | `main` |
 
-의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다.
+의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
+Worker Previews 는 Preview command 가 `npx wrangler preview` 를 부르기를 요구하고, `npx` 는 pnpm 이
+깐 `node_modules/.bin/wrangler`(`package.json` 의 버전)를 그대로 쓴다.
