@@ -6,7 +6,7 @@ LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보낸다.
 문서 · API · 데모: [mdwire.minjun.dev](https://mdwire.minjun.dev).
 
 에이전트는 마크다운을 낸다. 채팅 채널은 그걸 그대로 받지 않는다 — 채널마다 받는 문법이
-다르고, escape 규칙이 다르고, 길이 한도가 다르다. 기존 변환기는 입력이 잘 짜인
+다르고, 이스케이프 규칙이 다르고, 길이 한도가 다르다. 기존 변환기는 입력이 잘 짜인
 CommonMark 라고 가정하고 한 번에 한 채널만 본다. 에이전트 출력에는 두 가정이 다 맞지
 않는다.
 
@@ -24,23 +24,22 @@ LLM 마크다운  →  정규화  →  채널용 렌더  →  안전한 분할  
    넘는 강조, 안 닫힌 코드펜스. 렌더 전에 고친다.
 2. **렌더.** 채널이 실제로 받는 문법으로 낸다. Telegram HTML 은 태그 아홉 개만 받고,
    Slack `markdown_text` 는 표준 마크다운을 그대로 받는다. GitHub 도 그렇지만 홑 `~` 를
-   취소선으로, `<T>` 를 HTML 태그로 읽는다 — 글자로 쓴 `~`·`<` 는 탈출해 내고(`\~`, `\<`),
+   취소선으로, `<T>` 를 HTML 태그로 읽는다 — 글자로 쓴 `~`·`<` 는 이스케이프해 내고(`\~`, `\<`),
    GFM 이 못 닫는 강조(`**(a)**` 바로 뒤에 조사)는 `<strong>` 으로 낸다. 노션은 그 강조를 그대로
-   그리지만 인라인 HTML 을 글자로 보여서, `notion-markdown` 은 태그를 벗기고 글자 `*`·`\` 를
-   탈출한다. 브라우저용 `html` 은
-   블록까지 태그로 그리고 `innerHTML` 로 바로 넣어도 된다 — 글자는 escape 하고, 원문 태그는
-   속성을 버린 이름만 살리고, `http(s)`·`mailto` 링크만 `<a>` 로 낸다 — 줄바꿈·이미지·허용
-   스킴은 옵션이다. 스트리밍 중에는 누적본에
+   그리지만 인라인 HTML 을 글자로 보여 줘서, `notion-markdown` 은 태그를 벗기고 글자 `*`·`\` 를
+   이스케이프한다. 브라우저용 `html` 은 블록까지 태그로 그리고 `innerHTML` 로 바로 넣어도
+   된다 — 글자는 이스케이프하고, 원문 태그는 속성을 버린 이름만 살리고, `http(s)`·`mailto`
+   링크만 `<a>` 로 낸다. 줄바꿈·이미지·허용 스킴은 옵션이다. 스트리밍 중에는 누적본에
    `preview()`(또는 `closeOpen()`)를 붙이면 언제나 균형 잡힌 HTML 이다.
 3. **분할.** 채널 한도를 지키되 마크업 한가운데를 자르지 않는다. 스트리밍도 같다 —
    조각 경계가 `**굵게**` 안에 떨어지면 안 된다.
 
-이 흐름에 옵션이 둘 붙는다. **입력 방언:** 슬랙 문서로 슬랙을 배운 에이전트는 레거시
+이 흐름에 옵션이 둘 붙는다. **입력 표기:** 슬랙 문서로 슬랙을 배운 에이전트는 레거시
 `mrkdwn`(`*굵게*`, `~취소~`, `<url|텍스트>`)으로 쓴다. `--from slack-mrkdwn` 을 주면 표준
-마크다운이 아니라 그 표기로 읽는다. **바꾼 것 보고:** 정규화가 대신 고친 횟수 — 안 닫힌
-강조, 안 닫힌 펜스, 짝 없는 백틱, 버린 마커 — 와 채널에 맞춰 바꿔 쓴 횟수 — 탈출한 글자,
-태그로 낸 강조, 벗긴 HTML, 불릿, 표, 바꾼 마커. 모델이 제 서식을 얼마나 자주 깨는지 로그로
-재고, 붙이기 전에 채널이 무엇을 바꾸는지 볼 수 있다.
+마크다운이 아니라 그 표기로 읽는다. **정규화 보고:** 정규화가 대신 고친 횟수(안 닫힌 강조,
+안 닫힌 펜스, 짝 없는 백틱, 버린 마커)와 채널에 맞춰 바꿔 쓴 횟수(이스케이프한 글자, 태그로
+낸 강조, 벗긴 HTML, 불릿, 표, 바꾼 마커)를 센다. 모델이 제 서식을 얼마나 자주 깨는지 로그로
+재고, 채널을 들이기 전에 그 채널이 무엇을 바꾸는지 볼 수 있다.
 
 ## 쓰기
 
@@ -50,7 +49,7 @@ cat agent-output.md | mdwire --channel slack-markdown --stream # 들어오는 �
 cat agent-output.md | mdwire --channel plain --limit 4096      # 텔레그램으로 보내는 평문 폴백
 
 # 에이전트가 슬랙 레거시 mrkdwn(*굵게*, ~취소~)으로 썼다면 그렇다고 알려 준다. --report 는
-# 정규화가 고치고 바꾼 것(안 닫힌 강조, 탈출한 `~`, 벗긴 태그, …)을 stderr 에
+# 정규화가 고치고 바꾼 것(안 닫힌 강조, 이스케이프한 `~`, 벗긴 태그, …)을 stderr 에
 # JSON 한 줄로 낸다.
 cat agent-output.md | mdwire --channel slack-markdown --from slack-mrkdwn --report
 ```
@@ -70,7 +69,7 @@ const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
 
 // 메시지 전체를 고쳐 쓰는 채널(텔레그램 edit): acc 에 미리보기를 붙여 보낸다 — 붙들고 있는
-// 것(열린 굵게·표 행·코드 스팬)을 입력이 여기서 끝났다면처럼 그린다. acc 자체는 건드리지
+// 것(열린 굵게·표 행·코드 스팬)을 입력이 여기서 끝난 것처럼 그린다. acc 자체는 건드리지
 // 않는다. 끝난 뒤 바뀐 게 없으면 마지막 편집은 건너뛴다.
 const s = new Streamer("telegram-html");
 let acc = "";
@@ -90,8 +89,8 @@ for await (const chunk of tokens) {
 await append(t.finish());
 ```
 
-React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 세운다 — `innerHTML`
-이 없다. escape·태그 집합·링크 스킴은 코어의 `html` 채널 한 곳이 정하고, 태그마다 어떤
+React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 만든다 — `innerHTML`
+을 쓰지 않는다. 이스케이프·태그 집합·링크 스킴은 코어의 `html` 채널 한 곳이 정하고, 태그마다 어떤
 컴포넌트로 그릴지는 쓰는 쪽이 정한다. 다른 프레임워크는 `@minjun0219/mdwire/events` 로 같은
 출력을 `open` / `text` / `close` 이벤트 열로 받는다.
 
@@ -102,8 +101,8 @@ import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
 const { elements, push, finish } = useMarkdownStream();     // 스트리밍: push(토큰), finish()
 ```
 
-훅은 기본으로 붙든 것도 먼저 그린다. `useMarkdownStream({ eager: false })` 면 확정된 것만
-보이고, `onSettled(html, revised)` 가 완성본이 마지막 화면과 다른지 알려 준다.
+훅은 기본으로 붙든 것도 먼저 그린다. `useMarkdownStream({ eager: false })` 를 쓰면 확정된 것만
+보여 주고, `onSettled(html, revised)` 가 완성본이 마지막 화면과 다른지 알려 준다.
 
 [`examples/react-streaming`](examples/react-streaming) 은 같은 답변을 react-markdown, Streamdown, Streamdown
 앞에 둔 mdwire, mdwire 로 나란히 흘려 본다. 잰 수치는 `DESIGN.md` 에 있다.
@@ -112,7 +111,7 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
 그리고 `finish` 는 꼬리만 덧붙인다. 그래서 조각을 이어 붙인 것은 조각 크기와 상관없이 한
 번에 `render` 한 결과와 같다(문서가 길어 여러 조각으로 나뉘는 경우는 빼고). 코퍼스와
 퍼즈, 그리고 `mdwire-check --scan <dir>` 이 이것을 본다 — 디렉터리의 파일을 전부 한
-글자씩, 64자씩 흘려 보고 어긋나면 알린다. Node, Bun, 번들러에서 돈다. `SPEC.md` 8.2절.
+글자씩, 64자씩 흘려 보고 어긋나면 알린다. `SPEC.md` 8.2절.
 
 스트리머는 꼭 붙들어야 하는 것만 붙든다. 아직 무엇인지 가릴 수 없는 줄머리, 조각 끝에
 걸린 마커, 아직 안 닫힌 강조의 안쪽. 문단은 붙들지 않는다 — 줄바꿈을 기다리는 렌더러는
@@ -141,7 +140,7 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
   있고(표준 라이브러리만), 같은 코퍼스를 통과해야 한다. Rust 코어 자체와도 대조한다 —
   무작위 입력과 실제 문서가 똑같이 렌더돼야 한다.
 - **테스트 코퍼스가 일급 산출물이다.** `corpus/` 에 채널별 입력 → 기대 출력이 있다. 다른
-  언어의 이식은 코퍼스를 통과하면 맞는 것이다. 구현이 여럿이어도 일관성이 유지되는
+  언어의 이식은 코퍼스를 통과하면 맞는 것이다. 구현이 여럿이어도 일관성을 지키는
   방법이 이것이다.
 
 ## 설치
@@ -196,7 +195,7 @@ log.Printf("%+v", out.Repairs)
 
 wasm 바이너리는 `wasm-opt` 를 거친 release 빌드로 111 KB 다. 패키지에는 빌드가 둘 들어
 있고 `exports` 조건으로 고른다. `node` 조건은 wasm 을 디스크에서 읽는 CommonJS 빌드를,
-그 밖에는 번들러용 ESM 빌드를 받는다. 루트 `package.json` 은 스크립트가 직접 쓴다 —
+그 밖에는 번들러용 ESM 빌드를 받는다. 루트 `package.json` 은 스크립트가 직접 만든다 —
 코어 라이브러리 이름이 이미 `mdwire` 라서 크레이트는 `mdwire-wasm` 이어야 하는데,
 wasm-pack 은 npm 이름을 크레이트 이름에서 가져가기 때문이다.
 
@@ -217,8 +216,8 @@ mdwire-check --scan ./some-directory-of-markdown   # 불변식만, 기대 출력
 
 ## 릴리스
 
-버전은 아무도 손으로 고치지 않는다. `main` 에 머지될 때마다 봇이 `release: X.Y.Z` PR 을
-열어 두고, 그걸 머지하면 `vX.Y.Z` · `go/vX.Y.Z` 태그가 찍히고 산출물이 붙은 릴리스가
+버전은 아무도 손으로 고치지 않는다. 배포물(코어 · CLI · wasm · Go 이식의 소스, 매니페스트,
+npm 패키징)을 바꾼 커밋이 `main` 에 들어오면 봇이 `release: X.Y.Z` PR 을 열어 두고, 그걸 머지하면 `vX.Y.Z` · `go/vX.Y.Z` 태그가 찍히고 산출물이 붙은 릴리스가
 나온다. `AGENTS.md` 참고.
 
 ## 라이선스

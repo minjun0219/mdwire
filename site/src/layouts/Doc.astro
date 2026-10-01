@@ -71,7 +71,7 @@ const ld = notFound
         url,
         about: software,
       };
-// `</script>` 가 본문을 끊지 않게 `<` 를 탈출한다.
+// `</script>` 가 본문을 끊지 않게 `<` 를 이스케이프한다.
 const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
 ---
 
