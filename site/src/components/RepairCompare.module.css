@@ -1,0 +1,121 @@
+/* RepairCompare 의 스타일 — CSS Module 이라 클래스 이름이 이 컴포넌트 안에 갇힌다. */
+.root {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.root label > span,
+.pane > span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.root select,
+.root textarea {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+}
+
+.pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane textarea {
+  flex: 1;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.output {
+  flex: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.legend {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.legend ins,
+.legend del {
+  padding: 0 0.3em;
+}
+
+.report {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  max-width: 44rem;
+}
+
+.report caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.4rem;
+}
+
+.report th,
+.report td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  color: var(--muted);
+}
+
+.report th {
+  font-weight: normal;
+}
+
+.count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report tr.hit th,
+.report tr.hit td {
+  color: var(--fg);
+}
+
+.report tr.hit .count {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.error {
+  color: var(--warn);
+}

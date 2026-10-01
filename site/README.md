@@ -8,10 +8,12 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - **npm 에 올라간 `@minjun0219/mdwire` 를 쓴다.** 로컬 `pkg/` 를 쓰는 `examples/` 와 다르다 —
   배포 빌드(Workers Builds)에는 Rust·wasm-pack 이 없다. 새 버전이 나오면 `package.json` 의
   버전을 올린다.
-- 데모 예시(`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다.
+- 데모는 `/demo/` 아래 페이지 하나에 하나씩 둔다(목록은 `src/components/SectionNav.astro`). 예시
+  (`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다. 정규화 전후 데모는 그중 npm
+  에 올라간 판에서 정규화 보고가 0 이 아닌 케이스만 쓴다.
 - API 문서(`src/pages/docs/`)는 `main` 을 따른다. 코어·바인딩·CLI 의 공개 API 가 바뀌면 같은 PR 에서 문서도
   고친다. 마지막 릴리스에 없는 것에는 `<Next />` 표시를 달고, 릴리스가 나가면 그 표시를 지운다.
-- 데모 페이지의 스트리밍 비교(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
+- 스트리밍 데모(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
   을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
 - `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
