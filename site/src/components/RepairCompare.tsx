@@ -49,7 +49,7 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
     ko: "“채널” 뒤의 ** 는 짝이 없습니다. 정규식 기반 변환기는 이를 다음 ** 와 짝지어 굵게 범위를 뒤집습니다(표본 60개 중 28개). mdwire 는 짝 없는 마커를 버리고 진짜 굵게만 남깁니다.",
   },
   "unclosed-code-fence": {
-    en: "The answer ended inside a fence (cut off at the token limit). Sent as is, <pre> stays open: the channel rejects it or swallows whatever follows. Closed right before output.",
+    en: "The answer ended inside a fence (cut off at the token limit). Sent as is, <pre> stays open: the channel rejects it or swallows whatever follows. mdwire closes it right before output.",
     ko: "답이 코드펜스 안에서 끝났습니다(토큰 한도에서 잘림). 그대로 보내면 <pre> 가 열린 채라 채널이 거절하거나 뒤의 내용을 통째로 삼킵니다. mdwire 는 출력 직전에 닫습니다.",
   },
   "unpaired-backtick-run": {

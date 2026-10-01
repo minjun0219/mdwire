@@ -30,8 +30,8 @@ showing up as text and then vanishing, bold that ends right before a Korean part
 
 `DESIGN.md` measured this on 347 Korean documents written by agents (Streamdown 2.6.0,
 react-markdown 10.1.0 + remark-gfm): putting mdwire's streamer in front of Streamdown cut changes to
-already-visible text by about 60% and stopped markers from showing as text, and mdwire's own `html`
-streamer, showing only what is final, had neither. Showing only what is final has a cost: with
+already-visible text by about 60% and stopped markers from showing as text. mdwire's own `html`
+streamer, which shows only what is final, had neither problem. Showing only what is final has a cost: with
 this sample at a 60 ms token interval the longest pause was 1,389 ms against 302 ms with the
 preview — which is why the preview is the default. See the
 [bridge section of DESIGN.md](https://github.com/minjun0219/mdwire/blob/main/DESIGN.md) (Korean).

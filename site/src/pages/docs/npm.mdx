@@ -124,7 +124,7 @@ const settled = useMarkdownStream({ eager: false });        // only what is fina
 | | |
 |---|---|
 | `<Markdown text components? options? />` | A finished answer. `components` maps a tag (`a`, `code`, …) to your component. |
-| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | Streaming. Returns `{ elements, push, finish }`. `eager` (default `true`) draws held content early; `false` shows only what is final. `onSettled(html, revised)` runs after `finish`. Read once, except `onSettled`. |
+| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | Streaming. Returns `{ elements, push, finish }`. `eager` (default `true`) draws held content early; `false` shows only what is final. `onSettled(html, revised)` runs after `finish`. Options are read once, except `onSettled`. |
 | `toElements(html, components?, schemes?)` | `html` channel output (streaming: accumulated output + `preview()`) to React nodes. Pass the same `schemes` you gave the core. |
 
 ## Events — `@minjun0219/mdwire/events`

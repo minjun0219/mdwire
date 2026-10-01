@@ -7,7 +7,7 @@ description: The mdwire command — flags, output format, the repair report and 
 
 # CLI — `mdwire`
 
-Reads Markdown on stdin, writes the channel's output on stdout. Any agent in any language can pipe
+Reads Markdown from stdin and writes the channel's output to stdout. Any agent in any language can pipe
 through it with no bindings.
 
 ```sh
@@ -35,7 +35,7 @@ cat agent-output.md | mdwire --channel slack-markdown --report
 | `--html-images <link\|load>` | `html` only. Default `link`. |
 | `--html-schemes <list>` | `html` only. Comma-separated; default `http,https,mailto`. |
 | `--stream` | Emit as stdin is read. Does not split by the limit. |
-| `--report` | Print the repair report on stderr as one JSON line. |
+| `--report` | Print the repair report to stderr as one JSON line. |
 | `--batch jsonl` | Read many documents as JSON lines; print one report per document. |
 | `-h`, `--help` · `-V`, `--version` | Help · version (Rust CLI). |
 
@@ -51,7 +51,7 @@ Channels and options are explained on [Concepts](/docs/).
 
 ## `--report`
 
-One JSON line on stderr:
+One JSON line to stderr:
 
 ```json
 {"closedEmphasis":1,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":0}

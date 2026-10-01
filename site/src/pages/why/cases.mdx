@@ -29,7 +29,7 @@ mdwire
   <b>신분 공개 + 시점의 조합</b>이 판단 대상
 ```
 
-The stranded `**` is dropped and the `**` at the start of the line opens, as CommonMark and Slack read it.
+The stranded `**` is dropped and the `**` at the start of the line opens a new bold, which is how CommonMark and Slack read it.
 Test cases: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-across-linebreak),
 [`emphasis-wraps-line`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-wraps-line)
 
@@ -68,7 +68,7 @@ alone. Test case: [`tilde-is-not-strikethrough`](https://github.com/minjun0219/m
 
 ## Asterisks in masked numbers
 
-A card number masked with asterisks was read as italics: part of the number slanted, or asterisks disappeared.
+A card number masked with asterisks was read as italics: part of the number turned italic, or asterisks disappeared.
 
 ```text
 input

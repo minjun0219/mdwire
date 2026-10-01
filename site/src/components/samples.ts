@@ -29,7 +29,7 @@ export const samples: Sample[] = [
   {
     id: "cjk-adjacent-emphasis",
     note: {
-      en: "** right next to Korean text. Nothing is padded in.",
+      en: "** right next to Korean text. No space or zero-width character is inserted.",
       ko: "한글 바로 옆에 붙은 ** 입니다. 사이에 공백을 끼워 넣지 않습니다.",
     },
     input: "배포는 **금요일**에 하지 않는다. `main` 브랜치에 **직접 커밋**하지도 않는다.\n",
