@@ -50,6 +50,7 @@ Workers Builds 설정(대시보드):
 | Build watch paths | 포함 `site/**` — `*` 는 `/` 를 넘지 않아 최상위 파일만 잡는다 |
 | Production branch | `main` |
 
-의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
+빌드 명령은 대시보드에 꼭 넣는다 — `wrangler.jsonc` 의 `build.command` 는 로컬 `wrangler deploy` · `wrangler dev` 용이고,
+Workers Builds 는 문서상 그 설정을 따르지 않는다. 의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
 Worker Previews 는 Preview command 가 `npx wrangler preview` 를 부르기를 요구하고, `npx` 는 pnpm 이
 깐 `node_modules/.bin/wrangler`(`package.json` 의 버전)를 그대로 쓴다.
