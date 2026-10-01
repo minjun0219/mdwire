@@ -85,3 +85,19 @@ func TestBatchMatchesRust(t *testing.T) {
 		t.Errorf("러스트와 다르다\n  go   %s\n  rust %s", got.String(), want)
 	}
 }
+
+// --이름=값 도 --이름 값 과 같게 받는다 — 러스트 CLI 의 equals_form_is_the_same_as_two_args.
+func TestEqualsFormIsTheSameAsTwoArgs(t *testing.T) {
+	render := func(args ...string) string {
+		var out strings.Builder
+		if err := run(args, strings.NewReader("*굵게* ~취소~"), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	spaced := render("--channel", "slack-markdown", "--from", "slack-mrkdwn")
+	equals := render("--channel=slack-markdown", "--from=slack-mrkdwn")
+	if spaced != "**굵게** ~~취소~~" || equals != spaced {
+		t.Fatalf("spaced %q equals %q", spaced, equals)
+	}
+}
