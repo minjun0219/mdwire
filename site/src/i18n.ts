@@ -5,14 +5,18 @@ export type Locale = (typeof locales)[number];
 export const ui = {
   en: {
     tagline: "A bridge that carries LLM Markdown to chat channels without breaking it.",
-    nav: { home: "Overview", demo: "Demo" },
+    nav: { home: "Overview", demo: "Demo", docs: "Docs" },
+    docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
+    next: "next release",
     switchTo: "한국어",
     source: "Source",
     footer: "MIT licensed.",
   },
   ko: {
     tagline: "LLM 마크다운을 채널에 맞게 깨지지 않게 옮기는 브릿지.",
-    nav: { home: "개요", demo: "데모" },
+    nav: { home: "개요", demo: "데모", docs: "문서" },
+    docs: { index: "개념", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI" },
+    next: "다음 릴리스",
     switchTo: "English",
     source: "소스",
     footer: "MIT 라이선스.",

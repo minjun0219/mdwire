@@ -16,11 +16,15 @@ const other = lang === "en" ? "ko" : "en";
 // 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
 const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const href = (page: string) => getRelativeLocaleUrl(lang, page);
-const switchHref = getRelativeLocaleUrl(other, rest);
+// 404 는 언어별 페이지가 없다 — 다른 언어의 개요로 보낸다.
+const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
   { page: "demo", label: t.nav.demo },
+  { page: "docs", label: t.nav.docs },
 ];
+// `docs/npm` 처럼 아래 페이지에 있어도 그 메뉴를 현재로 본다.
+const isCurrent = (page: string) => rest === page || (page !== "" && rest.startsWith(`${page}/`));
 const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
 ---
 
@@ -41,7 +45,7 @@ const pageTitle = rest === "" ? `mdwire — ${title}` : `${title} · mdwire`;
       <nav>
         {
           nav.map(({ page, label }) => (
-            <a href={href(page)} aria-current={rest === page ? "page" : undefined}>
+            <a href={href(page)} aria-current={isCurrent(page) ? "page" : undefined}>
               {label}
             </a>
           ))

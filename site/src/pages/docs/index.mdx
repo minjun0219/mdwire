@@ -1,0 +1,104 @@
+---
+layout: ../../layouts/Doc.astro
+title: Concepts
+description: Channels, input dialects, options, the repair report and the streaming contract — shared by every mdwire API.
+---
+import DocsNav from "../../components/DocsNav.astro";
+import Next from "../../components/Next.astro";
+
+<DocsNav />
+
+# Concepts
+
+Every front end — the Rust core, the npm package, the Go port and the CLI — takes the same
+inputs and gives the same answers; they are held to the same
+[corpus](https://github.com/minjun0219/mdwire/tree/main/corpus/cases). This page covers what they
+share. The per-language pages list the exact names.
+
+These docs follow `main`. Anything marked <Next /> is not in 0.1.8, the current release on npm,
+crates.io and Go; it ships with the next one.
+
+## Channels
+
+A channel is where the output goes. Its name is the same string everywhere.
+
+| Name | Goes to | Limit |
+|---|---|---|
+| `telegram-html` | Telegram `parse_mode: "HTML"`. Nine tags (`b i u s code pre a blockquote tg-spoiler`), no headings or tables — a table goes out as a monospace block. | 4,096 |
+| `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; what is left is repair and splitting. | 12,000 |
+| `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold GFM would not close (before a Korean particle) goes out as `<strong>`. | 65,536 |
+| `notion-markdown` <Next /> | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
+| `plain` | Plain text — every marker removed. The fallback. | 12,000 |
+| `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
+
+The limit is a character count on the rendered output. The sender can set its own (see
+[options](#options)) — `plain` sent to Telegram has to fit 4,096.
+
+## Input dialects
+
+What the agent wrote, chosen separately from the channel.
+
+| Name | Reads |
+|---|---|
+| `markdown` | Standard Markdown (CommonMark · GFM). The default. |
+| `slack-mrkdwn` | Slack's legacy `mrkdwn`: any run of `*` is bold, one or two `~` is strikethrough, `<url\|text>` is a link. Standard spellings mixed in mean the same. |
+
+An agent that learned Slack from its docs writes `mrkdwn`. Read as standard Markdown, `*bold*`
+becomes italic and `~strike~` stays as text — declare it.
+
+## Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| from | `markdown` | The input dialect. |
+| limit | the channel's limit | Characters per part. Values below 256 are raised to 256 — every part needs room to close and reopen markup. Streaming never splits, and neither does `html`. |
+| html · line breaks | `br` | A line break inside a block: `<br>`, or `space` to let the browser fold it (for prose wrapped at 80 columns). |
+| html · images | `link` | `![alt](url)` as a link that loads nothing until clicked, or `load` for `<img>` (allowed schemes only). |
+| html · schemes | `http`, `https`, `mailto` | Schemes allowed in links and image URLs. Giving a list replaces the default; it does not add to it. |
+
+The three `html` options apply only to the `html` channel.
+
+## The repair report
+
+Rendering also counts what it had to do. The first four are **repairs** — how often the model broke
+its own formatting:
+
+| Field | Counts |
+|---|---|
+| closed emphasis | Emphasis still open at the end of a block, closed (`**impact scope`). |
+| closed fence | A code fence still open at the end of the document, closed. |
+| reverted code span | A backtick run with no partner, kept as text. |
+| dropped marker | A stray `**` dropped (`tail**`, where text comes before it). |
+
+The other six are **channel rewrites** <Next /> — what the channel needed changed before posting:
+
+| Field | Counts |
+|---|---|
+| escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`). |
+| tag emphasis | Emphasis written as a tag instead of markers — GitHub's `<strong>`. |
+| stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
+| rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
+| rewritten table | Tables rewritten (separator and cell spacing, or down to monospace). |
+| converted marker | Emphasis and links respelled — `mrkdwn` `*bold*` → `**bold**`, `<url\|text>` → `[text](url)`. Markdown channels only. |
+
+## The streaming contract
+
+A streamer takes the output token by token and returns what is safe to send now.
+
+- **What `push` returns is final.** A later chunk never rewrites it, and `finish` only appends the
+  tail. So the pieces concatenated equal a one-shot render, whatever the chunk size — unless the
+  document is long enough to be split into parts.
+- **It holds back only what it must:** a prefix it cannot classify yet, a marker run at the end of
+  a chunk, and the inside of emphasis that has not closed. Paragraphs are never held.
+- **Streaming does not split by the limit.** One exception <Next />: a Notion table over the limit
+  goes out as several tables with the header repeated, and streaming does the same.
+
+Two ways to send while streaming, depending on the channel:
+
+| The channel… | Send | Example |
+|---|---|---|
+| rewrites the whole message | accumulated output **plus `preview()`** — what is still held, drawn as if the input ended here. After `finish`, skip the last edit when `revised()` is false. | Telegram `editMessageText`, Slack `chat.update`, React |
+| only appends | each `push` piece as is. Never `preview()`. | Slack `appendStream` |
+
+`closeOpen()` is the stricter sibling of `preview()`: it only closes block markup that is already out
+(`<blockquote>`, `<pre>`), without drawing what is held. Neither changes the streamer's state.

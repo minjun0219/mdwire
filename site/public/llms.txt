@@ -9,6 +9,7 @@ Channels (the name each API takes):
 - `telegram-html` — Telegram `parse_mode: "HTML"` (nine tags, 4096-character limit)
 - `slack-markdown` — Slack `markdown_text` (standard Markdown, 12,000)
 - `github-markdown` — GitHub comments, GFM (65,536); a `~` or `<` meant as a character is escaped
+- `notion-markdown` — Notion page body, Notion-flavored Markdown (65,536); inline HTML Notion cannot draw is stripped. On `main`, ships after 0.1.8
 - `plain` — plain text
 - `html` — HTML for the browser, safe to set as `innerHTML`: text is escaped and, by default, only `http(s)`/`mailto` links become `<a>` (line breaks, images and allowed schemes are options)
 
@@ -17,7 +18,7 @@ Things that are easy to get wrong:
 - Input dialect: standard Markdown by default. Legacy Slack `mrkdwn` (`*bold*`, `~strike~`, `<url|text>`) must be declared — `from: "slack-mrkdwn"` in npm, `--from slack-mrkdwn` in the CLI.
 - Streaming is append-only: what `push` returns is final and `finish` only appends the tail, so the pieces concatenated equal a one-shot `render` (unless the document is long enough to be split into parts).
 - A channel that rewrites the whole message (Telegram edit) sends the accumulated output plus `preview()`. An append-only channel (Slack `appendStream`) sends each `push` piece as is and never calls `preview()`.
-- The repair report counts what the normalizer fixed: closed emphasis, closed code fences, backtick runs kept as text, dropped `**`.
+- The repair report counts what the normalizer fixed: closed emphasis, closed code fences, backtick runs kept as text, dropped `**`. After 0.1.8 it also counts what the channel rewrote (escapes, tag emphasis, stripped HTML, bullets, tables, converted markers).
 - One Rust core with no dependencies. The CLI, the npm package (WASM) and the Go port are held to the same test corpus.
 - `SPEC.md` and `DESIGN.md` are written in Korean.
 
@@ -40,6 +41,8 @@ Things that are easy to get wrong:
 - [Overview](https://mdwire.minjun.dev/): what mdwire does
 - [Demo](https://mdwire.minjun.dev/demo/): one agent answer converted for Telegram and Slack, in the browser
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
+- [Docs: concepts](https://mdwire.minjun.dev/docs/): channels, dialects, options, the repair report, the streaming contract
+- [Docs: npm](https://mdwire.minjun.dev/docs/npm/) · [Rust](https://mdwire.minjun.dev/docs/rust/) · [Go](https://mdwire.minjun.dev/docs/go/) · [CLI](https://mdwire.minjun.dev/docs/cli/): the API of each
 
 ## Optional
 

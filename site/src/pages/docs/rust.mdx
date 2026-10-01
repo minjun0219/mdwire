@@ -1,0 +1,136 @@
+---
+layout: ../../layouts/Doc.astro
+title: Rust
+description: The mdwire-core crate — render, render_with, Options, Streamer, Channel, Dialect and Repairs.
+---
+import DocsNav from "../../components/DocsNav.astro";
+import Next from "../../components/Next.astro";
+
+<DocsNav />
+
+# Rust — `mdwire-core`
+
+The core. Standard library only — no dependencies. The crate is `mdwire-core`; the library is
+imported as `mdwire`. Full rustdoc: [docs.rs/mdwire-core](https://docs.rs/mdwire-core).
+
+```sh
+cargo add mdwire-core
+```
+
+## `render`
+
+```rust
+use mdwire::{render, Channel};
+
+let parts: Vec<String> = render("## 제목\n\n**굵게** 있는 문단", Channel::TelegramHtml);
+assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
+```
+
+`render(input: &str, channel: Channel) -> Vec<String>` converts a finished document. Over the limit,
+it splits where no markup is open — chosen from the structure, never by cutting the rendered text.
+
+## `render_with`
+
+```rust
+use mdwire::{render_with, Channel, Dialect, Options};
+
+let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
+let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
+assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
+assert_eq!(out.repairs.closed_emphasis, 1);
+```
+
+`render_with(input: &str, channel: Channel, options: Options) -> Rendered`, where
+`Rendered { parts: Vec<String>, repairs: Repairs }`.
+
+## `Options`
+
+```rust
+pub struct Options {
+    pub from: Dialect,          // default Dialect::Markdown
+    pub limit: Option<usize>,   // None = channel.limit(); below MIN_LIMIT (256) is raised
+    pub html: HtmlOptions,      // Channel::Html only
+}
+
+pub struct HtmlOptions {
+    pub line_breaks: LineBreaks,          // Br (default) | Space
+    pub images: Images,                   // Link (default) | Load
+    pub schemes: Option<Vec<String>>,     // None = http, https, mailto; Some replaces the default
+}
+```
+
+Fields may be added — build it as `Options { from, ..Default::default() }`. `MIN_LIMIT` is `256`.
+
+## `Streamer`
+
+```rust
+use mdwire::{Channel, Streamer};
+
+let mut s = Streamer::new(Channel::TelegramHtml);
+let mut acc = String::new();
+s.push_into("앞말 **굵", &mut acc);
+assert_eq!(acc, "앞말 ");                                   // final so far
+assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>"); // what to draw now
+
+s.push_into("게** 끝", &mut acc);
+let last = format!("{acc}{}", s.preview());
+s.finish_into(&mut acc);
+assert_eq!(acc, last);
+assert!(!s.revised());                                       // the last frame was the result
+```
+
+| | |
+|---|---|
+| `Streamer::new(channel)` · `Streamer::with_options(channel, options)` | One streamer per document. |
+| `push(&mut self, chunk) -> &str` | What is safe to send now; borrowed until the next call. |
+| `push_into(&mut self, chunk, out: &mut String)` | The same, appended to your buffer — no allocation per chunk. |
+| `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | The rest, with open markup closed. |
+| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | The tail to append when redrawing the whole message. Costs as much as the open block; call it when you draw. |
+| `close_open(&self, out: &mut String)` | Appends only the closers for block markup already sent. |
+| `revised(&self) -> bool` | After `finish`: does the result differ from the last `preview`? `true` means "may differ". |
+| `repairs(&self) -> Repairs` | What was repaired so far. |
+
+The contract — `push` output is final, pieces concatenated equal `render` — is on
+[Concepts](/docs/#the-streaming-contract).
+
+## `Channel` and `Dialect`
+
+```rust
+pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, Html }
+pub enum Dialect { Markdown, SlackMrkdwn }
+```
+
+`NotionMarkdown` <Next />
+
+| | |
+|---|---|
+| `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | The string names (`"telegram-html"`, …). |
+| `Channel::all()` | Every channel. |
+| `Channel::limit(self) -> usize` | The part limit; `usize::MAX` for `Html`. |
+| `Dialect::name` · `Dialect::parse` | `"markdown"`, `"slack-mrkdwn"`. |
+
+## `Repairs`
+
+```rust
+pub struct Repairs {
+    pub closed_emphasis: usize,
+    pub closed_fence: usize,
+    pub reverted_code_span: usize,
+    pub dropped_marker: usize,
+    // channel rewrites — next release
+    pub escaped_char: usize,
+    pub tag_emphasis: usize,
+    pub stripped_html: usize,
+    pub rewritten_bullet: usize,
+    pub rewritten_table: usize,
+    pub converted_marker: usize,
+}
+```
+
+`any()` — did it repair anything (the first four). `changed()` <Next /> — did it repair or rewrite
+anything. What each field counts: [Concepts](/docs/#the-repair-report).
+
+## `mdwire::width`
+
+`char_width(char) -> usize` (0, 1 or 2), `str_width(&str) -> usize` and `is_cjk(char) -> bool` —
+the display widths the core uses to align monospace tables.

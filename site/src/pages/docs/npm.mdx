@@ -1,0 +1,141 @@
+---
+layout: ../../layouts/Doc.astro
+title: npm (JS · React)
+description: The @minjun0219/mdwire package — render, renderWithReport, Streamer, and the React and events entry points.
+---
+import DocsNav from "../../components/DocsNav.astro";
+import Next from "../../components/Next.astro";
+
+<DocsNav />
+
+# npm — `@minjun0219/mdwire`
+
+The Rust core compiled to WASM, plus hand-written JS for React and an event list. Runs in Node,
+Bun and bundlers.
+
+```sh
+npm install @minjun0219/mdwire
+```
+
+The package picks its build by `exports` condition: Node gets a CommonJS build that loads the WASM
+from disk, everything else gets the ESM bundler build. **Under a bundler** the WASM is imported as an
+ES module — Vite needs `vite-plugin-wasm` and `build.target: "esnext"` (for the top-level `await`).
+See [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js).
+
+Channel and dialect names are the strings on [Concepts](/docs/).
+
+## `render(input, channel, options?)`
+
+```ts
+import { render } from "@minjun0219/mdwire";
+
+const parts: string[] = render(markdown, "telegram-html");
+```
+
+Converts a finished document. Returns the parts to send — one string unless the channel's limit (or
+`options.limit`) splits it.
+
+## `renderWithReport(input, channel, options?)`
+
+```ts
+import { renderWithReport } from "@minjun0219/mdwire";
+
+const out = renderWithReport(markdown, "slack-markdown", { from: "slack-mrkdwn" });
+out.parts;                   // string[]
+out.repairs.closedEmphasis;  // see "Repairs" below
+out.free();                  // the result lives in WASM memory
+```
+
+`render` plus the [repair report](/docs/#the-repair-report). The result and its `repairs` are WASM
+objects: call `free()` when done, or use `using` (`Symbol.dispose`).
+
+## `limit(channel)`
+
+The channel's part limit as a number. `html` has none and returns `4294967295`.
+
+## `new Streamer(channel, options?)`
+
+```ts
+import { Streamer } from "@minjun0219/mdwire";
+
+const s = new Streamer("telegram-html");
+let acc = "";
+for await (const token of tokens) {
+  acc += s.push(token);           // final — never rewritten
+  await edit(acc + s.preview());  // + what is held, drawn as if the input ended here
+}
+acc += s.finish();
+if (s.revised()) await edit(acc); // skip when the last frame already equals the result
+s.free();
+```
+
+| Method | Returns | |
+|---|---|---|
+| `push(chunk)` | `string` | What is safe to send now. Final. |
+| `preview()` | `string` | The tail to append when redrawing the whole message. Does not change state; call it when you draw, not per chunk. |
+| `closeOpen()` | `string` | The tail that only closes block markup already sent. Does not change state. |
+| `finish()` | `string` | The rest, with open markup closed. |
+| `revised()` | `boolean` | After `finish`: does the result differ from the last `preview()` frame? |
+| `repairs()` | `Repairs` | What was repaired so far — the whole document after `finish`. |
+| `free()` | | Releases the WASM memory. |
+
+For an append-only channel (Slack `appendStream`), send each `push` piece and never call `preview()`.
+See [the streaming contract](/docs/#the-streaming-contract).
+
+## `RenderOptions`
+
+```ts
+interface RenderOptions {
+  from?: "markdown" | "slack-mrkdwn";
+  limit?: number;                       // a positive integer; below 256 is raised to 256
+  html?: {                              // the "html" channel only
+    lineBreaks?: "br" | "space";        // default "br"
+    images?: "link" | "load";           // default "link"
+    schemes?: string[];                 // default ["http", "https", "mailto"]; replaces, does not add
+  };
+}
+```
+
+An unknown channel or dialect name, an unknown `html` value, or a `limit` that is not a positive
+integer throws an `Error`.
+
+## `Repairs`
+
+| Field | |
+|---|---|
+| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` | Repairs |
+| `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` <Next /> | Channel rewrites |
+
+What each counts: [Concepts](/docs/#the-repair-report).
+
+## React — `@minjun0219/mdwire/react`
+
+Builds React elements with `createElement` — no `innerHTML`. Escaping, the tag set and link schemes
+are decided by the core's `html` channel; you choose which component draws each tag.
+
+```tsx
+import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
+
+<Markdown text={answer} components={{ a: RouterLink }} />
+
+const { elements, push, finish } = useMarkdownStream();      // push(token) … finish()
+const settled = useMarkdownStream({ eager: false });        // only what is final
+```
+
+| | |
+|---|---|
+| `<Markdown text from? components? options? />` | A finished answer. `components` maps a tag (`a`, `code`, …) to your component. |
+| `useMarkdownStream({ from?, components?, options?, eager?, onSettled? })` | Streaming. Returns `{ elements, push, finish }`. `eager` (default `true`) draws held content early; `false` shows only what is final. `onSettled(html, revised)` runs after `finish`. Read once, except `onSettled`. |
+| `toElements(html, components?, schemes?)` | `html` channel output (streaming: accumulated output + `preview()`) to React nodes. Pass the same `schemes` you gave the core. |
+
+## Events — `@minjun0219/mdwire/events`
+
+```ts
+import { toEvents } from "@minjun0219/mdwire/events";
+
+toEvents(html); // [{ type: "open", tag: "p", attrs: {} }, { type: "text", text: "…" }, { type: "close", tag: "p" }, …]
+```
+
+The same `html` output as a flat `open` / `text` / `close` / `void` list, for other frameworks.
+Attributes carry only what the core emits: `href` on `a`, `class` (`language-…`) on `code`, `style`
+(`text-align:…`) on `th` and `td`, `start` on `ol`, and `src` · `alt` on `img` when images load.

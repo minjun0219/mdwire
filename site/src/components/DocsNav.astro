@@ -1,0 +1,26 @@
+---
+// 문서 페이지끼리 오가는 목차. 언어와 현재 페이지는 경로에서 읽는다.
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang].docs;
+const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const items = [
+  { page: "docs", label: t.index },
+  { page: "docs/npm", label: t.npm },
+  { page: "docs/rust", label: t.rust },
+  { page: "docs/go", label: t.go },
+  { page: "docs/cli", label: t.cli },
+];
+---
+
+<nav class="docs-nav" aria-label="Docs">
+  {
+    items.map(({ page, label }) => (
+      <a href={getRelativeLocaleUrl(lang, page)} aria-current={rest === page ? "page" : undefined}>
+        {label}
+      </a>
+    ))
+  }
+</nav>

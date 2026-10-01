@@ -1,0 +1,135 @@
+---
+layout: ../../../layouts/Doc.astro
+title: Rust
+description: mdwire-core 크레이트 — render, render_with, Options, Streamer, Channel, Dialect, Repairs.
+---
+import DocsNav from "../../../components/DocsNav.astro";
+import Next from "../../../components/Next.astro";
+
+<DocsNav />
+
+# Rust — `mdwire-core`
+
+코어. 표준 라이브러리만 쓴다 — 의존이 없다. 크레이트 이름은 `mdwire-core`, 라이브러리는 `mdwire` 로
+import 한다. 전체 rustdoc: [docs.rs/mdwire-core](https://docs.rs/mdwire-core).
+
+```sh
+cargo add mdwire-core
+```
+
+## `render`
+
+```rust
+use mdwire::{render, Channel};
+
+let parts: Vec<String> = render("## 제목\n\n**굵게** 있는 문단", Channel::TelegramHtml);
+assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
+```
+
+`render(input: &str, channel: Channel) -> Vec<String>` 은 완성된 문서를 옮긴다. 한도를 넘으면 열린
+마크업이 없는 자리에서 나눈다 — 렌더 결과를 글자 수로 자르지 않고 구조에서 고른다.
+
+## `render_with`
+
+```rust
+use mdwire::{render_with, Channel, Dialect, Options};
+
+let options = Options { from: Dialect::SlackMrkdwn, ..Default::default() };
+let out = render_with("*굵게* 는 **영향 범위", Channel::SlackMarkdown, options);
+assert_eq!(out.parts, vec!["**굵게** 는 **영향 범위**"]);
+assert_eq!(out.repairs.closed_emphasis, 1);
+```
+
+`render_with(input: &str, channel: Channel, options: Options) -> Rendered`.
+`Rendered { parts: Vec<String>, repairs: Repairs }`.
+
+## `Options`
+
+```rust
+pub struct Options {
+    pub from: Dialect,          // 기본 Dialect::Markdown
+    pub limit: Option<usize>,   // None = channel.limit(). MIN_LIMIT(256) 보다 작으면 올린다
+    pub html: HtmlOptions,      // Channel::Html 에만
+}
+
+pub struct HtmlOptions {
+    pub line_breaks: LineBreaks,          // Br(기본) | Space
+    pub images: Images,                   // Link(기본) | Load
+    pub schemes: Option<Vec<String>>,     // None = http, https, mailto. Some 은 기본값을 바꾼다
+}
+```
+
+필드가 늘 수 있으니 `Options { from, ..Default::default() }` 로 만든다. `MIN_LIMIT` 은 `256`.
+
+## `Streamer`
+
+```rust
+use mdwire::{Channel, Streamer};
+
+let mut s = Streamer::new(Channel::TelegramHtml);
+let mut acc = String::new();
+s.push_into("앞말 **굵", &mut acc);
+assert_eq!(acc, "앞말 ");                                   // 지금까지의 확정분
+assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>"); // 지금 그릴 것
+
+s.push_into("게** 끝", &mut acc);
+let last = format!("{acc}{}", s.preview());
+s.finish_into(&mut acc);
+assert_eq!(acc, last);
+assert!(!s.revised());                                       // 마지막 화면이 곧 완성본
+```
+
+| | |
+|---|---|
+| `Streamer::new(channel)` · `Streamer::with_options(channel, options)` | 문서 하나에 스트리머 하나. |
+| `push(&mut self, chunk) -> &str` | 지금 보내도 안전한 것. 다음 호출 전까지 빌려준다. |
+| `push_into(&mut self, chunk, out: &mut String)` | 같은 것을 호출자 버퍼에 — 조각당 할당이 없다. |
+| `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | 남은 것, 열린 마크업은 닫아서. |
+| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | 메시지를 통째로 다시 그릴 때 붙일 꼬리. 열린 블록만큼 든다 — 그릴 때 부른다. |
+| `close_open(&self, out: &mut String)` | 이미 나간 블록 마크업의 닫는 태그만 붙인다. |
+| `revised(&self) -> bool` | `finish` 뒤에: 완성본이 마지막 `preview` 와 다른가. 참은 "다를 수 있다"는 뜻. |
+| `repairs(&self) -> Repairs` | 지금까지 고친 것. |
+
+계약(`push` 출력은 확정, 이어 붙이면 `render` 와 같다)은 [개념](/ko/docs/#스트리밍-계약)에 있다.
+
+## `Channel` 과 `Dialect`
+
+```rust
+pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, Html }
+pub enum Dialect { Markdown, SlackMrkdwn }
+```
+
+`NotionMarkdown` <Next />
+
+| | |
+|---|---|
+| `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …). |
+| `Channel::all()` | 모든 채널. |
+| `Channel::limit(self) -> usize` | 조각 한도. `Html` 은 `usize::MAX`. |
+| `Dialect::name` · `Dialect::parse` | `"markdown"`, `"slack-mrkdwn"`. |
+
+## `Repairs`
+
+```rust
+pub struct Repairs {
+    pub closed_emphasis: usize,
+    pub closed_fence: usize,
+    pub reverted_code_span: usize,
+    pub dropped_marker: usize,
+    // 채널에 맞춰 바꾼 것 — 다음 릴리스
+    pub escaped_char: usize,
+    pub tag_emphasis: usize,
+    pub stripped_html: usize,
+    pub rewritten_bullet: usize,
+    pub rewritten_table: usize,
+    pub converted_marker: usize,
+}
+```
+
+`any()` — 하나라도 고쳤는가(앞 넷). `changed()` <Next /> — 고쳤든 바꿨든 하나라도 했는가. 각 필드가 세는 것:
+[개념](/ko/docs/#정규화-보고).
+
+## `mdwire::width`
+
+`char_width(char) -> usize`(0, 1, 2), `str_width(&str) -> usize`, `is_cjk(char) -> bool` — 코어가
+고정폭 표를 맞출 때 쓰는 표시 폭.
