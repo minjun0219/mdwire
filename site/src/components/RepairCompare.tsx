@@ -64,7 +64,7 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
 
 const text = {
   en: {
-    sample: "Broken output from the corpus",
+    sample: "Broken output from the test cases",
     channel: "Channel",
     input: "Agent output — edit it",
     output: "What mdwire sends",

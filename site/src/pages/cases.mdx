@@ -1,0 +1,162 @@
+---
+layout: ../layouts/Doc.astro
+title: Cases
+description: Real failures from sending agent-written Markdown to chat channels, and what mdwire sends instead.
+---
+
+
+# Cases
+
+Real failures we hit sending agent-written Markdown to chat channels. Each one is in the
+[test cases](https://github.com/minjun0219/mdwire/tree/main/corpus/cases) with its input and the expected
+output per channel, and the Rust core, the npm package, the Go implementation and the CLI all produce the
+same result. More cases live there than are shown here.
+
+## Emphasis spanning lines
+
+Prose wrapped at 80 columns easily carries emphasis onto the next line: 44 of 60 real documents had it.
+A regex-based converter paired the stranded `**` with the next one and inverted the emphasis range. The
+channel still returned HTTP 200, so nothing caught it.
+
+```text
+input
+  공개 채널**이다. 글 내용이 아니라
+  **신분 공개 + 시점의 조합**이 판단 대상
+broken
+  공개 채널<b>이다. 글 내용이 아니라
+  </b>신분 공개 …
+mdwire
+  공개 채널이다. 글 내용이 아니라
+  <b>신분 공개 + 시점의 조합</b>이 판단 대상
+```
+
+The stranded `**` is dropped and the `**` at the start of the line opens, as CommonMark and Slack read it.
+Test cases: [`emphasis-across-linebreak`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-across-linebreak),
+[`emphasis-wraps-line`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/emphasis-wraps-line)
+
+## Bold ending in a symbol, before a Korean particle
+
+Korean attaches a particle right after the emphasis. When the bold ends in a parenthesis, quote, backtick or
+period, CommonMark's rules do not let the closing `**` close. On GitHub the asterisks stay as text, and with
+several on one line the pairs cross and the ranges invert.
+
+```text
+input
+  마감 전에 **설정(config)**을 바꾸고, **"배포 금지"**는 금요일까지 유지한다.
+GitHub
+  마감 전에 <strong>설정(config)</strong>을 바꾸고, <strong>"배포 금지"</strong>는 금요일까지 유지한다.
+Telegram
+  마감 전에 <b>설정(config)</b>을 바꾸고, <b>"배포 금지"</b>는 금요일까지 유지한다.
+```
+
+mdwire closes this bold. For GitHub it writes just those pairs as `<strong>` tags, which render regardless of
+the rule. Test case: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+
+## Tildes for ranges and approximations
+
+Korean uses the tilde for ranges (`5~6월`) and approximations (`~40km`). GitHub (GFM) reads a single `~` as
+strikethrough too, so two tildes in one paragraph strike everything between them.
+
+```text
+input
+  주행 가능 거리는 ~40km 남았고 보정까지 ~22km 부족하다. 충전은 5~6월에 한다.
+GitHub
+  주행 가능 거리는 \~40km 남았고 보정까지 \~22km 부족하다. 충전은 5\~6월에 한다.
+```
+
+For GitHub a literal `~` is escaped as `\~`, which shows as `~`. A real strikethrough, `~~like this~~`, is left
+alone. Test case: [`tilde-is-not-strikethrough`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/tilde-is-not-strikethrough)
+
+## Asterisks in masked numbers
+
+A card number masked with asterisks was read as italics: part of the number slanted, or asterisks disappeared.
+
+```text
+input
+  결제 수단: 신한카드 1***-****-****-001* (본인 명의)
+GitHub
+  결제 수단: 신한카드 1\*\*\*-\*\*\*\*-\*\*\*\*-001\* (본인 명의)
+```
+
+An asterisk where emphasis cannot open is judged to be a character, and it is escaped for GitHub and Notion,
+which would read it as syntax. Test case: [`masked-number-asterisks`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/masked-number-asterisks)
+
+## An unpaired backtick run
+
+A backtick run with no partner opened a code span that swallowed the rest of the block. The emphasis after it
+ended up trapped inside code.
+
+```text
+input
+  앞부분 ``` 뒤에 **굵게** 가 온다
+broken
+  앞부분 <code> 뒤에 **굵게** 가 온다</code>
+Telegram
+  앞부분 ``` 뒤에 <b>굵게</b> 가 온다
+```
+
+If no closing run arrives before the block ends, the backticks go back to being text and the swallowed part is
+read again, so its emphasis comes back. Test case: [`unpaired-backtick-run`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unpaired-backtick-run)
+
+## An unclosed code fence
+
+When the output hits a token limit or the last fence is forgotten, the code fence never closes. Sent as is, the
+channel rejects the message (400) or swallows the text after it as code.
+
+````text
+input
+  ```sh
+  tail -f app.log | grep ERROR
+Telegram
+  <pre><code class="language-sh">tail -f app.log | grep ERROR</code></pre>
+````
+
+The fence is closed right before sending. Test case: [`unclosed-code-fence`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unclosed-code-fence)
+
+## A table with Korean text
+
+Telegram has no table syntax, so a table goes out as a fixed-width block. Pad the columns by character count and
+a table with Korean text always misaligns: Hangul, Han characters and emoji take two cells on screen.
+
+```text
+환경     |  재현  | 응답 시간
+-------- | ------ | ---------
+스테이징 |   예   |     120ms
+프로덕션 |   예   |     340ms
+로컬     | 아니오 |      15ms
+```
+
+Columns are measured by display width, and alignment such as `:---:` is kept. Slack and GitHub get the table as
+is. Test case: [`korean-table`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/korean-table)
+
+## A tag cut at a part boundary
+
+Splitting a long answer to fit the length limit put the cut in the middle of a tag such as `<a href="…">`. Each
+part is one message, so both sides became broken HTML and the channel rejected the whole message. 8 of 2,289 real
+documents hit this.
+
+```text
+end of part 0
+  … 주소의 뒤집힌 꼴을 돌려준다 <a
+start of part 1
+  href="https://…">src</a>
+```
+
+The cut is chosen from the document's structure, not the rendered text. Only a point with no open markup can be a
+boundary; otherwise the markup is closed before it and reopened in the next part. Test case: [`tag-across-part-boundary`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/tag-across-part-boundary)
+
+## Links in angle brackets
+
+Text copied from Slack is full of `<https://…>` and `<url|text>` links: 124 of 256 real documents had them.
+Escaping `<` on the way to Telegram HTML shows them as text, angle brackets and all.
+
+```text
+input
+  슬랙에서 긁어 온 글은 <https://example.com/p|문서 보기> 꼴이다.
+Telegram
+  슬랙에서 긁어 온 글은 <a href="https://example.com/p">문서 보기</a> 꼴이다.
+Slack
+  슬랙에서 긁어 온 글은 [문서 보기](https://example.com/p) 꼴이다.
+```
+
+An angle-bracket link goes out as a link; the part after `|`, if any, is its text. Test case: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)

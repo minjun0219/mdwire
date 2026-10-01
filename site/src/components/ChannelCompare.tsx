@@ -30,7 +30,7 @@ type Output = { parts: string[]; repairs: Repairs; limit: number } | { error: st
 
 const text = {
   en: {
-    sample: "Example from the corpus",
+    sample: "Example from the test cases",
     input: "Agent output (Markdown)",
     parts: (n: number, max: number) => `${n} ${n === 1 ? "part" : "parts"} · limit ${max.toLocaleString("en")}`,
     noRepairs: "Nothing repaired or rewritten",

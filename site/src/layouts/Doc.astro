@@ -26,6 +26,7 @@ const href = (page: string) => getRelativeLocaleUrl(lang, page);
 const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
+  { page: "cases", label: t.nav.cases },
   { page: "demo", label: t.nav.demo },
   { page: "docs", label: t.nav.docs },
 ];
