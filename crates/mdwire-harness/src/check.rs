@@ -131,6 +131,15 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
             html_tags(part, allowed, &mut findings);
         }
     }
+    // **노션 표는 조각마다 온전해야 한다.** 분할기는 태그를 모르고 줄로 끊어서, 표 하나가 두 조각에
+    // 걸치면 앞은 `</table>` 없이 끝나고 뒤는 `<tr>` 로 시작한다 — 노션에는 XML 이 글자로 들어간다.
+    if channel == Channel::NotionMarkdown {
+        for part in output.split(PART_SEPARATOR) {
+            if part.matches("<table header-row=").count() != part.matches("</table>").count() {
+                findings.push(Finding { rule: Rule::UnclosedTag, detail: "조각 안에서 노션 표가 갈렸다".into() });
+            }
+        }
+    }
     tables(input, output, channel, &mut findings);
     // 번호 목록의 번호는 브라우저 채널에서 `<ol>` 이 그린다 — 글자로 안 나온다.
     let input = if channel == Channel::Html {
@@ -260,6 +269,19 @@ fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> 
         s = s.replace(&format!("<{tag}>"), marker).replace(&format!("</{tag}>"), marker);
     }
     std::borrow::Cow::Owned(s)
+}
+
+/// 노션 출력의 표 수. **한도 때문에 나눈 이어지는 표는 세지 않는다** — 코어는 긴 표를 머리글을 되풀이한
+/// 표 여럿으로 내는데(바로 앞이 `</table>` 와 빈 줄이나 조각 경계), 그걸 따로 세면 다른 표가 글로 풀려
+/// 사라진 것이 개수에 묻힌다.
+fn notion_table_count(output: &str) -> usize {
+    output
+        .match_indices("<table header-row=")
+        .filter(|&(at, _)| {
+            let before = output[..at].trim_end_matches(['\n', PART_SEPARATOR]);
+            !before.ends_with("</table>")
+        })
+        .count()
 }
 
 /// 역슬래시 탈출을 푼 글. `\*` 는 별표 한 글자다.
@@ -1141,6 +1163,8 @@ fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
         let want = gfm_table_count(input);
         let got = if channel == Channel::Html {
             output.matches("<table>").count()
+        } else if channel == Channel::NotionMarkdown {
+            notion_table_count(output)
         } else {
             output.split(PART_SEPARATOR).map(gfm_table_count).sum::<usize>()
         };
@@ -1667,5 +1691,14 @@ mod tests {
         // 한 줄의 강조를 잃으면 잡는다.
         let f = check("**줄을\n넘는 굵게**", "**줄을**\n넘는 굵게", Channel::NotionMarkdown);
         assert!(f.iter().any(|x| x.rule == Rule::EmphasisRange), "{f:?}");
+    }
+
+    /// 한도로 나눈 노션 표는 하나로 센다 — 따로 세면 다른 표가 사라진 것이 묻힌다.
+    #[test]
+    fn notion_split_table_counts_once() {
+        let t = "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n</table>";
+        assert_eq!(notion_table_count(&format!("{t}\n\n{t}")), 1);
+        assert_eq!(notion_table_count(&format!("{t}{PART_SEPARATOR}{t}")), 1);
+        assert_eq!(notion_table_count(&format!("{t}\n\n글\n\n{t}")), 2);
     }
 }

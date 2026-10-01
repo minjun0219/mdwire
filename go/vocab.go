@@ -109,6 +109,9 @@ func (v vocab) allowed(url string) bool {
 // 슬랙 markdown_text 는 표준 마크다운 표를 네이티브로 그린다. GitHub 은 GFM 표가 원래 문법이다.
 func (v vocab) tablesNative() bool { return v.isMarkdown() || v.isHTML() }
 
+// xmlTables 는 표를 노션 <table> 로 내는가다. 파이프 표로 내면 칸 안의 | 가 칸을 가른다.
+func (v vocab) xmlTables() bool { return v.channel == NotionMarkdown }
+
 // isHTML 은 브라우저용 HTML 채널인가다. 블록까지 태그로 그린다(<p> <h2> <ul> <table>).
 func (v vocab) isHTML() bool { return v.channel == HTML }
 

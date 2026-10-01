@@ -1,5 +1,22 @@
-| 환경 | 재현 | 응답 시간 |
-| --- | :---: | ---: |
-| 스테이징 | 예 | 120ms |
-| 프로덕션 | 예 | 340ms |
-| 로컬 | 아니오 | 15ms |
+<table header-row="true">
+<tr>
+<td>환경</td>
+<td>재현</td>
+<td>응답 시간</td>
+</tr>
+<tr>
+<td>스테이징</td>
+<td>예</td>
+<td>120ms</td>
+</tr>
+<tr>
+<td>프로덕션</td>
+<td>예</td>
+<td>340ms</td>
+</tr>
+<tr>
+<td>로컬</td>
+<td>아니오</td>
+<td>15ms</td>
+</tr>
+</table>

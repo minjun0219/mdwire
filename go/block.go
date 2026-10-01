@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // 블록 스캐너 — 줄 단위로 읽고, 줄 단위로 내보낸다.
@@ -602,8 +603,18 @@ func (e *engine) closeBlock(s sink) {
 		e.blockCloseMarkup(&e.out)
 	case stateTable:
 		e.startLine()
-		e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
+		breaks := e.table.render(e.v, e.dialect, &e.inline.repairs, &e.out)
 		e.table.clear()
+		// 한도를 넘어 여러 표로 나눴다 — 사이를 블록 경계로 내보낸다(노션).
+		if len(breaks) > 0 {
+			from := 0
+			for _, at := range breaks {
+				s.text(e.out[from:at])
+				s.boundary()
+				from = at
+			}
+			e.out = append(e.out[:0], e.out[from:]...)
+		}
 	}
 	e.state = stateNone
 	e.lists = e.lists[:0]
@@ -1068,7 +1079,7 @@ func (t *table) clear() {
 
 // render 는 고정폭 블록으로 그린다. 열은 표시 폭으로 맞춘다 — 문자 수로 맞추면 한글이 든
 // 표는 반드시 어긋난다(SPEC 7절). 표를 직접 그리는 채널은 GFM 그대로 낸다.
-func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
+func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) []int {
 	cols := len(t.align)
 	// 셀 안의 마크업은 고정폭 블록 안에서 살아남지 못한다. 글자로 내린다 — 표를 직접
 	// 그리는 채널은 예외다.
@@ -1109,11 +1120,14 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 
 	if v.isHTML() {
 		writeHTMLTable(out, cells, t.align)
-		return
+		return nil
+	}
+	if v.xmlTables() {
+		return writeNotionTable(out, cells, v.limit)
 	}
 	if v.tablesNative() {
 		writeGFMTable(out, cells, t.align)
-		return
+		return nil
 	}
 
 	widths := make([]int, cols)
@@ -1150,6 +1164,199 @@ func (t *table) render(v vocab, d Dialect, repairs *Repairs, out *[]byte) {
 	}
 	v.escape(string(body), out)
 	v.verbatimClose("", out)
+	return nil
+}
+
+// writeNotionTable 은 표를 노션 <table> 로 낸다 — 러스트 쪽 write_notion_table. 파이프 표로 내면
+// 칸 안의 | 가 칸을 가른다(실측). 정렬은 노션 표에 없어 버리고, 칸에 글자로 적힌 태그 모양은
+// 탈출한다(< 가 든 칸만 그 자리에서 바꾼다). 한도를 넘으면 머리글을 되풀이한 표 여럿으로 내고,
+// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로 내린다 — 머리글이 아직 안 나갔으면 머리글도 글로
+// 먼저 낸다. 머리글 하나가 한도를 넘으면 표 전체를 그렇게 내린다. 나눈 자리(다음 조각을 여는 빈
+// 줄의 위치)를 돌려준다 — 엔진이 그 사이를 블록 경계로 내보낸다.
+func writeNotionTable(out *[]byte, cells [][]string, limit int) []int {
+	const open, closeTag = `<table header-row="true">`, "\n</table>"
+	for _, row := range cells {
+		for c, cell := range row {
+			if strings.IndexByte(cell, '<') >= 0 {
+				row[c] = notionCell(cell)
+			}
+		}
+	}
+	rowLen := func(row []string) int {
+		n := len("\n<tr>\n</tr>")
+		for _, c := range row {
+			n += len("\n<td></td>") + utf8.RuneCountInString(c)
+		}
+		return n
+	}
+	writeRow := func(row []string) {
+		*out = append(*out, "\n<tr>"...)
+		for _, cell := range row {
+			*out = append(*out, "\n<td>"...)
+			*out = append(*out, cell...)
+			*out = append(*out, "</td>"...)
+		}
+		*out = append(*out, "\n</tr>"...)
+	}
+	if len(cells) == 0 {
+		return nil
+	}
+	head, body := cells[0], cells[1:]
+	base := len(open) + len(closeTag) + rowLen(head)
+	if base > limit {
+		for r, row := range cells {
+			if r > 0 {
+				*out = append(*out, '\n')
+			}
+			writeTextRow(out, row)
+		}
+		return nil
+	}
+	var breaks []int
+	wrote, headShown, opened, used := false, false, false, 0
+	piece := func() {
+		if wrote {
+			breaks = append(breaks, len(*out))
+			*out = append(*out, "\n\n"...)
+		}
+		wrote = true
+	}
+	for _, row := range body {
+		n := rowLen(row)
+		if base+n > limit {
+			if opened {
+				*out = append(*out, closeTag...)
+				opened = false
+			}
+			piece()
+			if !headShown {
+				writeTextRow(out, head)
+				*out = append(*out, '\n')
+				headShown = true
+			}
+			writeTextRow(out, row)
+			continue
+		}
+		if opened && used+n > limit {
+			*out = append(*out, closeTag...)
+			opened = false
+		}
+		if !opened {
+			piece()
+			*out = append(*out, open...)
+			writeRow(head)
+			opened, headShown, used = true, true, base
+		}
+		writeRow(row)
+		used += n
+	}
+	switch {
+	case opened:
+		*out = append(*out, closeTag...)
+	case !wrote:
+		// 머리글뿐인 표.
+		*out = append(*out, open...)
+		writeRow(head)
+		*out = append(*out, closeTag...)
+	}
+	return breaks
+}
+
+// writeTextRow 는 표 밖으로 내린 행을 글 한 줄로 적는다 — 러스트 쪽 write_text_row. 줄 첫머리가
+// #·>·-·+·* 나 1. 이면 노션이 블록 구문으로 읽어서 탈출한다.
+func writeTextRow(out *[]byte, row []string) {
+	for k, cell := range row {
+		if k > 0 {
+			*out = append(*out, " | "...)
+			*out = append(*out, cell...)
+			continue
+		}
+		digits := len(cell) - len(strings.TrimLeft(cell, "0123456789"))
+		switch {
+		case cell != "" && strings.IndexByte("#>-+*", cell[0]) >= 0:
+			*out = append(*out, '\\')
+		case digits > 0 && digits < len(cell) && (cell[digits] == '.' || cell[digits] == ')'):
+			*out = append(*out, cell[:digits]...)
+			*out = append(*out, '\\')
+			*out = append(*out, cell[digits:]...)
+			continue
+		}
+		*out = append(*out, cell...)
+	}
+}
+
+// notionCell 은 노션 표 칸 하나를 탈출한다 — 러스트 쪽 push_notion_cell. 칸 안의 </td> 는 노션이
+// 칸을 닫는 태그로 읽는다(실측). \<\/td\> 로 / 와 > 까지 막아야 글자로 남았다. 태그로 보는 것은 <
+// 뒤에 글자가 오고 다음 < 보다 앞에 > 가 있을 때뿐이고, <br> 은 둔다. 코드 스팬 안은 표 구조
+// 태그(td tr th table)만 막는다 — 코드 안의 탈출은 글자로 보인다.
+func notionCell(cell string) string {
+	var b strings.Builder
+	code, closeAt := 0, -1
+	for i := 0; i < len(cell); i++ {
+		c := cell[i]
+		if i == closeAt {
+			b.WriteString(`\>`)
+			closeAt = -1
+			continue
+		}
+		if c == '`' {
+			run := 1
+			for i+run < len(cell) && cell[i+run] == '`' {
+				run++
+			}
+			switch code {
+			case 0:
+				code = run
+			case run:
+				code = 0
+			}
+			b.WriteString(cell[i : i+run])
+			i += run - 1
+			continue
+		}
+		if c == '<' && closeAt < 0 {
+			rest := cell[i+1:]
+			slash := strings.HasPrefix(rest, "/")
+			name := rest
+			if slash {
+				name = rest[1:]
+			}
+			n := 0
+			for n < len(name) && (name[n]|0x20 >= 'a' && name[n]|0x20 <= 'z' || name[n] >= '0' && name[n] <= '9') {
+				n++
+			}
+			word := name[:n]
+			tagLike := n > 0 && name[0]|0x20 >= 'a' && name[0]|0x20 <= 'z' &&
+				!(!slash && strings.EqualFold(word, "br") && strings.HasPrefix(name[n:], ">"))
+			structural := false
+			for _, t := range []string{"td", "tr", "th", "table"} {
+				structural = structural || strings.EqualFold(word, t)
+			}
+			gt, lt := strings.IndexByte(rest, '>'), strings.IndexByte(rest, '<')
+			if gt >= 0 && lt >= 0 && lt < gt {
+				gt = -1
+			}
+			if tagLike && gt >= 0 && (code == 0 || structural) {
+				if slash {
+					b.WriteString(`\<\/`)
+					i++
+				} else {
+					b.WriteString(`\<`)
+				}
+				closeAt = i - boolInt(slash) + 1 + gt
+				continue
+			}
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // writeHTMLTable 은 표를 <table> 로 낸다(HTML). 칸은 이미 escape·렌더된 것을 받는다.

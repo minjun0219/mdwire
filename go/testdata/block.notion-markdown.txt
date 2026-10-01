@@ -30,15 +30,35 @@ tail -f app.log | grep ERROR
 펜스 안 **마커** 는 글자
 ```
 ----
-| 환경 | 재현 | 응답 |
-| --- | ---: | :---: |
-| 스테이징 | 예 | 120ms |
-| 로컬 | 아니오 | 5ms |
+<table header-row="true">
+<tr>
+<td>환경</td>
+<td>재현</td>
+<td>응답</td>
+</tr>
+<tr>
+<td>스테이징</td>
+<td>예</td>
+<td>120ms</td>
+</tr>
+<tr>
+<td>로컬</td>
+<td>아니오</td>
+<td>5ms</td>
+</tr>
+</table>
 ----
 문단이 먼저다.
-| a | b |
-| --- | --- |
-| 1 | 2 |
+<table header-row="true">
+<tr>
+<td>a</td>
+<td>b</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2</td>
+</tr>
+</table>
 ----
 | 이건 표가 아니다
 그냥 문단

@@ -262,7 +262,7 @@ func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 		{"<https://a.com/x_y>", `[https://a.com/x\_y](https://a.com/x_y)`},
 		{"##### 다섯\n\n* 별표 목록", "#### 다섯\n\n- 별표 목록"},
 		{"> **a<br>b** 끝", "> **a<br>b** 끝"},
-		{"| a |\n|---|\n| 줄<br>바꿈 |", "| a |\n| --- |\n| 줄<br>바꿈 |"},
+		{"| a |\n|---|\n| 줄<br>바꿈 |", "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>줄<br>바꿈</td>\n</tr>\n</table>"},
 		{"foo\\\nbar", "foo\\\\\nbar"},
 		{`path C:\`, `path C:\\`},
 		{`\$x\$ 와 $5`, `\$x\$ 와 $5`},
@@ -292,5 +292,64 @@ func TestNotionClosesEmphasisAtEachLine(t *testing.T) {
 		if got := strings.Join(Render(c[0], NotionMarkdown), ""); got != c[1] {
 			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
 		}
+	}
+}
+
+// 노션에는 표를 <table> 로 낸다 — 러스트 쪽 notion_writes_tables_as_xml.
+func TestNotionWritesTablesAsXML(t *testing.T) {
+	got := strings.Join(Render("| 항목 | 비고 |\n|:--|--:|\n| **마통** | a \\| b |", NotionMarkdown), "")
+	want := "<table header-row=\"true\">\n<tr>\n<td>항목</td>\n<td>비고</td>\n</tr>\n<tr>\n<td>**마통**</td>\n<td>a | b</td>\n</tr>\n</table>"
+	if got != want {
+		t.Fatalf("\n  got  %q\n  want %q", got, want)
+	}
+}
+
+// 한도를 넘는 노션 표는 머리글을 되풀이한 표 여럿으로 나눈다 — 러스트 쪽 같은 이름의 테스트.
+func TestNotionSplitsLongTablesIntoWholeTables(t *testing.T) {
+	input := "| a | b |\n|---|---|\n"
+	for i := 0; i < 40; i++ {
+		input += fmt.Sprintf("| 행%d | 값%d 가나다라 |\n", i, i)
+	}
+	parts := RenderWith(input, NotionMarkdown, Options{Limit: 300}).Parts
+	if len(parts) < 2 {
+		t.Fatal("나뉘어야 한다")
+	}
+	for _, p := range parts {
+		if utf8.RuneCountInString(p) > 300 || !strings.HasPrefix(p, "<table header-row=\"true\">\n<tr>\n<td>a</td>") || !strings.HasSuffix(p, "</table>") {
+			t.Fatalf("온전한 표가 아니다: %q", p)
+		}
+	}
+}
+
+// 머리글과 함께 한도에 안 드는 행은 표 밖의 글로, 칸의 태그 모양은 탈출 — 러스트 쪽
+// notion_splits_long_tables_into_whole_tables 의 뒷부분.
+func TestNotionTableLongRowAndTagLikeCell(t *testing.T) {
+	long := "| 머리 | 둘 |\n|---|---|\n| 짧음 | 가 |\n| " + strings.Repeat("긴칸", 200) + " | 나 |\n| 짧음2 | 다 |"
+	parts := RenderWith(long, NotionMarkdown, Options{Limit: 300}).Parts
+	for _, p := range parts {
+		if utf8.RuneCountInString(p) > 300 || strings.Count(p, "<table ") != strings.Count(p, "</table>") {
+			t.Fatalf("온전하지 않은 조각: %q", p)
+		}
+	}
+	if !strings.Contains(strings.Join(parts, ""), "긴칸긴칸 | 나") {
+		t.Fatal("긴 행이 글로 내려오지 않았다")
+	}
+	got := strings.Join(Render("| a |\n|---|\n| x </td> y <br> z |", NotionMarkdown), "")
+	want := "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
+	if got != want {
+		t.Fatalf("\n  got  %q\n  want %q", got, want)
+	}
+}
+
+// 두 번째 자체 리뷰 — 러스트 쪽 notion_splits_long_tables_into_whole_tables 의 뒷부분과 같다.
+func TestNotionTableCellAnglesAndHeaderKept(t *testing.T) {
+	cells := strings.Join(Render("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", NotionMarkdown), "")
+	if !strings.Contains(cells, "<td>i<n 일 때<br>반복</td>") || !strings.Contains(cells, "<td>`Option<T>` 와 `x\\<\\/td\\>y`</td>") {
+		t.Fatalf("칸 탈출이 틀렸다: %q", cells)
+	}
+	only := "| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | " + strings.Repeat("가 ", 200) + " |"
+	out := strings.Join(RenderWith(only, NotionMarkdown, Options{Limit: 256}).Parts, "")
+	if !strings.HasPrefix(out, "이름 | 설명\n\\# 제목처럼 | 가 가") {
+		t.Fatalf("머리글이 사라졌거나 첫머리가 탈출되지 않았다: %q", out)
 	}
 }

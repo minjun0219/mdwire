@@ -729,7 +729,10 @@ fn notion_escapes_what_it_eats_and_strips_tags() {
     // 자체 리뷰에서 나온 것들 — 노션에 다시 올려 재 봤다.
     // `<br>` 은 그린다(칸 안에서도) — `\n` 으로 바꾸면 인용이 갈린다.
     assert_eq!(n("> **a<br>b** 끝"), "> **a<br>b** 끝");
-    assert_eq!(n("| a |\n|---|\n| 줄<br>바꿈 |"), "| a |\n| --- |\n| 줄<br>바꿈 |");
+    assert_eq!(
+        n("| a |\n|---|\n| 줄<br>바꿈 |"),
+        "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>줄<br>바꿈</td>\n</tr>\n</table>"
+    );
     // 줄 끝 역슬래시는 글자로 둔다(탈출한다) — 노션에 하드 브레이크 문법이 없고, 지우면 문단 끝의
     // `C:\` 같은 글자까지 사라진다.
     assert_eq!(n("foo\\\nbar"), "foo\\\\\nbar");
@@ -760,6 +763,64 @@ fn notion_closes_emphasis_at_each_line() {
     assert_eq!(n("**[링크\n이어](http://x.com)**"), "**[링크**\n**이어](http://x.com)**");
     // 다른 채널은 그대로다.
     assert_eq!(one("**줄을\n넘는**", Channel::GithubMarkdown), "**줄을\n넘는**");
+}
+
+/// **노션에는 표를 `<table>` 로 낸다**(실측 2026-10-01). 파이프 표로 내면 칸 안의 `|` 가 — 코드
+/// 스팬 안이든 `\|` 로 탈출했든 — 칸을 갈라 뒤의 내용이 사라졌다. `<table>` 에서는 글자다.
+#[test]
+fn notion_writes_tables_as_xml() {
+    let out = one("| 항목 | 비고 |\n|:--|--:|\n| **마통** | a \\| b |", Channel::NotionMarkdown);
+    assert_eq!(
+        out,
+        "<table header-row=\"true\">\n<tr>\n<td>항목</td>\n<td>비고</td>\n</tr>\n<tr>\n<td>**마통**</td>\n<td>a | b</td>\n</tr>\n</table>"
+    );
+}
+
+/// **한도를 넘는 노션 표는 머리글을 되풀이한 표 여럿으로 나눈다.** 분할기는 태그를 모르고 줄로
+/// 끊어서, 한 표를 가르면 앞 조각은 `</table>` 없이 끝나고 뒤 조각은 `<tr>` 로 시작했다.
+#[test]
+fn notion_splits_long_tables_into_whole_tables() {
+    let mut input = String::from("| a | b |\n|---|---|\n");
+    for i in 0..40 {
+        input.push_str(&format!("| 행{i} | 값{i} 가나다라 |\n"));
+    }
+    let opts = mdwire::Options { limit: Some(300), ..Default::default() };
+    let parts = mdwire::render_with(&input, Channel::NotionMarkdown, opts).parts;
+    assert!(parts.len() > 1);
+    for p in &parts {
+        assert!(p.chars().count() <= 300, "{p}");
+        assert!(p.starts_with("<table header-row=\"true\">\n<tr>\n<td>a</td>") && p.ends_with("</table>"), "{p}");
+    }
+    // 머리글과 함께 한도에 안 드는 행은 표 밖의 글로 내린다 — 표는 조각마다 온전하다.
+    let long = format!("| 머리 | 둘 |\n|---|---|\n| 짧음 | 가 |\n| {} | 나 |\n| 짧음2 | 다 |", "긴칸".repeat(200));
+    let opts = mdwire::Options { limit: Some(300), ..Default::default() };
+    let parts = mdwire::render_with(&long, Channel::NotionMarkdown, opts).parts;
+    for p in &parts {
+        assert!(p.chars().count() <= 300);
+        assert_eq!(p.matches("<table ").count(), p.matches("</table>").count(), "{p}");
+    }
+    assert!(parts.concat().contains("긴칸긴칸 | 나"));
+    // 칸에 글자로 적힌 태그 모양은 탈출한다 — `</td>` 가 칸을 닫았다.
+    assert_eq!(
+        one("| a |\n|---|\n| x </td> y <br> z |", Channel::NotionMarkdown),
+        "<table header-row=\"true\">\n<tr>\n<td>a</td>\n</tr>\n<tr>\n<td>x \\<\\/td\\> y <br> z</td>\n</tr>\n</table>"
+    );
+    // 두 번째 자체 리뷰: 닫히지 않는 꺾쇠(`i<n`)는 태그가 아니라 뒤의 `<br>` 을 건드리지 않고, 코드
+    // 안의 `<T>` 는 그대로(코드 안의 탈출은 글자로 보인다) — 칸을 깨는 `</td>` 만 막는다.
+    let cells = one("| a | b |\n|---|---|\n| i<n 일 때<br>반복 | `Option<T>` 와 `x</td>y` |", Channel::NotionMarkdown);
+    assert!(cells.contains("<td>i<n 일 때<br>반복</td>"), "{cells}");
+    assert!(cells.contains(r"<td>`Option<T>` 와 `x\<\/td\>y`</td>"), "{cells}");
+    // 행이 전부 글로 내려가도 머리글은 남고, 글로 내린 줄의 첫머리는 탈출한다.
+    let only = format!("| 이름 | 설명 |\n|---|---|\n| # 제목처럼 | {} |", "가 ".repeat(200));
+    let opts = mdwire::Options { limit: Some(256), ..Default::default() };
+    let out = mdwire::render_with(&only, Channel::NotionMarkdown, opts).parts.concat();
+    assert!(out.starts_with("이름 | 설명\n\\# 제목처럼 | 가 가"), "{out}");
+    // 스트리밍은 채널 한도(65,536)로 재므로 이 크기는 표 하나다.
+    let mut s = mdwire::Streamer::new(Channel::NotionMarkdown);
+    let mut acc = String::new();
+    s.push_into(&input, &mut acc);
+    s.finish_into(&mut acc);
+    assert_eq!(acc.matches("<table ").count(), 1);
 }
 
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
