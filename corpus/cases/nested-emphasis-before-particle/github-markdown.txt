@@ -1,0 +1,5 @@
+닫는 기호마다 조사가 붙는다: <strong>「설정」</strong>을, <strong>『제목』</strong>은, <strong>“설정”</strong>은, <strong>[설정]</strong>에, <strong>설정?</strong>이라고, <strong>설정…</strong>은, <strong>10\~20%</strong>는.
+
+겹친 강조: <strong>*중요(필수)*</strong>를 지킨다. 기울임 <em>설정(config)</em>을 바꾸고 <del>예전(구)</del>는 지운다.
+
+①<strong><em>"주간 졸림"</em></strong> 이 먼저다.

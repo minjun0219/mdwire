@@ -569,10 +569,25 @@ impl Inline {
             let (left, right) = gfm_sides(open.before, &out[open.at..], after);
             if !(left && right) {
                 self.repairs.tag_emphasis += 1;
+                // **안쪽 강조의 마커가 맞붙어 있으면 그쪽에도 끼운다.** `***중요(필수)***를` 은 기울임의
+                // 닫는 `*` 뒤에 굵게의 조이너가 오게 되어, 이번에는 기울임이 앞 `)` 와 뒤 조이너
+                // 사이에서 못 닫는다. 맞붙은 마커 런 너머가 구두점이면 런 바깥에도 하나 넣는다.
+                let punct = |c: char| !c.is_alphanumeric() && !c.is_whitespace() && c != WORD_JOINER;
+                let marker = |c: &char| matches!(c, '*' | '_' | '~');
                 if !right {
+                    let body = &out[open.at..];
+                    let run = body.chars().rev().take_while(marker).count();
+                    if run > 0 && body[..body.len() - run].chars().next_back().is_some_and(punct) {
+                        out.insert(out.len() - run, WORD_JOINER);
+                    }
                     out.push(WORD_JOINER);
                 }
                 if !left {
+                    let body = &out[open.at..];
+                    let run = body.chars().take_while(marker).count();
+                    if run > 0 && body[run..].chars().next().is_some_and(punct) {
+                        out.insert(open.at + run, WORD_JOINER);
+                    }
                     out.insert(open.at, WORD_JOINER);
                 }
             }

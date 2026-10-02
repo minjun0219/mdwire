@@ -463,10 +463,33 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	if v.joinerEmphasis() && o.emph != emphCode {
 		if left, right := gfmSides(o.before, (*out)[o.at:], after); !(left && right) {
 			in.repairs.TagEmphasis++
+			// 안쪽 강조의 마커가 맞붙어 있으면 그쪽에도 끼운다 — 러스트 쪽과 같다(`***중요(필수)***를`).
+			punct := func(c rune) bool { return !isAlphanumeric(c) && !unicode.IsSpace(c) && c != '\u2060' }
+			isMarker := func(c byte) bool { return c == '*' || c == '_' || c == '~' }
 			if !right {
+				body := (*out)[o.at:]
+				run := 0
+				for run < len(body) && isMarker(body[len(body)-1-run]) {
+					run++
+				}
+				if run > 0 {
+					if c, _ := utf8.DecodeLastRune(body[:len(body)-run]); c != utf8.RuneError && punct(c) {
+						insertAt(out, len(*out)-run, wordJoiner)
+					}
+				}
 				*out = append(*out, wordJoiner...)
 			}
 			if !left {
+				body := (*out)[o.at:]
+				run := 0
+				for run < len(body) && isMarker(body[run]) {
+					run++
+				}
+				if run > 0 {
+					if c, _ := utf8.DecodeRune(body[run:]); c != utf8.RuneError && punct(c) {
+						insertAt(out, o.at+run, wordJoiner)
+					}
+				}
 				insertAt(out, o.at, wordJoiner)
 			}
 		}

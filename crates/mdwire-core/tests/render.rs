@@ -862,6 +862,9 @@ fn github_uses_tags_where_gfm_cannot_pair_markers() {
     // 슬랙은 태그가 없어 못 읽히는 쪽 마커 안쪽에 U+2060 을 끼운다(실측 2026-10-01). 노션은 그대로 그린다.
     assert_eq!(one("**설정(config)**을", Channel::SlackMarkdown), "**설정(config)\u{2060}**을");
     assert_eq!(one("①**\"인용\" 끝**", Channel::SlackMarkdown), "①**\u{2060}\"인용\" 끝**");
+    // 겹친 강조 — 맞붙은 안쪽 마커 너머가 구두점이면 안쪽에도 끼운다(실측 2026-10-02).
+    assert_eq!(one("***중요(필수)***를", Channel::SlackMarkdown), "***중요(필수)\u{2060}*\u{2060}**를");
+    assert_eq!(one("①***\"인용\"*** 끝", Channel::SlackMarkdown), "①**\u{2060}*\u{2060}\"인용\"*** 끝");
     assert_eq!(one("**마통**이 · **(중요)** 다", Channel::SlackMarkdown), "**마통**이 · **(중요)** 다");
     assert_eq!(one("**설정(config)**을", Channel::NotionMarkdown), "**설정(config)**을");
     // 마커에 붙은 태그·주석이 벗겨지면 출력의 이웃이 바뀐다 — 그 자리는 태그로 낸다.

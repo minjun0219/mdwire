@@ -746,7 +746,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     }
     let scan = |text: &str| match channel {
         Channel::TelegramHtml | Channel::Html => emphasis::scan_html(text).spans,
-        _ => emphasis::scan_markdown(text, Mode::Strict).spans,
+        _ => emphasis::scan_markdown(text, output_mode(channel)).spans,
     };
     let plain = output.replace(PART_SEPARATOR, "\n");
     let mut got = scan(&plain);
@@ -804,6 +804,12 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     }
 }
 
+/// 출력을 훑는 짝짓기 모드. 슬랙은 출력을 CommonMark 로 다시 읽어서, 닫기 판정까지 그 규칙으로 잰다
+/// (실측 2026-10-01). GitHub 은 그 자리를 태그로 내므로 엄격 모드면 된다.
+fn output_mode(channel: Channel) -> Mode {
+    if channel == Channel::SlackMarkdown { Mode::CommonMark } else { Mode::Strict }
+}
+
 /// 변환되지 않은 마커가 남았는가.
 ///
 /// **`**` 가 출력에 남으면 그건 실패다.** 정상이라면 전부 태그나 채널 문법으로 바뀌었어야
@@ -817,7 +823,7 @@ fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Find
             // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
             let mut scan = emphasis::Scan::default();
             for part in output.split(PART_SEPARATOR) {
-                scan.unpaired.extend(emphasis::scan_markdown(part, Mode::Strict).unpaired);
+                scan.unpaired.extend(emphasis::scan_markdown(part, output_mode(channel)).unpaired);
             }
             // **저자가 남긴 짝 없는 마커는 우리 잘못이 아니다.** 입력에 이미 짝 없이
             // 서 있던 것을 그대로 내보내는 것은 충실한 전달이지 결함이 아니다. 종류별로
