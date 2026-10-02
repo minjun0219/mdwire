@@ -27,6 +27,14 @@ jobs:
       - name: README 두 벌
         run: ./scripts/readme-sync.sh
 
+      # Context7 이 이 파일을 읽어 코딩 에이전트에게 mdwire 문서를 준다. 한도를 넘기면(설명 200자 등)
+      # 거절되거나 잘린다. 스키마는 Context7 이 공개한 것을 그때그때 받는다.
+      - name: context7.json 스키마
+        run: |
+          curl -sSfL --retry 3 https://context7.com/schema/context7.json -o "$RUNNER_TEMP/context7.schema.json"
+          npx -y -p ajv-cli@5 -p ajv-formats@3 ajv validate -c ajv-formats \
+            -s "$RUNNER_TEMP/context7.schema.json" -d context7.json
+
       - name: 툴체인
         run: |
           rustup update --no-self-update stable
