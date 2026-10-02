@@ -42,11 +42,16 @@ struct Open {
     /// 더 긴 런(`***`)을 쪼갠 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한
     /// 덩어리의 글자였다(마스킹 번호 `4***-…`).
     split: bool,
+    /// **여는 쪽이 막힌 마커**인가 — 앞이 글자이고 뒤가 구두점이라 CommonMark 가 열지 않는 자리
+    /// (`값**(합계)**를`). 열린 줄 번호를 든다. 같은 줄에서 거울 모양으로 닫는 마커가 오면 짝을 맺는다.
+    hemmed: Option<u32>,
 }
 
 #[derive(Clone)]
 pub(crate) struct Inline {
     open: Vec<Open>,
+    /// 지금 몇 번째 줄인가. 막힌 여는 마커는 같은 줄에서만 짝을 맺는다.
+    line: u32,
     /// 줄을 넘어온 직전 글자. 블록 안에서 줄이 바뀌면 `'\n'` 이다.
     /// 이 값이 있어야 **줄 첫머리의 마커가 닫기가 아니라는 판정**이 선다.
     prev: Option<char>,
@@ -81,6 +86,7 @@ impl Inline {
     pub fn new() -> Self {
         Self {
             open: Vec::new(),
+            line: 0,
             prev: None,
             scratch: String::new(),
             code_src: Vec::new(),
@@ -122,6 +128,7 @@ impl Inline {
 
     /// 줄 하나가 끝났다. 다음 줄의 첫 글자에게 앞 글자는 줄바꿈이다.
     pub fn end_line(&mut self) {
+        self.line += 1;
         self.prev = Some('\n');
     }
 
@@ -229,6 +236,7 @@ impl Inline {
                     after_space: prev.is_none_or(char::is_whitespace),
                     before: prev,
                     split: false,
+                    hemmed: None,
                 });
                 i += run;
                 continue;
@@ -319,6 +327,20 @@ impl Inline {
                 // 끝에서 되돌린다.
                 // 앞이 글자인 마커(`조합**이`)도 추측을 닫지 않고, 열지도 않는다 — 열면
                 // 블록 끝까지 삼킨다. 글자다.
+                // **막힌 여는 마커의 거울 짝.** `값**(합계)**를` 의 첫 `**` 는 앞이 글자, 뒤가 구두점이라
+                // 열지 못하고 추측으로 열렸다. 같은 줄에서 같은 길이의 마커가 거울 모양(앞이 구두점)으로
+                // 오면 그 짝이다 — 닫는 쪽이 "구두점 + 조사" 인 모양을 닫아 주는 규칙의 거울이다. 글롭
+                // (`.* (4개)`)·주석(`/* */`)은 여는 쪽 뒤가 공백이라, 마스킹 번호(`4***-****`)는 길이가
+                // 달라 여기 걸리지 않는다.
+                Some(at)
+                    if self.open[at].hemmed == Some(self.line)
+                        && self.open[at].run == take
+                        && prev.is_some_and(|p| !is_word_char(p) && !p.is_whitespace()) =>
+                {
+                    self.open[at].guess = false;
+                    self.after_close = next;
+                    self.close_at(at, out, v)
+                }
                 Some(at) if self.open[at].guess && (!left || !after_space) => {
                     for _ in 0..take {
                         self.text_char(c, out, v);
@@ -355,6 +377,7 @@ impl Inline {
                     after_space,
                     before: prev,
                     split,
+                    hemmed: None,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
                 None => self.open.push(Open {
@@ -366,6 +389,8 @@ impl Inline {
                     after_space,
                     before: prev,
                     split,
+                    hemmed: (prev.is_some_and(is_word_char) && next.is_some_and(|n| !n.is_whitespace() && is_punct(n)))
+                        .then_some(self.line),
                 }),
             }
             i += take;
@@ -437,12 +462,12 @@ impl Inline {
             self.finalize(out, v, false);
         }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
-        if old.run == 1 || (old.guess && (old.after_space || old.split)) {
+        if old.run == 1 || (old.guess && (old.after_space || old.split || old.hemmed.is_some())) {
             insert_marker(out, old.at, old.ch, old.run, v, &mut self.repairs);
         } else {
             self.repairs.dropped_marker += 1;
         }
-        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, before, split });
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, before, split, hemmed: None });
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
@@ -487,7 +512,8 @@ impl Inline {
             // (`underfront.*`), 곱셈(`2 * 3`)으로 쓰이는 글자라 버리면 내용 손실이다.
             // `**` 는 앞이 공백이었을 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로
             // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
-            if open.after_space || open.run == 1 || open.split {
+            // 막힌 여는 마커도 되돌린다 — 짝 없는 `2**(n-1)` 의 `**` 는 거듭제곱이지 짝 잃은 마커가 아니다.
+            if open.after_space || open.run == 1 || open.split || open.hemmed.is_some() {
                 insert_marker(out, open.at, open.ch, open.run, v, &mut self.repairs);
             } else {
                 self.repairs.dropped_marker += 1;
@@ -734,6 +760,7 @@ impl Inline {
                         after_space: false,
                             before: self.prev_char(line, i),
                         split: false,
+                        hemmed: None,
                     }),
                 }
                 self.prev = Some('>');

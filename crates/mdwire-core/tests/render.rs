@@ -849,6 +849,21 @@ fn report_counts_what_the_channel_rewrote() {
     assert_eq!(r("1) a\n2) b", Channel::SlackMarkdown).rewritten_bullet, 2);
 }
 
+/// **여는 쪽이 막힌 강조는 같은 줄의 거울 모양 마커와 짝짓는다**(`값**(합계)**를`). 짝이 없으면 버리지 않고
+/// 글자로 되돌린다 — `2**(n-1)` 의 `**` 는 거듭제곱이다. 글롭 · 마스킹 번호 · 줄을 넘는 것은 그대로다.
+#[test]
+fn hemmed_opener_pairs_with_its_mirror_on_the_same_line() {
+    let t = |s| one(s, Channel::TelegramHtml);
+    assert_eq!(t("값**(합계)**를 본다"), "값<b>(합계)</b>를 본다");
+    assert_eq!(t("이름이**\"홍길동\"**이다"), "이름이<b>\"홍길동\"</b>이다");
+    assert_eq!(one("값**(합계)**를", Channel::GithubMarkdown), "값<strong>(합계)</strong>를");
+    assert_eq!(one("값**(합계)**를", Channel::SlackMarkdown), "값**\u{2060}(합계)\u{2060}**를");
+    assert_eq!(t("2**(n-1) 은 거듭제곱"), "2**(n-1) 은 거듭제곱");
+    assert_eq!(t("underfront.* (4개), minjunkim.* (3개)"), "underfront.* (4개), minjunkim.* (3개)");
+    assert_eq!(t("마스킹 4***-****-****-003* 번호"), "마스킹 4***-****-****-003* 번호");
+    assert_eq!(t("값**(합계)\n**다음** 줄"), "값**(합계)\n<b>다음</b> 줄");
+}
+
 /// **GFM 이 마커를 못 읽는 자리의 강조는 태그로 낸다**(실측 2026-09-30). 닫는 `**` 앞이
 /// 구두점이고 뒤에 조사가 붙으면 GFM 은 닫지 않아 별표가 글자로 남고, 여럿이면 범위가 뒤집힌다.
 #[test]

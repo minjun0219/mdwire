@@ -1,0 +1,6 @@
+<p>값<strong>(합계)</strong>를 본다. 이름이<strong>"홍길동"</strong>이다. 설정<strong>「캐시」</strong>는 끈다.</p>
+
+<p>짝 없는 거듭제곱 2**(n-1) 은 그대로 둔다.</p>
+
+<p>줄을 넘으면 짝짓지 않는다: 값**(합계)<br>
+<strong>다음</strong> 줄이다.</p>
