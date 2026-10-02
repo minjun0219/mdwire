@@ -2,6 +2,24 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.11 — 2026-10-02
+
+### 새로 할 수 있는 것
+
+- 코딩 에이전트가 mdwire 를 찾고 고르게 한다 ([#92](https://github.com/minjun0219/mdwire/pull/92))
+
+### 고친 것
+
+- context7.json 을 스키마 한도 안으로 줄이고 CI 에서 검증한다 ([#94](https://github.com/minjun0219/mdwire/pull/94))
+
+### 문서
+
+- 공개 API 문서 주석을 영어로 쓴다 ([#95](https://github.com/minjun0219/mdwire/pull/95))
+
+### 유지
+
+- **binaries** — 플랫폼마다 그 바이너리로 전체 시험을 돌린다 ([#88](https://github.com/minjun0219/mdwire/pull/88))
+
 ## 0.1.10 — 2026-10-01
 
 ### 고친 것
