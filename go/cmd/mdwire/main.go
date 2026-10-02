@@ -1,6 +1,7 @@
-// mdwire CLI 의 Go 판 — stdin 을 읽어 채널 하나로 내보낸다. 러스트 CLI 와 인자·출력이 같다:
-// 조각은 NUL 로 구분하고, --stream 이면 받는 대로 내보낸다. --batch jsonl 이면 문서 여럿의
-// 고친 것을 한 줄씩 낸다.
+// Command mdwire is the Go version of the mdwire CLI. It reads stdin and
+// emits it for one channel. Its arguments and output match the Rust CLI:
+// parts are separated by NUL, and --stream emits output as input arrives.
+// --batch jsonl prints the repairs for multiple documents, one line each.
 package main
 
 import (

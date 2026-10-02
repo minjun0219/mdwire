@@ -18,8 +18,8 @@ const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"' };
 const decode = (s) => s.replace(/&(amp|lt|gt|quot);/g, (_, n) => ENTITIES[n]);
 
 /**
- * html 채널 출력을 이벤트 배열로 바꾼다.
- * @param {string} html `render(text, "html")` 의 결과, 또는 스트리밍 누적본 + `closeOpen()`.
+ * Converts html channel output into an array of events.
+ * @param {string} html The result of `render(text, "html")`, or the accumulated stream output + `closeOpen()`.
  * @returns {import("./events.d.ts").MdEvent[]}
  */
 export function toEvents(html) {

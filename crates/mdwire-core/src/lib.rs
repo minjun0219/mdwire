@@ -1,19 +1,19 @@
-//! mdwire — 에이전트가 만든 마크다운을 채팅 채널로 안전하게 내보낸다.
+//! mdwire — safely deliver agent-generated Markdown to chat channels.
 //!
-//! 세 가지를 한 파이프라인에서 한다. 순서가 곧 설계다.
+//! It does three things in one pipeline. The order is the design.
 //!
-//! 1. **정규화** — LLM 출력은 올바른 CommonMark 가 아니다. 짝이 안 맞는 강조,
-//!    줄을 넘는 강조, 안 닫힌 코드펜스가 일상이다. 먼저 복구한다.
-//! 2. **채널 렌더링** — 타깃이 받는 문법으로 옮긴다. 타깃이 못 받는 구문은
-//!    파싱할 이유도 없다 (아래 `Channel` 주석 참고).
-//! 3. **안전 분할** — 채널 한도와 스트리밍 경계에서, 마크업 한가운데를 자르지 않는다.
+//! 1. **Normalize** — LLM output is not valid CommonMark. Unbalanced emphasis,
+//!    emphasis that spans lines, and unclosed code fences are routine. Repair them first.
+//! 2. **Render for the channel** — translate into the syntax the target accepts. Syntax the
+//!    target cannot accept is not worth parsing in the first place (see the `Channel` docs below).
+//! 3. **Split safely** — at channel limits and streaming boundaries, never cut through markup.
 //!
-//! # 왜 의존성이 없나
+//! # Why no dependencies
 //!
-//! 기성 파서는 전부 **배치형**이다 — 문서 전체를 받아 AST 를 만든 뒤 렌더한다.
-//! 토큰이 흘러들어오는 대로 내보내야 하는 이 문제에는 처음부터 맞지 않는다.
-//! 그리고 CJK 인접 강조 정책은 파서 안에 박혀 있어서, 남의 것을 쓰면 못 바꾼다.
-//! 그게 이 라이브러리가 고치려는 바로 그 문제다.
+//! Existing parsers are all **batch** parsers — they take the whole document, build an AST,
+//! then render. That does not fit a problem where output must go out as tokens stream in.
+//! And the CJK-adjacent emphasis policy is baked into the parser, so with someone else's
+//! parser you cannot change it. That is exactly the problem this library sets out to fix.
 
 #![forbid(unsafe_code)]
 
@@ -27,35 +27,41 @@ use block::Engine;
 use sink::{PartsSink, StringSink};
 use vocab::Vocab;
 
-/// 내보낼 채널. 받는 문법이 채널마다 다르고, **출력이 좁은 쪽이 파싱 범위를 정한다**.
+/// Target channel. Each channel accepts a different syntax, and **the narrower output decides the
+/// parsing scope**.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
-    /// Telegram `parse_mode=HTML`. 허용 태그 9개:
-    /// `b i u s code pre a blockquote tg-spoiler`. 표·헤딩 없음. 4096자.
+    /// Telegram `parse_mode=HTML`. Nine allowed tags:
+    /// `b i u s code pre a blockquote tg-spoiler`. No tables or headings. 4096 characters.
     TelegramHtml,
-    /// Slack `markdown_text`. 표준 마크다운을 슬랙이 직접 변환한다. 12,000자.
-    /// 변환이 거의 필요 없고, 남는 일은 정규화와 분할뿐이다.
+    /// Slack `markdown_text`. Slack converts standard Markdown itself. 12,000 characters.
+    /// Almost no conversion is needed; what is left is normalization and splitting.
     SlackMarkdown,
-    /// GitHub 코멘트·PR 본문(GFM). 표·헤딩·취소선을 다 그린다. 65,536자.
-    /// 슬랙과 같은 마크다운을 내되, GFM 이 구문으로 읽는 글자 둘(`~` `<`)을 이스케이프한다.
+    /// GitHub comments and PR bodies (GFM). Renders tables, headings, and strikethrough.
+    /// 65,536 characters. Emits the same Markdown as Slack, but escapes the two characters GFM
+    /// reads as syntax (`~` `<`).
     GithubMarkdown,
-    /// 노션 페이지 본문(Notion-flavored Markdown — API `markdown` 필드·커넥터). 헤딩은 네 단계.
-    /// GitHub 과 같은 마크다운을 내되, 노션이 못 그리는 인라인 HTML 은 벗기고(글자로 보인다),
-    /// 오토링크 `<url>` 은 `[url](url)` 로 쓴다(꺾쇠가 글자로 남는다). 조사 앞 강조는 노션이 그대로
-    /// 그려서 `<strong>` 으로 바꾸지 않는다 — 바꾸면 오히려 태그가 글자로 보인다.
+    /// Notion page body (Notion-flavored Markdown — the API `markdown` field and connectors).
+    /// Four heading levels. Emits the same Markdown as GitHub, but strips inline HTML Notion
+    /// cannot render (it would show as text), and writes autolinks `<url>` as `[url](url)` (the
+    /// angle brackets would remain as text). Emphasis before a Korean particle is rendered by
+    /// Notion as is, so it is not turned into `<strong>` — doing so would make the tag show as text.
     NotionMarkdown,
-    /// 모든 마크업 제거. 폴백 경로.
+    /// Strips all markup. The fallback path.
     Plain,
-    /// 브라우저에 넣을 HTML 조각. 헤딩·목록·표·코드블록을 태그로 그린다. 한도 없음.
+    /// An HTML fragment for the browser. Renders headings, lists, tables, and code blocks as tags.
+    /// No limit.
     ///
-    /// `innerHTML` 로 바로 넣는 것을 전제로 한다 — 글자는 전부 이스케이프하고, 원문의 HTML 은
-    /// 속성을 버린 인라인 태그만 살리며, 링크는 `http(s)`·`mailto` 만 `<a>` 로 낸다.
-    /// 스트리밍 누적본에 [`Streamer::close_open`] 을 붙이면 그대로 넣어도 되는 모양이 된다.
+    /// Assumes the output goes straight into `innerHTML` — all text is escaped, HTML from the
+    /// source survives only as inline tags with their attributes dropped, and only `http(s)` and
+    /// `mailto` links become `<a>`. Appending [`Streamer::close_open`] to the streaming
+    /// accumulated output gives a shape that can be inserted as is.
     Html,
 }
 
 impl Channel {
-    /// 코퍼스 디렉토리와 CLI 인자에서 쓰는 이름. 채널을 문자열로 다루는 곳의 정본이다.
+    /// The name used for corpus directories and CLI arguments. The source of truth wherever a
+    /// channel is handled as a string.
     pub fn name(self) -> &'static str {
         match self {
             Channel::TelegramHtml => "telegram-html",
@@ -67,7 +73,7 @@ impl Channel {
         }
     }
 
-    /// 내보낼 수 있는 채널 전부. 코퍼스와 하네스가 이 목록을 돈다.
+    /// Every supported channel. The corpus and the harness iterate over this list.
     pub fn all() -> [Channel; 6] {
         [
             Channel::TelegramHtml,
@@ -79,12 +85,12 @@ impl Channel {
         ]
     }
 
-    /// 이름으로 채널을 찾는다.
+    /// Looks up a channel by name.
     pub fn parse(name: &str) -> Option<Channel> {
         Self::all().into_iter().find(|c| c.name() == name)
     }
 
-    /// 이 채널의 메시지 길이 한도(문자 수). 분할의 기준이다.
+    /// This channel's message length limit, in characters. Splitting is based on it.
     pub fn limit(self) -> usize {
         match self {
             Channel::TelegramHtml => 4096,
@@ -100,92 +106,105 @@ impl Channel {
     }
 }
 
-/// 호출자가 줄 수 있는 가장 작은 조각 한도.
+/// The smallest part limit a caller can set.
 ///
-/// **조각마다 마크업을 닫고 다시 열 자리가 있어야 한다.** 한도가 태그보다 작으면 분할기가 태그 글자
-/// 사이를 가른다 — 텔레그램 `**x**` 를 한도 1 로 나누면 `<` · `b` · `></b>` 가 됐다(리뷰에서 나왔다).
-/// 중첩된 여는 태그 몇 개(인용·굵게·코드·`<pre><code class="language-…">`)가 들어가고도 내용이 남는
-/// 값이다. 실제 쓰임(텔레그램 4096 에서 머리글 몫을 빼는 것)과는 거리가 멀다.
+/// **Each part needs room to close and reopen its markup.** If the limit is smaller than a tag,
+/// the splitter cuts between the tag's characters — splitting Telegram `**x**` with a limit of 1
+/// produced `<` · `b` · `></b>` (found in review). This value fits several nested opening tags
+/// (quote, bold, code, `<pre><code class="language-…">`) and still leaves room for content. It is
+/// far from real use (subtracting a header's share from Telegram's 4096).
 pub const MIN_LIMIT: usize = 256;
 
-/// 변환 옵션 — 조각 한도, 브라우저 채널의 정책.
+/// Conversion options — the part limit and the browser channel's policy.
 ///
-/// **입력 표기는 고르지 않는다.** LLM 이 표준에서 벗어나게 써도 받아 내는 것이 기본 읽기의 일이다.
+/// **There is no input-syntax choice.** Accepting LLM output even when it strays from the standard
+/// is the job of the default reader.
 ///
-/// 필드가 늘 수 있으니 `Options { limit, ..Default::default() }` 로 만든다.
+/// Fields may be added, so build it as `Options { limit, ..Default::default() }`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Options {
-    /// 한 조각의 한도(렌더한 출력의 글자 수). `None` 이면 [`Channel::limit`].
+    /// The limit for one part (characters of rendered output). `None` means [`Channel::limit`].
     ///
-    /// **한도는 보내는 쪽이 정한다.** 채널이 정해 주지 못하는 경우가 있다 — plain 은 어디로
-    /// 가는지 모르는 폴백이라 텔레그램으로 보내면 4096 이어야 하고(12,000 으로 나눈 7,153자
-    /// 조각이 400 을 받았다), 앞에 제목을 붙여 보내는 쪽은 그만큼 덜 써야 한다.
-    /// 스트리밍([`Streamer`])은 나누지 않으므로 이 값을 보지 않는다 — 노션 표만 예외다. 한도를 넘는
-    /// 표는 머리글을 되풀이한 표 여럿으로 내는데, 이건 표의 모양이라 스트리밍도 같게 낸다. 브라우저 채널([`Channel::Html`])도
-    /// 나누지 않는다 — 분할기가 블록 태그를 여닫지 않아 태그 한가운데서 갈린다. [`MIN_LIMIT`] 보다 작은
-    /// 값은 그만큼 올린다.
+    /// **The sender decides the limit.** Sometimes the channel cannot — plain is a fallback with
+    /// no known destination, so sending it to Telegram needs 4096 (a 7,153-character part split at
+    /// 12,000 got a 400), and a sender that prepends a title must use that much less.
+    /// Streaming ([`Streamer`]) does not split, so it ignores this value — except for Notion
+    /// tables. A table over the limit comes out as several tables that repeat the header row; that
+    /// is the table's shape, so streaming emits it the same way. The browser channel
+    /// ([`Channel::Html`]) does not split either — the splitter does not close and reopen block
+    /// tags, so it would cut through the middle of a tag. Values below [`MIN_LIMIT`] are raised
+    /// to it.
     pub limit: Option<usize>,
-    /// 브라우저 채널([`Channel::Html`])의 정책. 다른 채널은 보지 않는다.
+    /// The browser channel's ([`Channel::Html`]) policy. Other channels ignore it.
     pub html: HtmlOptions,
 }
 
-/// 브라우저 채널의 정책. 기본값이 가장 보수적이다 — `<br>` 줄바꿈, 이미지는 링크로만,
-/// 링크는 `http`·`https`·`mailto` 만.
+/// The browser channel's policy. The defaults are the most conservative — `<br>` line breaks,
+/// images as links only, and only `http`, `https`, and `mailto` links.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HtmlOptions {
     pub line_breaks: LineBreaks,
     pub images: Images,
-    /// 링크·이미지 주소로 받는 스킴(`"https"` 처럼 콜론 없이). `None` 이면 `http`·`https`·
-    /// `mailto`. 목록을 주면 **그것만** 받는다 — 기본값에 더하는 것이 아니다.
+    /// Schemes accepted for link and image URLs (without the colon, like `"https"`). `None`
+    /// means `http`, `https`, and `mailto`. A list accepts **only** those — it does not add to the
+    /// defaults.
     pub schemes: Option<Vec<String>>,
 }
 
-/// 블록 안의 줄바꿈을 어떻게 낼지.
+/// How to emit line breaks inside a block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LineBreaks {
-    /// `<br>` — 채팅·메모처럼 저자의 줄바꿈이 뜻인 글. 다른 채널이 다 줄바꿈을 살린다.
+    /// `<br>` — for text where the author's line breaks carry meaning, like chat or notes. Every
+    /// other channel keeps line breaks.
     #[default]
     Br,
-    /// 줄바꿈 글자만 — 브라우저가 공백으로 접는다. 80열로 wrap 된 문서를 문단으로 읽을 때.
+    /// The newline character only — the browser folds it into a space. For reading a document
+    /// wrapped at 80 columns as paragraphs.
     Space,
 }
 
-/// 이미지 `![alt](url)` 을 어떻게 낼지.
+/// How to emit an image `![alt](url)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Images {
-    /// `<a href>alt</a>` — 누르기 전에는 아무것도 불러오지 않는다(추적 픽셀이 없다).
+    /// `<a href>alt</a>` — nothing loads until it is clicked (no tracking pixels).
     #[default]
     Link,
-    /// `<img src alt>` — 주소가 허용 스킴일 때만. 아니면 `Link` 처럼 낸다.
+    /// `<img src alt>` — only when the URL has an allowed scheme. Otherwise emitted like `Link`.
     Load,
 }
 
-/// 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수. 앞 넷(고친 것)은 **모델이 얼마나 자주 서식을
-/// 깨는지**를, 뒤 여섯(바꾼 것)은 **채널을 들이기 전에 그 채널이 무엇을 바꾸는지**를 재는 데 쓴다 — 둘을 따로
-/// 물으려면 [`Repairs::any`]·[`Repairs::changed`].
+/// Counts of what normalization repaired and what was changed to fit the channel. The first four
+/// (repairs) measure **how often the model breaks formatting**; the last six (changes) measure
+/// **what a channel changes, before adopting it** — to ask about each separately, use
+/// [`Repairs::any`] and [`Repairs::changed`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Repairs {
-    /// 블록이 끝나도록 안 닫혀서 닫아 준 강조(`**영향 범위` 처럼).
+    /// Emphasis left unclosed at the end of a block and closed for it (like `**영향 범위`).
     pub closed_emphasis: usize,
-    /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스.
+    /// Code fences left unclosed at the end of the document and closed for it.
     pub closed_fence: usize,
-    /// 짝이 없어 코드가 아니라 글자로 되돌린 백틱 런.
+    /// Unmatched backtick runs turned back into text instead of code.
     pub reverted_code_span: usize,
-    /// 짝 잃은 채 버린 `**` (`꼬리**` 처럼 앞이 글자인 것).
+    /// Orphaned `**` dropped (preceded by text, like `꼬리**`).
     pub dropped_marker: usize,
-    /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
+    /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`,
+    /// `\*`).
     pub escaped_char: usize,
-    /// 채널이 마커로 못 읽는 자리(`**「설정」**가`)라 다르게 낸 강조 — GitHub 은 `<strong>`, 슬랙은 마커 안쪽에
-    /// 끼운 U+2060.
+    /// Emphasis emitted differently because the channel cannot read the markers in that position
+    /// (`**「설정」**가`) — `<strong>` on GitHub, U+2060 inserted inside the markers on Slack.
     pub tag_emphasis: usize,
-    /// 벗긴 원문 HTML — 그 채널이 못 그리는 태그, 주석, 줄바꿈으로 바꾼 `<br>`.
+    /// Source HTML stripped — tags the channel cannot render, comments, and `<br>` turned into
+    /// line breaks.
     pub stripped_html: usize,
-    /// 다른 기호로 바꿔 쓴 목록 기호 — 불릿(`* `·`• ` → `- `, 텔레그램은 `- ` → `• `)과 번호(`1)` → `1.`).
+    /// List markers rewritten with a different symbol — bullets (`* `, `• ` → `- `; on Telegram
+    /// `- ` → `• `) and numbers (`1)` → `1.`).
     pub rewritten_bullet: usize,
-    /// 원문과 다른 모양으로 다시 쓴 표(구분선·칸 공백 정규화, 고정폭으로 내림).
+    /// Tables rewritten into a different shape from the source (delimiter row and cell padding
+    /// normalized, or lowered to fixed width).
     pub rewritten_table: usize,
-    /// 다른 표기로 바꿔 쓴 강조 마커와 링크 — `_기울임_` → `*기울임*`, `__굵게__` → `**굵게**`,
-    /// `<url|텍스트>` → `[텍스트](url)`. 마크다운을 내는 채널에서만 센다.
+    /// Emphasis markers and links rewritten in a different notation — `_기울임_` → `*기울임*`,
+    /// `__굵게__` → `**굵게**`, `<url|텍스트>` → `[텍스트](url)`. Counted only on channels that
+    /// emit Markdown.
     pub converted_marker: usize,
 }
 
@@ -203,41 +222,44 @@ impl Repairs {
         self.converted_marker += other.converted_marker;
     }
 
-    /// 정규화가 하나라도 **고쳤는가** — 앞 넷(닫아 준 강조·펜스, 되돌린 백틱, 버린 마커). 모델이 서식을
-    /// 깼는지를 묻는 값이다. 채널에 맞춰 바꾼 것(이스케이프·불릿·표 …)은 보지 않는다 — 그건 [`Repairs::changed`].
+    /// Whether normalization **repaired** anything — the first four (closed emphasis and fences,
+    /// reverted backticks, dropped markers). It asks whether the model broke formatting. Changes
+    /// made to fit the channel (escapes, bullets, tables …) are not counted — that is
+    /// [`Repairs::changed`].
     pub fn any(&self) -> bool {
         self.closed_emphasis + self.closed_fence + self.reverted_code_span + self.dropped_marker > 0
     }
 
-    /// 고친 것이든 채널에 맞춰 바꾼 것이든 **하나라도 했는가**. 출력이 원문과 달라질 수 있는지를 묻는다
-    /// (빈 줄 접기 같은 모양 고르기는 세지 않는다 — `SPEC.md` 5.1).
+    /// Whether **anything at all** was done, repair or channel change. It asks whether the output
+    /// may differ from the source (tidying such as collapsing blank lines is not counted —
+    /// `SPEC.md` 5.1).
     pub fn changed(&self) -> bool {
         *self != Repairs::default()
     }
 }
 
-/// [`render_with`] 의 결과 — 조각과 고친 것.
+/// The result of [`render_with`] — the parts and the repairs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rendered {
     pub parts: Vec<String>,
     pub repairs: Repairs,
 }
 
-/// 스트리밍 변환기.
+/// Streaming converter.
 ///
-/// 조각을 넣으면 **지금 안전하게 내보낼 수 있는 만큼만** 돌려준다.
-/// 경계에 걸린 마크업(`**굵` 에서 끊긴 것)은 안에 남겨 두고 다음 조각을 기다린다.
-/// 이것이 이 라이브러리의 핵심이다 — 완성본 변환은 이미 남들이 푼 문제고,
-/// 경계 문제는 스트리밍을 하는 한 채널과 무관하게 생긴다.
+/// Feed it chunks and it returns **only as much as is safe to emit right now**.
+/// Markup caught on a boundary (cut off at `**굵`) stays inside until the next chunk arrives.
+/// This is the core of the library — converting a finished document is a problem others have
+/// already solved, while the boundary problem shows up on every channel as long as you stream.
 ///
-/// # 예
+/// # Example
 ///
 /// ```
 /// use mdwire::{Channel, Streamer};
 ///
 /// let mut s = Streamer::new(Channel::TelegramHtml);
 /// let mut out = String::new();
-/// // 조각 경계가 `**` 한가운데를 지나가도 반쪽으로 나가지 않는다.
+/// // A chunk boundary inside `**` never sends half a marker.
 /// out.push_str(s.push("앞말 **굵"));
 /// out.push_str(s.push("게** 뒷말"));
 /// out.push_str(s.finish());
@@ -266,7 +288,7 @@ impl Streamer {
         Self::with_options(channel, Options::default())
     }
 
-    /// 옵션을 주고 만든다 — 입력 표기 따위.
+    /// Builds one with options.
     pub fn with_options(channel: Channel, options: Options) -> Self {
         Self {
             engine: Engine::new(channel, &options),
@@ -278,7 +300,7 @@ impl Streamer {
         }
     }
 
-    /// 지금까지 정규화가 고친 것. `finish` 뒤에 보면 문서 전체의 값이다.
+    /// What normalization has repaired so far. After `finish`, it covers the whole document.
     pub fn repairs(&self) -> Repairs {
         self.engine.repairs()
     }
@@ -298,10 +320,10 @@ impl Streamer {
         }
     }
 
-    /// 조각을 밀어 넣고, 지금 내보낼 수 있는 출력을 받는다.
+    /// Pushes a chunk and returns the output that can be emitted now.
     ///
-    /// 돌려주는 슬라이스는 **다음 호출 전까지만** 유효하다. 할당을 아예 없애려면
-    /// [`Streamer::push_into`] 를 쓴다 — 둘은 같은 코드를 부른다(`SPEC.md` 5절).
+    /// The returned slice is valid **only until the next call**. To avoid allocation entirely,
+    /// use [`Streamer::push_into`] — both call the same code (`SPEC.md` section 5).
     pub fn push(&mut self, chunk: &str) -> &str {
         let mut buf = std::mem::take(&mut self.buf);
         buf.clear();
@@ -310,7 +332,8 @@ impl Streamer {
         &self.buf
     }
 
-    /// 호출자 버퍼에 직접 쓴다. 정본 서명 — 조각당 할당이 0 이다.
+    /// Writes directly into the caller's buffer. The canonical signature — zero allocations per
+    /// chunk.
     pub fn push_into(&mut self, chunk: &str, out: &mut String) {
         self.dirty |= !chunk.is_empty();
         let from = out.len();
@@ -319,7 +342,7 @@ impl Streamer {
         self.trim_leading(out, from);
     }
 
-    /// 입력이 끝났다. 남은 것을 전부 내보낸다(열린 마크업은 닫는다).
+    /// Signals the end of input. Emits everything left (open markup is closed).
     pub fn finish(&mut self) -> &str {
         let mut buf = std::mem::take(&mut self.buf);
         buf.clear();
@@ -328,7 +351,7 @@ impl Streamer {
         &self.buf
     }
 
-    /// [`Streamer::finish`] 의 무할당 판.
+    /// The allocation-free version of [`Streamer::finish`].
     pub fn finish_into(&mut self, out: &mut String) {
         let from = out.len();
         let mut sink = StringSink(out);
@@ -341,19 +364,20 @@ impl Streamer {
         self.dirty = false;
     }
 
-    /// **지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리.** 누적본에 이걸 붙이면 그 자리에서 보낼 수
-    /// 있는 모양이다 — [`Streamer::close_open`] 과 같은 자리에 들어가지만, 붙들고 있던 것까지
-    /// 그린다: 열린 강조는 닫아서(`**굵` → `<b>굵</b>`), 표는 지금까지 온 행으로, 코드 스팬은
-    /// 닫아서. 누적본을 통째로 다시 그리는 쪽(React, 텔레그램 `editMessageText`, 슬랙
-    /// `chat.update`)의 기본값이다.
+    /// **The tail that would follow the final output if input ended now.** Appending it to the
+    /// accumulated output gives a shape that can be sent on the spot — it goes where
+    /// [`Streamer::close_open`] goes, but also renders what is being held back: open emphasis
+    /// closed (`**굵` → `<b>굵</b>`), tables with the rows received so far, code spans closed.
+    /// It is the default for callers that redraw the whole accumulated output (React, Telegram
+    /// `editMessageText`, Slack `chat.update`).
     ///
-    /// 꼬리는 일괄 렌더와 같은 `finish` 경로라 문법은 늘 맞는다. 다만 **추측**이다 — 끝내 안
-    /// 닫힌 코드 스팬이 글자로 되돌아가는 것처럼 뒤의 조각이 모양을 바꿀 수 있다. 끝난 뒤에
-    /// 마지막 미리보기와 달라졌는지는 [`Streamer::revised`] 가 알려 준다. 누적본 자체에는
-    /// 넣지 않는다.
+    /// The tail takes the same `finish` path as batch rendering, so its syntax is always valid. But
+    /// it is a **guess** — later chunks can change the shape, for example a code span that never
+    /// closes turns back into text. After finishing, [`Streamer::revised`] tells you whether the
+    /// result differs from the last preview. Do not put it into the accumulated output itself.
     ///
-    /// 비용은 지금 열린 블록 크기에 비례한다(엔진을 복제한다). 조각마다 부르지 말고 화면을
-    /// 그릴 때 부른다.
+    /// The cost is proportional to the size of the currently open block (the engine is cloned).
+    /// Call it when drawing the screen, not on every chunk.
     ///
     /// ```
     /// use mdwire::{Channel, Streamer};
@@ -361,14 +385,14 @@ impl Streamer {
     /// let mut s = Streamer::new(Channel::TelegramHtml);
     /// let mut acc = String::new();
     /// s.push_into("앞말 **굵", &mut acc);
-    /// assert_eq!(acc, "앞말 ");                       // 확정분은 여기까지
+    /// assert_eq!(acc, "앞말 ");                       // final output so far
     /// assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>");
     ///
     /// s.push_into("게** 끝", &mut acc);
     /// let last = format!("{acc}{}", s.preview());
     /// s.finish_into(&mut acc);
     /// assert_eq!(acc, last);
-    /// assert!(!s.revised());                          // 마지막 화면이 곧 완성본
+    /// assert!(!s.revised());                          // the last frame is already the result
     /// ```
     pub fn preview(&mut self) -> &str {
         // 그 뒤로 조각이 안 왔으면 같은 답이다 — 다시 그리는 쪽은 조각과 무관하게도 자주 부른다.
@@ -387,29 +411,31 @@ impl Streamer {
         &self.tail
     }
 
-    /// [`Streamer::preview`] 를 호출자 버퍼에 덧붙인다.
+    /// Appends [`Streamer::preview`] to the caller's buffer.
     pub fn preview_into(&mut self, out: &mut String) {
         out.push_str(self.preview());
     }
 
-    /// **완성본이 마지막 미리보기와 다른가** — `finish` 뒤에 본다. 거짓이면 마지막으로 그린
-    /// 화면(`누적본 + preview`)이 곧 완성본이라 다시 그릴 필요가 없다. 텔레그램은 같은 내용으로
-    /// 편집하면 400("message is not modified")을 주므로 이걸 보고 마지막 편집을 건너뛴다.
-    /// 미리보기를 안 했거나 그 뒤에 조각이 더 왔으면 참이다 — **참은 "다를 수 있다"** 는 뜻이다.
-    /// 편집을 솎아 보내 마지막 미리보기가 마지막 조각보다 앞서면 완성본이 같아도 참이니, 그런
-    /// 쪽은 마지막으로 보낸 문자열과 직접 비교한다.
+    /// **Whether the final output differs from the last preview** — check it after `finish`. If
+    /// false, the last screen drawn (accumulated output + `preview`) already is the final output, so no
+    /// redraw is needed. Telegram returns 400 ("message is not modified") for an edit with the same
+    /// content, so use this to skip the last edit. It is true if there was no preview or more
+    /// chunks arrived after it — **true means "may differ"**. If you throttle edits so the last
+    /// preview comes before the last chunk, it is true even when the final output is the same;
+    /// in that case compare against the last string you sent.
     pub fn revised(&self) -> bool {
         self.revised
     }
 
-    /// **지금까지 받은 것을 그대로 보내도 되게 만든다.** 상태는 건드리지 않으므로
-    /// 붙인 뒤에도 스트리밍은 이어진다.
+    /// **Makes what has been received so far safe to send as is.** It does not touch the state,
+    /// so streaming continues after appending it.
     ///
-    /// 강조는 짝이 맞을 때까지 안에 붙들려 있어 이미 균형이 맞지만, 블록의 여는
-    /// 마크업(`<blockquote>`·`<pre>`·헤딩의 `<b>`)은 블록이 끝나기 전에 나간다 —
-    /// 코드블록이 끝날 때까지 출력을 멈추면 스트리밍이 아니기 때문이다. 누적본을
-    /// 중간에 채널로 보내는 쪽(토큰이 오는 대로 메시지를 편집하는 경우)은 보내기
-    /// 직전에 이걸 덧붙인다. **누적본 자체에는 넣지 않는다** — 다음 조각이 이어진다.
+    /// Emphasis is held inside until its pair arrives, so it is already balanced, but a block's
+    /// opening markup (`<blockquote>`, `<pre>`, a heading's `<b>`) goes out before the block
+    /// ends — holding output until a code block ends would not be streaming. Callers that send
+    /// the accumulated output to a channel midway (editing a message as tokens arrive) append this
+    /// right before sending. **Do not put it into the accumulated output itself** — the next chunk
+    /// continues from there.
     ///
     /// ```
     /// use mdwire::{Channel, Streamer};
@@ -419,10 +445,10 @@ impl Streamer {
     /// s.push_into("> 인용이 시작되고", &mut acc);
     ///
     /// let mut snapshot = acc.clone();
-    /// s.close_open(&mut snapshot);          // 지금 보내도 되는 모양
+    /// s.close_open(&mut snapshot);          // safe to send now
     /// assert_eq!(snapshot, "<blockquote>인용이 시작되고</blockquote>");
     ///
-    /// s.push_into("\n> 이어진다\n", &mut acc);  // 누적본은 그대로 이어진다
+    /// s.push_into("\n> 이어진다\n", &mut acc);  // the accumulated output just continues
     /// s.finish_into(&mut acc);
     /// assert_eq!(acc, "<blockquote>인용이 시작되고\n이어진다</blockquote>");
     /// ```
@@ -431,13 +457,13 @@ impl Streamer {
     }
 }
 
-/// 완성된 문서를 한 번에 변환한다. 한도를 넘으면 안전한 지점에서 나눈다.
+/// Converts a finished document in one go. Splits at safe points when it exceeds the limit.
 ///
-/// 나누는 자리는 **렌더 결과가 아니라 구조에서** 고른다 — 블록이 끝나 열린 마크업이
-/// 없는 지점만 경계가 된다. 변환 후에 문자 수로 자르면 `<code>` 가 열린 채 잘리고,
-/// 채널은 400 을 준다(`DESIGN.md`).
+/// Split points are chosen **from the structure, not the rendered output** — only points where a
+/// block has ended and no markup is open become boundaries. Cutting by character count after
+/// conversion leaves `<code>` open across the cut, and the channel returns 400 (`DESIGN.md`).
 ///
-/// # 예
+/// # Example
 ///
 /// ```
 /// use mdwire::{render, Channel};
@@ -449,7 +475,7 @@ pub fn render(input: &str, channel: Channel) -> Vec<String> {
     render_with(input, channel, Options::default()).parts
 }
 
-/// [`render`] 에 옵션을 주고, 정규화가 고친 것도 같이 받는다.
+/// [`render`] with options; also returns what normalization repaired.
 ///
 /// ```
 /// use mdwire::{render_with, Channel, Options};

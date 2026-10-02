@@ -148,7 +148,7 @@ var wide = []cpRange{
 	{0x30000, 0x3FFFD},
 }
 
-// CharWidth 는 한 글자의 표시 폭이다. 0, 1, 2 중 하나.
+// CharWidth returns the display width of one character: 0, 1 or 2.
 func CharWidth(c rune) int {
 	if c == 0 {
 		return 0
@@ -170,8 +170,10 @@ func CharWidth(c rune) int {
 	return 1
 }
 
-// StrWidth 는 문자열의 표시 폭이다. 이모지 결합 연쇄(ZWJ)는 구성 요소를 각각 세므로 실제보다
-// 넓게 나올 수 있다 — 표를 어긋나게 하는 쪽이 아니라 여유를 주는 방향이라 그대로 둔다.
+// StrWidth returns the display width of a string. Emoji ZWJ sequences count
+// each component separately, so the result can be wider than the actual
+// display. This errs toward extra space rather than misaligned tables, so it
+// is left as is.
 func StrWidth(s string) int {
 	n := 0
 	for _, c := range s {

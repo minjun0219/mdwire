@@ -1,10 +1,11 @@
-//! 브라우저·npm 바인딩.
+//! Browser and npm bindings.
 //!
-//! **`wasm-bindgen` 은 이 crate 에만 있다**(`SPEC.md` 3절). 코어를 쓰는 쪽은
-//! 의존 없이 남는다.
+//! **`wasm-bindgen` lives only in this crate** (`SPEC.md` section 3). Users of the core
+//! stay dependency-free.
 //!
-//! 올리는 것은 **bundler 타깃**이다(`scripts/build-npm.sh`). 번들러가 wasm 초기화를
-//! 맡으므로 `init()` 을 부르지 않는다 — `web` 타깃으로 직접 쓸 때만 필요하다.
+//! The published package is the **bundler target** (`scripts/build-npm.sh`). The bundler
+//! initializes wasm, so you do not call `init()`. You only need it when you use the `web`
+//! target directly.
 //!
 //! ```js
 //! import { render, Streamer } from "@minjun0219/mdwire";
@@ -16,14 +17,14 @@
 //! let out = "";
 //! for await (const chunk of stream) {
 //!   out += s.push(chunk);
-//!   await edit(out + s.closeOpen());   // 중간에 보낼 때만 닫아 붙인다
+//!   await edit(out + s.closeOpen());   // close and append only when sending mid-stream
 //! }
 //! out += s.finish();
 //! ```
 //!
-//! 경계를 넘을 때는 어차피 복사가 일어난다. 그래서 여기서는 코어가 고른
-//! `push_into` 대신 `String` 을 돌려주는 모양이 자연스럽다 — 복사를 한 번 더
-//! 하는 것이 아니라, 그 한 번이 경계 자체다.
+//! Crossing the JS boundary copies anyway. So instead of the core's `push_into`,
+//! returning a `String` is the natural shape here. It is not an extra copy:
+//! that one copy is the boundary itself.
 
 #![forbid(unsafe_code)]
 
@@ -32,17 +33,17 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(typescript_custom_section)]
 const OPTIONS_TS: &str = r#"
-/** 변환 옵션. 생략하면 채널의 기본값이다. */
+/** Conversion options. Anything omitted uses the channel's default. */
 export interface RenderOptions {
-  /** 조각 한도(글자 수). 생략하면 채널의 한도다 — plain 을 텔레그램에 보내면 4096. 스트리밍은 나누지 않는다. */
+  /** Part size limit (in characters). Defaults to the channel's limit; for example, 4096 when sending plain to Telegram. Streaming does not split. */
   limit?: number;
-  /** 브라우저 채널("html")의 정책. 기본값이 가장 보수적이다. */
+  /** Policy for the browser channel ("html"). The defaults are the most conservative. */
   html?: {
-    /** 블록 안 줄바꿈. "br"(기본) 은 `<br>`, "space" 는 브라우저가 공백으로 접게 둔다. */
+    /** Line breaks inside a block. "br" (default) emits `<br>`; "space" lets the browser collapse them into spaces. */
     lineBreaks?: "br" | "space";
-    /** 이미지. "link"(기본) 는 누르기 전에 아무것도 안 불러온다, "load" 는 `<img>`. */
+    /** Images. "link" (default) loads nothing until clicked; "load" emits `<img>`. */
     images?: "link" | "load";
-    /** 링크·이미지 주소로 받는 스킴(콜론 없이). 주면 그것만 받는다. 기본 ["http","https","mailto"]. */
+    /** Schemes allowed in link and image URLs (without the colon). If given, only these are allowed. Default ["http","https","mailto"]. */
     schemes?: string[];
   };
 }
@@ -50,7 +51,7 @@ export interface RenderOptions {
 
 #[wasm_bindgen]
 extern "C" {
-    /// JS 쪽 옵션 객체. 필드를 속성으로 읽는다 — `js-sys` 없이.
+    /// The options object from JS. Fields are read as properties, without `js-sys`.
     #[wasm_bindgen(typescript_type = "RenderOptions")]
     pub type RenderOptions;
 
@@ -60,7 +61,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     fn html(this: &RenderOptions) -> Option<HtmlOptionsJs>;
 
-    /// `RenderOptions.html` 객체.
+    /// The `RenderOptions.html` object.
     pub type HtmlOptionsJs;
 
     #[wasm_bindgen(method, getter, js_name = lineBreaks)]
@@ -73,14 +74,14 @@ extern "C" {
     fn schemes(this: &HtmlOptionsJs) -> Option<Vec<String>>;
 }
 
-/// 완성된 문서를 변환한다. 한도를 넘으면 조각 배열로 돌아온다.
+/// Converts a complete document. Returns an array of parts; it has more than one when the text exceeds the limit.
 #[wasm_bindgen]
 pub fn render(input: &str, channel: &str, options: Option<RenderOptions>) -> Result<Vec<String>, JsError> {
     Ok(mdwire::render_with(input, parse_channel(channel)?, parse_options(options)?).parts)
 }
 
-/// [`render`] 에 **정규화가 고친 것**을 같이 돌려준다. 모델이 얼마나 자주 서식을 깨는지
-/// 로그로 남기려는 쪽이 쓴다.
+/// Like [`render`], but also returns **what normalization repaired**. Use it to log
+/// how often the model breaks formatting.
 #[wasm_bindgen(js_name = renderWithReport)]
 pub fn render_with_report(
     input: &str,
@@ -91,7 +92,7 @@ pub fn render_with_report(
     Ok(Rendered { parts: out.parts, repairs: out.repairs.into() })
 }
 
-/// `renderWithReport` 의 결과.
+/// The result of `renderWithReport`.
 #[wasm_bindgen]
 pub struct Rendered {
     parts: Vec<String>,
@@ -100,51 +101,51 @@ pub struct Rendered {
 
 #[wasm_bindgen]
 impl Rendered {
-    /// 조각들. 한도를 넘지 않았으면 하나다.
+    /// The parts. Just one if the text fit within the limit.
     #[wasm_bindgen(getter)]
     pub fn parts(&self) -> Vec<String> {
         self.parts.clone()
     }
 
-    /// 정규화가 고친 것.
+    /// What normalization repaired.
     #[wasm_bindgen(getter)]
     pub fn repairs(&self) -> Repairs {
         self.repairs
     }
 }
 
-/// 정규화가 고친 것과 채널에 맞춰 바꾼 것의 개수.
+/// Counts of what normalization repaired and what was changed to fit the channel.
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct Repairs {
-    /// 블록이 끝나도록 안 닫혀서 닫아 준 강조.
+    /// Emphasis left open at the end of a block, closed for you.
     #[wasm_bindgen(js_name = closedEmphasis)]
     pub closed_emphasis: usize,
-    /// 문서 끝까지 안 닫혀서 닫아 준 코드펜스.
+    /// Code fences left open at the end of the document, closed for you.
     #[wasm_bindgen(js_name = closedFence)]
     pub closed_fence: usize,
-    /// 짝이 없어 글자로 되돌린 백틱 런.
+    /// Unmatched backtick runs, turned back into literal text.
     #[wasm_bindgen(js_name = revertedCodeSpan)]
     pub reverted_code_span: usize,
-    /// 짝 잃은 채 버린 `**`.
+    /// Unmatched `**` markers that were dropped.
     #[wasm_bindgen(js_name = droppedMarker)]
     pub dropped_marker: usize,
-    /// 채널이 구문으로 읽을 글자를 이스케이프한 수(GitHub 의 `\~`·`\<`·`\*`).
+    /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`, `\*`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
-    /// 채널이 마커로 못 읽는 자리라 다르게 낸 강조(GitHub 의 `<strong>`, 슬랙의 U+2060).
+    /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's `<strong>`, Slack's U+2060).
     #[wasm_bindgen(js_name = tagEmphasis)]
     pub tag_emphasis: usize,
-    /// 벗긴 원문 HTML(태그·주석·줄바꿈으로 바꾼 `<br>`).
+    /// Raw HTML stripped from the source (tags, comments, and `<br>` turned into line breaks).
     #[wasm_bindgen(js_name = strippedHtml)]
     pub stripped_html: usize,
-    /// 다른 기호로 바꿔 쓴 목록 불릿.
+    /// List bullets rewritten with a different symbol.
     #[wasm_bindgen(js_name = rewrittenBullet)]
     pub rewritten_bullet: usize,
-    /// 원문과 다른 모양으로 다시 쓴 표.
+    /// Tables rewritten in a different shape from the source.
     #[wasm_bindgen(js_name = rewrittenTable)]
     pub rewritten_table: usize,
-    /// 다른 표기로 바꿔 쓴 강조 마커와 `<url|텍스트>` 링크.
+    /// Emphasis markers and `<url|text>` links rewritten in a different notation.
     #[wasm_bindgen(js_name = convertedMarker)]
     pub converted_marker: usize,
 }
@@ -166,16 +167,17 @@ impl From<mdwire::Repairs> for Repairs {
     }
 }
 
-/// 채널의 길이 한도(문자 수). 조각을 직접 다루려는 호출자를 위해 열어 둔다.
+/// The channel's length limit (in characters). Exposed for callers that handle parts themselves.
 #[wasm_bindgen]
 pub fn limit(channel: &str) -> Result<usize, JsError> {
     Ok(parse_channel(channel)?.limit())
 }
 
-/// 스트리밍 변환기.
+/// Streaming converter.
 ///
-/// 조각을 넣으면 지금 안전하게 내보낼 수 있는 만큼만 돌려준다. 경계에 걸린 마크업은
-/// 안에 남는다 — 토큰이 흘러들어오는 대로 화면에 붙이는 쪽이 이것 때문에 쓴다.
+/// Push a chunk and it returns only what is safe to emit now. Markup cut off at the
+/// chunk boundary stays inside. This is what you want when appending tokens to the
+/// screen as they arrive.
 #[wasm_bindgen]
 pub struct Streamer {
     inner: mdwire::Streamer,
@@ -192,7 +194,7 @@ impl Streamer {
         })
     }
 
-    /// 지금까지 정규화가 고친 것. `finish` 뒤에 보면 문서 전체의 값이다.
+    /// What normalization has repaired so far. After `finish`, this covers the whole document.
     pub fn repairs(&self) -> Repairs {
         self.inner.repairs().into()
     }
@@ -203,14 +205,15 @@ impl Streamer {
         self.buf.clone()
     }
 
-    /// **지금까지 받은 것을 그대로 보내려면 이걸 뒤에 붙인다.**
+    /// **To send what you have received so far as is, append this after it.**
     ///
-    /// 상태는 건드리지 않으므로 붙인 뒤에도 스트리밍은 이어진다. 누적본 자체에는
-    /// 넣지 말고, 보내기 직전에만 붙인다. 토큰이 오는 대로 메시지를 편집하는 쪽이 쓴다.
+    /// It does not touch the state, so streaming continues afterwards. Do not add it
+    /// to the accumulated output itself; append it only right before sending. Use it
+    /// when editing a message as tokens arrive.
     ///
     /// ```js
     /// acc += s.push(chunk);
-    /// await edit(acc + s.closeOpen());   // 누적본은 그대로 둔다
+    /// await edit(acc + s.closeOpen());   // leave acc unchanged
     /// ```
     #[wasm_bindgen(js_name = closeOpen)]
     pub fn close_open(&self) -> String {
@@ -219,26 +222,27 @@ impl Streamer {
         out
     }
 
-    /// **지금 입력이 끝났다면 확정분 뒤에 붙을 꼬리.** `closeOpen` 과 같은 자리에 들어가지만
-    /// 붙들고 있던 것(열린 강조, 표 행, 코드 스팬)까지 그린다. 누적본을 통째로 다시 그리는 쪽의
-    /// 기본값이다. 추측이라 뒤 조각이 모양을 바꿀 수 있다 — 끝난 뒤 `revised()` 로 본다.
+    /// **The tail that would follow the final output if input ended now.** It goes in the
+    /// same place as `closeOpen`, but also draws what is being held back (open emphasis,
+    /// table rows, code spans). This is the default when you redraw the whole message.
+    /// It is a guess, so later chunks may change the shape. Check `revised()` after the end.
     ///
     /// ```js
     /// acc += s.push(chunk);
-    /// await edit(acc + s.preview());      // 화면을 그릴 때만 부른다(열린 블록만큼 든다)
+    /// await edit(acc + s.preview());      // call only when drawing (costs as much as the open block)
     /// acc += s.finish();
-    /// if (s.revised()) await edit(acc);   // 마지막 화면이 곧 완성본이면 건너뛴다
+    /// if (s.revised()) await edit(acc);   // skip if the last screen already is the final output
     /// ```
     pub fn preview(&mut self) -> String {
         self.inner.preview().to_string()
     }
 
-    /// 완성본이 마지막 `preview()` 와 다른가 — `finish` 뒤에 본다.
+    /// Whether the final output differs from the last `preview()`. Check it after `finish`.
     pub fn revised(&self) -> bool {
         self.inner.revised()
     }
 
-    /// 입력이 끝났다. 남은 것을 내보내고 열린 마크업을 닫는다.
+    /// Input has ended. Emits what is left and closes open markup.
     pub fn finish(&mut self) -> String {
         self.buf.clear();
         self.inner.finish_into(&mut self.buf);
