@@ -42,7 +42,7 @@ type Repairs = Record<(typeof keys)[number], number>;
 const why: Record<(typeof ids)[number], Record<Locale, string>> = {
   "chat-bot-answer": {
     en: "Bold opened on “영향 범위” never closes, and neither does the code fence. Sent as is, the ** shows as text and Telegram rejects the open <pre>. mdwire closes the bold at the end of its block and the fence at the end of the answer.",
-    ko: "“영향 범위”에서 연 굵게도, 코드펜스도 닫히지 않았습니다. 그대로 보내면 ** 가 텍스트로 보이고, 텔레그램은 열린 <pre> 를 거절합니다. mdwire 는 굵게를 그 블록 끝에서, 펜스를 답 끝에서 닫습니다.",
+    ko: "“영향 범위”에서 연 굵게도, 코드펜스도 닫히지 않았습니다. 그대로 보내면 ** 가 텍스트로 보이고, 텔레그램은 열린 <pre> 를 거절합니다. mdwire 는 굵게를 그 블록 끝에서, 펜스를 답변 끝에서 닫습니다.",
   },
   "emphasis-across-linebreak": {
     en: "The ** after “채널” has no partner. A regex converter pairs it with the next ** and inverts the bold range — 28 of 60 samples. mdwire drops the stray marker and keeps the real bold.",
@@ -50,11 +50,11 @@ const why: Record<(typeof ids)[number], Record<Locale, string>> = {
   },
   "unclosed-code-fence": {
     en: "The answer ended inside a fence (cut off at the token limit). Sent as is, <pre> stays open: the channel rejects it or swallows whatever follows. mdwire closes it right before output.",
-    ko: "답이 코드펜스 안에서 끝났습니다(토큰 한도에서 잘림). 그대로 보내면 <pre> 가 열린 채라 채널이 거절하거나 뒤의 내용을 통째로 삼킵니다. mdwire 는 출력 직전에 닫습니다.",
+    ko: "답변이 코드펜스 안에서 끝났습니다(토큰 한도에서 잘림). 그대로 보내면 <pre> 가 열린 채라 채널이 거절하거나 뒤의 내용을 통째로 삼킵니다. mdwire 는 출력 직전에 닫습니다.",
   },
   "unpaired-backtick-run": {
     en: "A ``` with no partner. Opened as a code span, it swallows the rest of the line, bold included. mdwire keeps the run as text, so the Markdown barely changes — switch to Telegram HTML to see the bold after it come out as <b>.",
-    ko: "짝 없는 ``` 입니다. 이를 코드 스팬으로 열면 뒤의 굵게까지 줄 끝을 통째로 삼킵니다. mdwire 는 이 백틱을 텍스트로 둡니다. 마크다운은 거의 그대로이므로, 채널을 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 것을 확인할 수 있습니다.",
+    ko: "짝 없는 ``` 입니다. 이를 코드 스팬으로 열면 줄 끝까지 통째로 삼켜서 뒤의 굵게도 코드 안에 갇힙니다. mdwire 는 이 백틱을 텍스트로 둡니다. 마크다운은 거의 그대로이므로, 채널을 텔레그램 HTML 로 바꿔 보면 뒤의 굵게가 <b> 로 나오는 것을 확인할 수 있습니다.",
   },
   "table-cell-overflow": {
     en: "The | inside `vol|wlv` splits the cell, leaving two half code spans (kept as text) and one cell too many — which GFM silently drops. mdwire folds the extra cell into the last one with an escaped \\|, so the author's last cell survives.",

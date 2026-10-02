@@ -29,7 +29,7 @@ export const ui = {
     },
   },
   ko: {
-    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환하는 브리지.",
+    tagline: "LLM 마크다운을 깨뜨리지 않고 채널에 맞게 변환합니다.",
     nav: { home: "소개", why: "배경", demo: "데모", docs: "문서" },
     why: { index: "왜 또 만들었나", cases: "사례" },
     docs: { index: "Concepts", npm: "npm (JS · React)", rust: "Rust", go: "Go", cli: "CLI", emphasis: "조사 앞 강조" },
@@ -43,8 +43,8 @@ export const ui = {
       tryDemo: "데모 보기",
       readDocs: "문서 읽기",
       showcase: {
-        title: "답 하나, 채널 다섯",
-        lead: "모델이 쓴 그대로의 실제 봇 답변과, mdwire 가 채널마다 보내는 것입니다.",
+        title: "답변 하나, 채널 다섯",
+        lead: "모델이 쓴 실제 봇 답변 원문과 mdwire 가 채널마다 보내는 결과입니다.",
         input: "에이전트 출력",
         output: "보내는 곳",
         broken: ["조사 옆 굵게", "줄을 넘는 굵게", "닫히지 않은 굵게", "닫히지 않은 코드펜스"],

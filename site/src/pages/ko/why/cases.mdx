@@ -7,7 +7,7 @@ import Next from "../../../components/Next.astro";
 
 # 사례
 
-에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장을 모았습니다. 모두
+에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장을 모았습니다. 사례마다
 [테스트 케이스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에 입력과 채널별 기대 출력이 있고,
 Rust 코어, npm 패키지, Go 구현, CLI 가 모두 같은 결과를 출력합니다. 여기 없는 사례도 테스트 케이스에 있습니다.
 
@@ -36,7 +36,7 @@ mdwire
 ## 기호로 끝나는 굵게 뒤의 조사
 
 한국어는 강조 바로 뒤에 조사가 붙습니다. 굵게가 괄호, 따옴표, 백틱, 마침표로 끝나면 CommonMark
-규칙상 닫는 `**` 가 닫히지 않습니다. GitHub 과 슬랙에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이
+규칙상 닫는 자리의 `**` 가 굵게를 닫지 않습니다. GitHub 과 슬랙에서는 별표가 글자로 남고, 한 줄에 여럿이면 짝이
 엇갈려 범위가 뒤집힙니다.
 
 ```text
@@ -50,14 +50,14 @@ GitHub
   마감 전에 <b>설정(config)</b>을 바꾸고, <b>"배포 금지"</b>는 금요일까지 유지한다.
 ```
 
-mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 내보냅니다. 태그는 이 규칙과
+mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 출력합니다. 태그는 이 규칙과
 상관없이 렌더링되기 때문입니다. 슬랙은 태그를 쓸 수 없어서 닫는 `**` 바로 앞에 보이지 않는 U+2060(워드
 조이너)을 넣습니다. 겉보기는 입력과 같지만 슬랙이 굵게로 렌더링합니다 <Next />. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## 범위와 근사값의 물결표
 
 한국어는 범위(`5~6월`)와 근사값(`~40km`)에 물결표를 자주 씁니다. GitHub(GFM)은 홑 `~` 도 취소선으로
-읽어서, 한 문단에 물결표가 둘 이상 있으면 그 사이를 통째로 긋습니다.
+읽어서, 한 문단에 물결표가 둘 이상 있으면 그 사이에 줄을 긋습니다.
 
 ```text
 입력
@@ -85,7 +85,7 @@ GitHub
 
 ## 짝 없는 백틱
 
-짝 없는 연속된 백틱이 코드 스팬을 열고 블록 끝까지 삼켰습니다. 뒤에 오던 강조가 통째로 코드 안에 갇힙니다.
+짝 없는 연속된 백틱이 코드 스팬을 열고 블록 끝까지 삼켰습니다. 뒤에 오던 강조가 코드 안에 갇혔습니다.
 
 ```text
 입력
@@ -112,7 +112,7 @@ GitHub
   <pre><code class="language-sh">tail -f app.log | grep ERROR</code></pre>
 ````
 
-내보내기 직전에 펜스를 닫습니다. 테스트 케이스: [`unclosed-code-fence`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unclosed-code-fence)
+출력하기 직전에 펜스를 닫습니다. 테스트 케이스: [`unclosed-code-fence`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/unclosed-code-fence)
 
 ## 한글이 든 표
 
@@ -133,7 +133,7 @@ GitHub
 
 ## 조각 경계에 걸린 태그
 
-긴 답을 길이 제한에 맞춰 나눌 때, 자르는 자리가 `<a href="…">` 같은 태그 한가운데에 떨어졌습니다.
+긴 답변을 길이 제한에 맞춰 나눌 때, 자르는 자리가 `<a href="…">` 같은 태그 한가운데에 떨어졌습니다.
 조각 하나가 메시지 하나라서 양쪽 다 깨진 HTML 이 되고, 채널은 메시지를 통째로 거절합니다. 실제 문서
 2,289건 중 8건이 여기에 걸렸습니다.
 
@@ -144,7 +144,7 @@ GitHub
   href="https://…">src</a>
 ```
 
-자를 지점은 렌더링 결과가 아니라 문서 구조에서 고릅니다. 열린 마크업이 없는 지점만 경계가 될 수 있고,
+자를 지점은 문서 구조에서 고릅니다. 열린 마크업이 없는 지점만 경계가 될 수 있고,
 없으면 그 앞에서 닫고 다음 조각에서 다시 엽니다. 테스트 케이스: [`tag-across-part-boundary`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/tag-across-part-boundary)
 
 ## 꺾쇠로 감싼 링크
@@ -161,4 +161,4 @@ GitHub
   슬랙에서 긁어 온 글은 [문서 보기](https://example.com/p) 꼴이다.
 ```
 
-꺾쇠 링크는 링크로 내보냅니다. `|` 뒤에 글이 있으면 그것을 링크 텍스트로 씁니다. 테스트 케이스: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)
+꺾쇠 링크는 링크로 출력합니다. `|` 뒤에 글이 있으면 그것을 링크 텍스트로 씁니다. 테스트 케이스: [`angle-autolink`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/angle-autolink)

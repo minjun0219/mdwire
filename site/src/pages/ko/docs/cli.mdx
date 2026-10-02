@@ -8,7 +8,7 @@ import Next from "../../../components/Next.astro";
 
 # CLI — `mdwire`
 
-stdin 으로 마크다운을 받아 stdout 으로 채널용 출력을 내보냅니다. 어떤 언어로 만든 에이전트든 바인딩
+stdin 으로 받은 마크다운을 채널에 맞게 바꿔 stdout 으로 출력합니다. 어떤 언어로 만든 에이전트든 바인딩
 없이 파이프로 연결해 쓸 수 있습니다.
 
 ```sh
@@ -17,7 +17,7 @@ go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest  # Go (플래그 �
 ```
 
 [릴리스](https://github.com/minjun0219/mdwire/releases)마다 macOS(Apple silicon)와 Linux(x86_64)
-바이너리도 첨부되며, 릴리스 노트에 각 파일의 SHA-256 이 있습니다. Linux(arm64)와
+바이너리도 첨부됩니다. 각 파일의 SHA-256 은 릴리스 노트에 있습니다. Linux(arm64)와
 Windows(x86_64) 바이너리도 첨부됩니다 <Next />.
 
 ```sh
@@ -31,15 +31,15 @@ cat agent-output.md | mdwire --channel slack-markdown --report
 
 | 플래그 | |
 |---|---|
-| `--channel <이름>` | 필수. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` |
-| `--limit <글자 수>` | 조각 길이 제한. 기본값은 채널의 길이 제한입니다. |
-| `--html-line-breaks <br\|space>` | `html` 채널 전용. 기본값 `br`. |
-| `--html-images <link\|load>` | `html` 채널 전용. 기본값 `link`. |
-| `--html-schemes <목록>` | `html` 채널 전용. 쉼표로 구분하며 기본값은 `http,https,mailto`. |
+| `--channel <이름>` | 필수입니다. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` 중 하나를 줍니다. |
+| `--limit <글자 수>` | 조각 길이 제한입니다. 기본값은 채널의 길이 제한입니다. |
+| `--html-line-breaks <br\|space>` | `html` 채널 전용입니다. 기본값은 `br` 입니다. |
+| `--html-images <link\|load>` | `html` 채널 전용입니다. 기본값은 `link` 입니다. |
+| `--html-schemes <목록>` | `html` 채널 전용입니다. 쉼표로 구분합니다. 기본값은 `http,https,mailto` 입니다. |
 | `--stream` | stdin 을 읽는 대로 출력합니다. 길이 제한으로 나누지 않습니다. |
 | `--report` | 정규화 보고를 stderr 에 JSON 한 줄로 출력합니다. |
 | `--batch jsonl` | 여러 문서를 JSON lines 로 받아 문서마다 보고를 한 줄씩 출력합니다. |
-| `-h`, `--help` · `-V`, `--version` | 도움말 · 버전(Rust CLI). |
+| `-h`, `--help` · `-V`, `--version` | 도움말과 버전을 출력합니다. 버전은 Rust CLI 에만 있습니다. |
 
 값을 받는 플래그는 `--이름=값` 형태로도 쓸 수 있습니다(`--channel=slack-markdown`).
 
@@ -47,9 +47,8 @@ cat agent-output.md | mdwire --channel slack-markdown --report
 
 ## 출력
 
-- 기본(일괄 처리): 조각들을 출력합니다. 조각이 여러 개면 NUL(`\0`)로 구분합니다.
-- `--stream`: 한 덩어리로 흘려 보냅니다. 조각을 이어 붙인 것과 같으며, 일괄 처리 결과가 나뉘지 않았다면
-  그 결과와 같습니다.
+- 기본(일괄 처리): 조각을 출력합니다. 조각이 여러 개면 NUL(`\0`)로 구분합니다.
+- `--stream`: 한 덩어리로 흘려 보냅니다. 일괄 처리 결과가 나뉘지 않았다면 그 결과와 같습니다.
 
 ## `--report`
 
