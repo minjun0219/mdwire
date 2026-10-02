@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "mdwire",
-  "description": "Send LLM-generated Markdown to Telegram, Slack, GitHub and Notion without it breaking: repaired, rendered for each channel and split within its limit, streaming included. Rust core, npm (WASM, React), Go and a CLI.",
+  "description": "Send LLM-generated Markdown to Telegram, Slack, GitHub and Notion without it breaking: repaired, rendered per channel, split within its limit, streaming too. Rust core, npm (WASM, React), Go, CLI.",
   "folders": ["site/src/pages/docs", "site/src/pages/why", "skills"],
   "excludeFolders": ["site/src/pages/ko", "corpus", "crates", "go", "examples", "scripts", "site/node_modules"],
   "excludeFiles": ["CHANGELOG.md", "AGENTS.md", "README.ko.md"],
