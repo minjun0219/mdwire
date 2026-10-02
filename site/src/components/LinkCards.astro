@@ -1,0 +1,57 @@
+---
+// 본문의 글머리 목록(항목마다 링크 하나, 줄바꿈 `\`, 설명)을 카드로 보이게 감싼다. 카드 전체가 첫 링크로 눌린다.
+// 글은 MDX 본문(slot)에 그대로 있어 마크다운 사본에도 남는다.
+---
+
+<div class="link-cards wide"><slot /></div>
+
+<style>
+  .link-cards :global(> ul) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .link-cards :global(> ul > li) {
+    position: relative;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    font-size: 0.93rem;
+    color: var(--muted);
+    transition: border-color 0.15s;
+  }
+
+  .link-cards :global(> ul > li:hover) {
+    border-color: var(--accent);
+  }
+
+  .link-cards :global(> ul > li > a:first-child) {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 700;
+    font-size: 1.02rem;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  /* 링크가 블록이라 뒤의 줄바꿈은 필요 없다 — 마크다운 사본에서만 뜻이 있다. */
+  .link-cards :global(> ul > li > br) {
+    display: none;
+  }
+
+  /* 첫 링크가 카드 전체를 덮는다. */
+  .link-cards :global(> ul > li > a:first-child::after) {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .link-cards :global(> ul > li:hover > a:first-child) {
+    color: var(--accent);
+  }
+</style>

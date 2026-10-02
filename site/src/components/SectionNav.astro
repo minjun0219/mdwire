@@ -3,34 +3,17 @@
 // 위의 알약 줄(페이지만)이다. 레이아웃이 문서 · 데모 페이지에 싣는다. 언어와 현재 페이지는 경로에서 읽는다.
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
+import { sectionItems, type Section } from "../sections";
 
 interface Props {
-  section: "why" | "docs" | "demo";
+  section: Section;
   headings?: { depth: number; slug: string; text: string }[];
 }
 
 const lang = localeOf(Astro.currentLocale);
 const t = ui[lang];
 const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
-const items = {
-  why: [
-    { page: "why", label: t.why.index },
-    { page: "why/cases", label: t.why.cases },
-  ],
-  docs: [
-    { page: "docs", label: t.docs.index },
-    { page: "docs/npm", label: t.docs.npm },
-    { page: "docs/rust", label: t.docs.rust },
-    { page: "docs/go", label: t.docs.go },
-    { page: "docs/cli", label: t.docs.cli },
-  ],
-  demo: [
-    { page: "demo", label: t.demo.index },
-    { page: "demo/channels", label: t.demo.channels },
-    { page: "demo/streaming", label: t.demo.streaming },
-    { page: "demo/repair", label: t.demo.repair },
-  ],
-}[Astro.props.section];
+const items = sectionItems(Astro.props.section, lang);
 // 절 이름은 ` — ` 앞만 — "React — @minjun0219/mdwire/react" 는 좁은 칸에서 글자 단위로 끊긴다.
 const sections = (Astro.props.headings ?? [])
   .filter((h) => h.depth === 2)

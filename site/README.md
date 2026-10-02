@@ -8,7 +8,7 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
 - **npm 에 올라간 `@minjun0219/mdwire` 를 쓴다.** 로컬 `pkg/` 를 쓰는 `examples/` 와 다르다 —
   배포 빌드(Workers Builds)에는 Rust·wasm-pack 이 없다. 새 버전이 나오면 `package.json` 의
   버전을 올린다.
-- 데모는 `/demo/` 아래 페이지 하나에 하나씩 둔다(목록은 `src/components/SectionNav.astro`). 예시
+- 데모는 `/demo/` 아래 페이지 하나에 하나씩 둔다(목록은 `src/sections.ts`). 예시
   (`src/components/samples.ts`)는 `corpus/cases/*/input.md` 를 옮긴 것이다. 정규화 전후 데모는 그중 npm
   에 올라간 판에서 정규화 보고가 0 이 아닌 케이스만 쓴다.
 - 사례(`src/pages/why/cases.mdx`)는 `corpus/cases/` 중 대표 케이스의 입력과 기대 출력을 옮기고 `why.md` 를 풀어 쓴 것이다.
@@ -18,11 +18,19 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   npm 판을 올리고 그 판에 들어간 표시를 걷는 PR 을 연다(`scripts/site-release-next.sh`).
 - 스트리밍 데모(`src/components/StreamCompare.tsx` · `streamSample.ts`)는 `examples/react-streaming`
   을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
-- `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 채널·API·문서 위치가
+- `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 모든 페이지 푸터에서 링크한다. 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
+- 홈은 MDX 본문을 화면용 컴포넌트로 감싼다. `Hero` · `Steps` · `LinkCards` 는 안의 글(slot)을 꾸밀 뿐이라 글은 MDX 에
+  그대로 있고, `Showcase`(전후 비교) · `Channels`(채널 카드)는 같은 내용이 본문에 있는 화면용 블록이다. 마크다운 사본은
+  컴포넌트만 있는 줄을 걷어 낸다 — 그래서 컴포넌트는 늘 제 줄에 따로 쓴다.
+- 홈의 전후 비교(`src/components/Showcase.astro`)는 `corpus/cases/chat-bot-answer/` 의 입력과 채널별 기대 출력을 그대로
+  옮긴 정적 화면이다(홈에서 wasm 을 받지 않는다). 그 케이스의 기대 출력이 바뀌면 같이 고친다. 채널 카드
+  (`src/components/Channels.astro`)의 이름 · 제한은 문서 개념 페이지의 채널 표와 같다.
+- 코드 블록의 복사 버튼과 절 제목의 `#` 링크는 레이아웃(`layouts/Doc.astro`)의 스크립트가 단다. 배경 · 문서 · 데모 묶음의
+  페이지 차례는 `src/sections.ts` 한 곳에 있다 — 사이드바와 본문 아래 이전 · 다음 링크가 같이 쓴다.
 - 레지스트리 배지(`src/components/Badges.astro`)는 shields.io 이미지라 버전을 손으로 고치지 않는다. 홈은 전부, 언어별
   문서는 그 언어 것만 싣는다. 마크다운 사본에서는 뺀다.
 - 링크 미리보기 이미지 `public/og.png`(1200×630)는 손으로 만든 것이다. 채널 목록이 바뀌면 다시 만든다.

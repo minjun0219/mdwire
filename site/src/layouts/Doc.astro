@@ -4,6 +4,7 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
 import SectionNav from "../components/SectionNav.astro";
+import Pager from "../components/Pager.astro";
 // 한국어 본문 글꼴. 유니코드 범위로 나뉜 woff2 라 페이지에 쓰인 글자의 조각만 받는다 — 영어 페이지는 받지 않는다.
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "../styles/global.css";
@@ -22,8 +23,8 @@ const other = lang === "en" ? "ko" : "en";
 // 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
 const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const href = (page: string) => getRelativeLocaleUrl(lang, page);
-// 404 는 언어별 페이지가 없다 — 다른 언어의 개요로 보낸다.
-const switchHref = getRelativeLocaleUrl(other, rest === "404" ? "" : rest);
+// 언어 전환 — 같은 문서의 각 언어 주소. 404 는 언어별 페이지가 없다 — 각 언어의 개요로 보낸다.
+const langHref = (l: "en" | "ko") => getRelativeLocaleUrl(l, rest === "404" ? "" : rest);
 const nav = [
   { page: "", label: t.nav.home },
   { page: "why", label: t.nav.why },
@@ -128,14 +129,28 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         }
       </nav>
       <div class="header-end">
-        <a href={switchHref} hreflang={other} lang={other}>{t.switchTo}</a>
-        <a class="header-github" href="https://github.com/minjun0219/mdwire">GitHub</a>
+        <nav class="lang-switch" aria-label={t.langSwitch}>
+          {
+            (["en", "ko"] as const).map((l) => (
+              <a href={langHref(l)} hreflang={l} lang={l} aria-current={l === lang ? "true" : undefined}>
+                {l.toUpperCase()}
+              </a>
+            ))
+          }
+        </nav>
+        <a class="header-github" href="https://github.com/minjun0219/mdwire" aria-label="GitHub" title="GitHub">
+          {/* GitHub 마크(Octicons mark-github, MIT). 색은 글자색을 따른다. */}
+          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+          </svg>
+        </a>
       </div>
     </header>
     <div class:list={["page", { "with-sidebar": section }]}>
       {section && <SectionNav section={section} headings={Astro.props.headings} />}
-      <main class="doc">
+      <main class="doc" data-copy-label={t.code.copy} data-copied-label={t.code.copied} data-anchor-label={t.code.anchor}>
         <slot />
+        {section && <Pager section={section} />}
       </main>
     </div>
     <footer class="site-footer">
@@ -143,8 +158,60 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         <a href="https://github.com/minjun0219/mdwire">GitHub</a>
         <span aria-hidden="true">·</span>
         <a href="https://github.com/minjun0219/mdwire/blob/main/LICENSE">{t.license}</a>
+        <span aria-hidden="true">·</span>
+        <a href="/llms.txt" type="text/plain">llms.txt</a>
       </p>
-      <p class="footer-by">by <a href="https://minjun.kim">minjun.kim</a></p>
+      <p class="footer-by">by <a href="https://minjun.kim/?utm_source=mdwire&utm_medium=referral&utm_content=footer">minjun.kim</a></p>
     </footer>
+    <script>
+      // 글을 고치지 않는 편의 기능 — 스크립트가 없어도 본문은 그대로 읽힌다. 문구는 `main` 의 data-* 에서 읽는다.
+      const main = document.querySelector<HTMLElement>("main.doc");
+      if (main) {
+        const { copyLabel = "Copy", copiedLabel = "Copied", anchorLabel = "" } = main.dataset;
+
+        const copy = async (button: HTMLButtonElement, text: string) => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            return;
+          }
+          button.textContent = copiedLabel;
+          button.dataset.done = "";
+          setTimeout(() => {
+            button.textContent = copyLabel;
+            delete button.dataset.done;
+          }, 1500);
+        };
+
+        // 코드 블록마다 복사 버튼. 블록이 옆으로 스크롤해도 버튼이 따라가지 않게 바깥을 한 겹 감싼다.
+        for (const pre of main.querySelectorAll<HTMLPreElement>("pre.astro-code")) {
+          const box = document.createElement("div");
+          box.className = "code-box";
+          pre.replaceWith(box);
+          box.append(pre);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "copy";
+          button.textContent = copyLabel;
+          button.addEventListener("click", () => copy(button, pre.querySelector("code")?.textContent ?? pre.textContent ?? ""));
+          box.append(button);
+        }
+
+        // 글을 미리 넣어 둔 버튼(홈의 설치 한 줄).
+        for (const button of main.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+          button.addEventListener("click", () => copy(button, button.dataset.copy ?? ""));
+        }
+
+        // 절 제목 옆의 # 링크 — 주소를 복사해 절을 가리킬 수 있게.
+        for (const h of main.querySelectorAll<HTMLHeadingElement>(":scope > :is(h2, h3)[id]")) {
+          const a = document.createElement("a");
+          a.className = "anchor";
+          a.href = `#${h.id}`;
+          a.textContent = "#";
+          a.setAttribute("aria-label", anchorLabel);
+          h.append(a);
+        }
+      }
+    </script>
   </body>
 </html>

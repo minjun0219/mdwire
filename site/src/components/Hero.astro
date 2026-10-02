@@ -1,0 +1,138 @@
+---
+// 홈 첫 화면. 제목과 첫 문단은 MDX 본문(slot)에 그대로 두고 — 마크다운 사본에도 남게 — 그 아래에 행동
+// 버튼과 설치 한 줄을 붙인다.
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang];
+const install = "npm install @minjun0219/mdwire";
+---
+
+<section class="hero wide">
+  <div class="hero-text">
+    <slot />
+  </div>
+  <div class="hero-actions">
+    <a class="button primary" href={getRelativeLocaleUrl(lang, "demo/channels")}>{t.home.tryDemo}</a>
+    <a class="button" href={getRelativeLocaleUrl(lang, "docs")}>{t.home.readDocs}</a>
+    <a class="button ghost" href="https://github.com/minjun0219/mdwire">GitHub</a>
+  </div>
+  <p class="hero-install">
+    <code><span aria-hidden="true">$ </span>{install}</code>
+    <button type="button" class="copy" data-copy={install}>{t.code.copy}</button>
+  </p>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    isolation: isolate;
+    margin: 0 0 1rem;
+    padding: 2.5rem 0 1.5rem;
+  }
+
+  /* 뒤에 깐 옅은 격자 — 위쪽에서만 보이고 아래로 사라진다. */
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: -2rem -1.25rem 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 70% 80% at 30% 0%, #000 20%, transparent 75%);
+    opacity: 0.6;
+  }
+
+  .hero-text {
+    max-width: 46rem;
+  }
+
+  .hero-text :global(h1) {
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+    margin: 0 0 1.25rem;
+  }
+
+  .hero-text :global(p) {
+    font-size: 1.12rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .hero-text :global(strong) {
+    color: var(--fg);
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.75rem 0 1.25rem;
+  }
+
+  .button {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+  }
+
+  .button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  .button.primary:hover {
+    color: var(--bg);
+    filter: brightness(1.1);
+  }
+
+  .button.ghost {
+    background: transparent;
+  }
+
+  .hero-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 100%;
+    margin: 0;
+    padding: 0.45rem 0.5rem 0.45rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--code-bg);
+  }
+
+  .hero-install code {
+    background: none;
+    padding: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .hero-install code span {
+    color: var(--muted);
+  }
+
+  /* 복사 버튼 모양은 global.css 의 .copy — 여기선 제자리에 둔다. */
+  .hero-install .copy {
+    position: static;
+    opacity: 1;
+  }
+</style>

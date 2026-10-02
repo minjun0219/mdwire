@@ -1,0 +1,106 @@
+---
+// 홈의 채널 카드. 이름과 길이 제한은 문서 개념 페이지(`pages/docs/index.mdx`)의 채널 표와 같다 — 채널이나
+// 제한이 바뀌면 같이 고친다.
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang].home.channels;
+
+const channels: { name: string; target: string; limit?: number; note: Record<"en" | "ko", string> }[] = [
+  {
+    name: "telegram-html",
+    target: "Telegram",
+    limit: 4096,
+    note: { en: "parse_mode HTML, nine tags", ko: "parse_mode HTML, 태그 아홉 개" },
+  },
+  {
+    name: "slack-markdown",
+    target: "Slack",
+    limit: 12000,
+    note: { en: "markdown_text, repaired and split", ko: "markdown_text, 고치고 나누기만" },
+  },
+  {
+    name: "github-markdown",
+    target: "GitHub",
+    limit: 65536,
+    note: { en: "comments and PR bodies (GFM)", ko: "코멘트 · PR 본문(GFM)" },
+  },
+  {
+    name: "notion-markdown",
+    target: "Notion",
+    limit: 65536,
+    note: { en: "Notion-flavored Markdown", ko: "노션식 마크다운" },
+  },
+  { name: "plain", target: "Plain text", limit: 12000, note: { en: "every marker removed", ko: "표시를 모두 걷은 평문" } },
+  { name: "html", target: "Browser", note: { en: "safe for innerHTML", ko: "innerHTML 에 바로 넣어도 안전" } },
+];
+const number = new Intl.NumberFormat(lang === "ko" ? "ko-KR" : "en-US");
+---
+
+<ul class="channels wide" aria-label={t.title}>
+  {
+    channels.map((c) => (
+      <li>
+        <a href={`${getRelativeLocaleUrl(lang, "docs")}#${lang === "ko" ? "채널" : "channels"}`}>
+          <span class="target">{c.target}</span>
+          <code>{c.name}</code>
+          <span class="note">{c.note[lang]}</span>
+          <span class="limit">{c.limit ? `${t.limit} ${number.format(c.limit)}` : t.none}</span>
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr));
+    gap: 0.75rem;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .channels a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    height: 100%;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--fg);
+    text-decoration: none;
+    transition: border-color 0.15s;
+  }
+
+  .channels a:hover {
+    border-color: var(--accent);
+  }
+
+  .target {
+    font-weight: 700;
+  }
+
+  .channels code {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+
+  .note {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .limit {
+    margin-top: auto;
+    padding-top: 0.4rem;
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+</style>

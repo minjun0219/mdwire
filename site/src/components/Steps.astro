@@ -1,0 +1,53 @@
+---
+// 본문의 번호 목록을 단계 카드로 보이게 감싼다. 글은 MDX 본문(slot)에 그대로 있어 마크다운 사본에도 남는다.
+---
+
+<div class="steps wide"><slot /></div>
+
+<style>
+  .steps :global(> :not(ol)) {
+    max-width: 44rem;
+  }
+
+  .steps :global(> ol) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .steps :global(> ol > li) {
+    position: relative;
+    padding: 2.6rem 1rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    font-size: 0.93rem;
+    counter-increment: step;
+  }
+
+  .steps :global(> ol > li::before) {
+    content: counter(step);
+    position: absolute;
+    top: 0.9rem;
+    left: 1rem;
+    display: grid;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .steps :global(> ol > li > strong:first-child) {
+    display: block;
+    font-size: 1.02rem;
+    margin-bottom: 0.2rem;
+  }
+</style>

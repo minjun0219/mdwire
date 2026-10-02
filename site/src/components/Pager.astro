@@ -1,0 +1,77 @@
+---
+// 배경 · 문서 · 데모 묶음의 본문 아래 이전 · 다음 링크. 차례는 사이드바와 같다(`sections.ts`).
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { localeOf, ui } from "../i18n";
+import { sectionItems, type Section } from "../sections";
+
+interface Props {
+  section: Section;
+}
+
+const lang = localeOf(Astro.currentLocale);
+const t = ui[lang].pager;
+const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const items = sectionItems(Astro.props.section, lang);
+const i = items.findIndex((item) => item.page === rest);
+const prev = i > 0 ? items[i - 1] : undefined;
+const next = i >= 0 && i < items.length - 1 ? items[i + 1] : undefined;
+---
+
+{
+  (prev || next) && (
+    <nav class="pager" aria-label={`${t.prev} / ${t.next}`}>
+      {prev ? (
+        <a class="prev" href={getRelativeLocaleUrl(lang, prev.page)} rel="prev">
+          <span>← {t.prev}</span>
+          {prev.label}
+        </a>
+      ) : (
+        <span />
+      )}
+      {next && (
+        <a class="next" href={getRelativeLocaleUrl(lang, next.page)} rel="next">
+          <span>{t.next} →</span>
+          {next.label}
+        </a>
+      )}
+    </nav>
+  )
+}
+
+<style>
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    max-width: 44rem;
+    margin-top: 3.5rem;
+  }
+
+  .pager a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--fg);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .pager a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .pager span {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .next {
+    grid-column: 2;
+    text-align: right;
+  }
+</style>

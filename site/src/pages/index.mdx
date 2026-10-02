@@ -4,12 +4,23 @@ title: LLM Markdown for Telegram, Slack and GitHub
 description: Send LLM-generated Markdown to Telegram, Slack and GitHub without it breaking — repaired, rendered for each channel and split within its limit, streaming included. Rust, npm (WASM), Go and a CLI.
 ---
 import Badges from "../components/Badges.astro";
+import Channels from "../components/Channels.astro";
+import Hero from "../components/Hero.astro";
+import LinkCards from "../components/LinkCards.astro";
+import Showcase from "../components/Showcase.astro";
+import Steps from "../components/Steps.astro";
+
+<Hero>
 
 # Send LLM Markdown to chat channels without it breaking
 
 mdwire does not turn Markdown into finished output. It **tailors the Markdown an agent wrote to
 each channel**: repaired, rewritten into the syntax that channel accepts, and split within its
 length limit. Rendering is still the channel's job.
+
+</Hero>
+
+<Steps>
 
 ```
 LLM markdown  →  normalize  →  render for channel  →  split safely  →  send
@@ -23,6 +34,10 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
 3. **Split.** Respect the channel's limit and never cut through markup — including while
    streaming, where a chunk boundary must not land inside `**bold**`.
 
+</Steps>
+
+<Showcase />
+
 ## Why another one
 
 We found three gaps in existing tools: emphasis that spans lines, Korean notation that collides with
@@ -35,12 +50,22 @@ Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain
 text, and HTML for the browser. A Rust core, a CLI, an npm package (WASM) and a Go implementation, all held to
 the same test cases.
 
+<Channels />
+
 ## Try it
 
-The [demos](/demo/) run the npm package in your browser: one agent answer
-[rendered for Telegram and for Slack](/demo/channels/) side by side, the same answer
-[streamed into five renderers](/demo/streaming/), and broken agent output
-[before and after repair](/demo/repair/).
+The [demos](/demo/) run the npm package in your browser.
+
+<LinkCards>
+
+- [Telegram vs Slack](/demo/channels/)\
+  One agent answer rendered for Telegram and for Slack side by side.
+- [Streaming](/demo/streaming/)\
+  The same answer streamed into five renderers.
+- [Before and after repair](/demo/repair/)\
+  Broken agent output next to what mdwire sends.
+
+</LinkCards>
 
 ## Install
 
