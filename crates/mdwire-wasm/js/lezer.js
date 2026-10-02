@@ -51,6 +51,10 @@ function isAlnum(cp) {
 function isAsciiAlnum(cp) {
   return (cp >= 48 && cp <= 57) || (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122);
 }
+/** 코어 `is_opening_bracket` — 여는 괄호·따옴표. 바로 뒤의 마커는 닫는 자리가 아니라 여는 자리다. */
+function isOpeningBracket(cp) {
+  return cp >= 0 && "([{「『（【《“‘".includes(String.fromCodePoint(cp));
+}
 /** 코어 `is_punct`. */
 function isPunct(cp) {
   if (cp < 0) return false;
@@ -100,6 +104,12 @@ function open(cx, type) {
   return i == null ? null : [i, cx.getDelimiterAt(i)];
 }
 
+/** 열린 구분자를 물린다 — 더는 찾히지 않고, 끝에 글자로 남는다(코어의 "글자로 되돌린다"). */
+const RETIRED = {};
+function retire(delim) {
+  delim.type = RETIRED;
+}
+
 /** `at` 에서 열린 것을 `[from, to)` 의 닫는 마커로 닫는다. */
 function close(cx, kind, index, delim, from, to) {
   const content = cx.takeContent(index);
@@ -130,7 +140,8 @@ function marker(cx, kind, from, to, prev, next, intraword) {
   if (nearest === "hemmed") {
     const [i, d] = hemmed;
     // 막힌 여는 마커의 거울 짝 — 같은 줄, 같은 길이, 앞이 구두점, 뒤가 글자(조사). 양 끝이 다 ASCII
-    // 영숫자면 수식(`x**(y)**z`)이라 짝짓지 않는다.
+    // 영숫자면 수식(`x**(y)**z`)이라 짝짓지 않는다. 앞이 여는 괄호·따옴표면 거울이 아니라 다음 강조의
+    // 여는 마커다(`2**(n-1) (**주의**)`).
     const openBefore = before(cx, d.from);
     if (
       d.to - d.from === run &&
@@ -138,15 +149,23 @@ function marker(cx, kind, from, to, prev, next, intraword) {
       prev >= 0 &&
       !isWord(prev) &&
       !isWs(prev) &&
+      !isOpeningBracket(prev) &&
       isWord(next) &&
       !(isAsciiAlnum(openBefore) && isAsciiAlnum(next))
     ) {
       return close(cx, kind, i, d, from, to);
     }
-    // 막힌 여는 마커가 또 왔다 — 앞의 것은 짝이 없었다. lezer 가 글자로 둔다. 이쪽을 새로 연다.
-    if (hemmedHere) return cx.addDelimiter(kind.hemmed, from, to, true, false);
-    // 추측으로 연 것은 닫지 않는다. 여는 자리면 새로 열고, 아니면 글자다.
-    if (left && afterSpace) return cx.addDelimiter(kind.type, from, to, true, false);
+    // 막힌 여는 마커가 또 왔다 — 앞의 것은 짝이 없었다. 물리면 글자로 남는다. 이쪽을 새로 연다.
+    if (hemmedHere) {
+      retire(d);
+      return cx.addDelimiter(kind.hemmed, from, to, true, false);
+    }
+    // 추측으로 연 것은 닫지 않는다. 여는 자리면 새로 열고, 아니면 글자다. 여는 괄호 뒤의 마커는 여는
+    // 자리다 — 막힌 마커는 물려서 글자로 남는다.
+    if (left && (afterSpace || isOpeningBracket(prev))) {
+      if (!afterSpace) retire(d);
+      return cx.addDelimiter(kind.type, from, to, true, false);
+    }
     return to;
   }
   if (nearest === "same") {
