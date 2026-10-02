@@ -60,7 +60,7 @@ cat > "$OUT/package.json" <<JSON
     "./react": { "types": "./js/react.d.ts", "default": "./js/react.js" },
     "./lezer": { "types": "./js/lezer.d.ts", "default": "./js/lezer.js" }
   },
-  "peerDependencies": { "react": ">=18", "@lezer/markdown": ">=1.3" },
+  "peerDependencies": { "react": ">=18", "@lezer/markdown": ">=1.5" },
   "peerDependenciesMeta": { "react": { "optional": true }, "@lezer/markdown": { "optional": true } },
   "sideEffects": ["./bundler/mdwire.js"],
   "files": ["bundler", "node", "js"],

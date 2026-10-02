@@ -172,8 +172,12 @@ function marker(cx, kind, from, to, prev, next, intraword) {
     const [i, d] = same;
     // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
     if (!afterSpace) return close(cx, kind, i, d, from, to);
-    // 앞이 공백인데 열 수 있다 — 여는 마커가 또 왔다. 먼저 열린 쪽이 진다(글자로 남는다). 규칙 2.
-    if (left) return cx.addDelimiter(kind.type, from, to, true, false);
+    // 앞이 공백인데 열 수 있다 — 여는 마커가 또 왔다. 먼저 열린 쪽이 진다(물려서 글자로 남는다). 규칙 2.
+    // 물리지 않으면 `**old⏎**new** tail**` 의 끝 `**` 가 첫 `**` 와 다시 짝지어 문단 전체가 굵어진다.
+    if (left) {
+      retire(d);
+      return cx.addDelimiter(kind.type, from, to, true, false);
+    }
     return close(cx, kind, i, d, from, to);
   }
   if (left) return cx.addDelimiter(kind.type, from, to, true, false);

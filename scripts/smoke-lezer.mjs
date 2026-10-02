@@ -63,6 +63,8 @@ for (const input of same) {
 }
 // 코어는 짝 잃은 `**` 를 버리지만, 이 확장은 글자로 둔다 — 범위는 같다.
 assert.equal(read(p, "채널**이다. 글\n**신분 공개**이"), "채널**이다. 글\n<b>신분 공개</b>이");
+// 진 여는 마커는 물린다 — 뒤의 짝 잃은 마커와 다시 짝지어 문단 전체가 굵어지면 안 된다.
+assert.equal(read(p, "**old\n**new** tail**"), "**old\n<b>new</b> tail**");
 // 쌓는 순서 둘 다 된다.
 assert.equal(read(parser.configure(GFM).configure(koreanEmphasis), "**설정(config)**을"), "<b>설정(config)</b>을");
 // GFM 없이도 강조는 되고, 취소선은 글자로 남는다(노드가 없다).

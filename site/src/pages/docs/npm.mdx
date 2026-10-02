@@ -152,7 +152,7 @@ const p = parser.configure([GFM, koreanEmphasis]); // after GFM: it replaces Emp
 
 For screens that draw Markdown with `@lezer/markdown` or CodeMirror instead of going through mdwire. The extension
 reads emphasis with [the same rules](/docs/emphasis/) as the core, so `**설정(config)**을` becomes bold instead of
-leaving its asterisks on screen. No WASM; `@lezer/markdown` is an optional peer dependency.
+leaving its asterisks on screen. No WASM; `@lezer/markdown` (1.5 or later) is an optional peer dependency.
 
 Three things differ from the core, by design: markers that do not pair stay as text (the core drops some of them),
 emphasis left open at the end of a paragraph stays as text (the core closes it), and a run of four or more `*` is

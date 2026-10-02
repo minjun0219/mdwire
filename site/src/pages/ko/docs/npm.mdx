@@ -152,7 +152,7 @@ const p = parser.configure([GFM, koreanEmphasis]); // GFM 뒤에 둡니다 — E
 
 mdwire 를 거치지 않고 `@lezer/markdown` 이나 CodeMirror 로 마크다운을 그리는 화면을 위한 확장입니다. 코어와
 [같은 규칙](/ko/docs/emphasis/)으로 강조를 읽어서 `**설정(config)**을` 이 별표 대신 굵게로 보입니다. WASM 이 없고,
-`@lezer/markdown` 은 선택 peer 의존성입니다.
+`@lezer/markdown`(1.5 이상)은 선택 peer 의존성입니다.
 
 코어와 다른 점은 셋이고 모두 의도한 것입니다. 짝을 맺지 못한 마커는 글자로 남깁니다(코어는 일부를 버립니다).
 문단 끝까지 열려 있는 강조도 글자로 남깁니다(코어는 닫아 줍니다). 별표 넷 이상은 글자입니다. 실제 문단 6,965개로
