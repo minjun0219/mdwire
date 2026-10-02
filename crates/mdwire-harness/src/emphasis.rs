@@ -267,6 +267,8 @@ struct Open {
     /// 추측으로 연 것인가. 양쪽 다 공백이라 원래는 그냥 글자인 `**` 를
     /// "줄바꿈에 걸린 강조일 것"으로 보고 연 경우다. 안 닫히면 되돌린다.
     guess: bool,
+    /// 여는 쪽이 막힌 마커(`값**(합계)**를`)면 열린 줄 번호. 같은 줄의 거울 모양 마커와 짝짓는다. 규칙은 코어와 같다.
+    hemmed: Option<usize>,
     buf: String,
 }
 
@@ -276,8 +278,12 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
     let mut root = String::new();
     let mut i = 0;
 
+    let mut line = 0;
     while i < ch.len() {
         let c = ch[i];
+        if c == '\n' {
+            line += 1;
+        }
 
         // **역슬래시 이스케이프가 먼저다.** `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
         // 코어가 그렇게 읽으므로 참조 구현도 같이 읽어야 한다.
@@ -407,9 +413,30 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         let right = !after_space && (!prev.is_some_and(is_punct) || next.is_none_or(|n| n.is_whitespace() || is_punct(n)));
         let closes = mode != Mode::CommonMark || right;
 
+        // 여는 쪽이 막혔다 — 앞이 글자이고 뒤가 구두점. 규칙은 코어와 같다.
+        let hemmed = prev.is_some_and(|p| p.is_alphabetic() || p.is_ascii_digit())
+            && next.is_some_and(|n| !n.is_whitespace() && is_punct(n));
+
         match open_same {
+            // 막힌 여는 마커의 거울 짝 — 같은 줄, 같은 길이, 앞이 구두점. 규칙은 코어와 같다.
+            Some(at)
+                if mode != Mode::CommonMark
+                    && stack[at].hemmed == Some(line)
+                    && stack[at].marker.chars().count() == take
+                    && prev.is_some_and(|p| {
+                        !(p.is_alphabetic() || p.is_ascii_digit()) && !p.is_whitespace() && !is_opening_bracket(p)
+                    }) =>
+            {
+                stack[at].guess = false;
+                close_to(&mut stack, &mut root, at, scan)
+            }
             // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
-            Some(at) if stack[at].guess && (!left || !after_space) => {
+            // 막힌 추측 뒤의 `(**주의` 는 여는 마커라 아래로 보낸다(`2**(n-1) (**주의**)`).
+            Some(at)
+                if stack[at].guess
+                    && (!left || !after_space)
+                    && !(left && stack[at].hemmed.is_some() && prev.is_some_and(is_opening_bracket)) =>
+            {
                 *scan.literal.entry(c).or_default() += take;
                 push_text(&mut stack, &mut root, &marker)
             }
@@ -429,7 +456,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 *scan.literal.entry(c).or_default() += old.marker.chars().count();
                 let restored = format!("{}{}", old.marker, old.buf);
                 push_text(&mut stack, &mut root, &restored);
-                stack.push(Open { kind, marker, guess: false, buf: String::new() });
+                stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() });
             }
             // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
             Some(at) if !after_space && closes => close_to(&mut stack, &mut root, at, scan),
@@ -447,7 +474,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     let buf = old.buf;
                     push_text(&mut stack, &mut root, &buf);
                 }
-                stack.push(Open { kind, marker, guess: false, buf: String::new() });
+                stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() });
             }
             // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
             Some(_) if left => {
@@ -461,12 +488,12 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 *scan.literal.entry(c).or_default() += take;
                 push_text(&mut stack, &mut root, &marker)
             }
-            Some(_) => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
-            None if left => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
+            Some(_) => stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() }),
+            None if left => stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() }),
             // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
             // 일단 열어 두고, 안 닫히면 글자로 되돌린다.
-            None if mode == Mode::Repair => {
-                stack.push(Open { kind, marker, guess: true, buf: String::new() })
+            None if mode == Mode::Repair || (mode == Mode::Strict && hemmed) => {
+                stack.push(Open { kind, marker, guess: true, hemmed: hemmed.then_some(line), buf: String::new() })
             }
             None => {
                 *scan.literal.entry(c).or_default() += take;
@@ -610,6 +637,11 @@ pub(crate) fn can_open(prev: Option<char>, next: Option<char>) -> bool {
     next.is_some_and(|n| {
         !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| !(p.is_alphabetic() || p.is_ascii_digit())))
     })
+}
+
+/// 여는 괄호·따옴표 — 코어의 `is_opening_bracket` 과 같다.
+fn is_opening_bracket(c: char) -> bool {
+    matches!(c, '(' | '[' | '{' | '「' | '『' | '（' | '【' | '《' | '“' | '‘')
 }
 
 pub(crate) fn is_punct(c: char) -> bool {
@@ -887,5 +919,14 @@ mod angle_tests {
         let fixed = "***중요(필수)\u{2060}*\u{2060}**를";
         assert!(scan_markdown(fixed, Mode::CommonMark).unpaired.is_empty());
         assert!(!scan_markdown("**설정(config)**을", Mode::CommonMark).unpaired.is_empty());
+    }
+
+    /// 막힌 여는 마커 뒤에 괄호 안의 강조가 오면 거울이 아니다 — 규칙은 코어와 같다.
+    #[test]
+    fn opening_bracket_marker_is_not_a_mirror() {
+        let scan = scan_markdown("2**(n-1) (**주의**)", Mode::Repair);
+        assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "주의".into() }]);
+        let scan = scan_markdown("값**(합계)**를", Mode::Repair);
+        assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "(합계)".into() }]);
     }
 }

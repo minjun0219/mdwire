@@ -125,3 +125,23 @@ func TestSlackJoinerForNestedEmphasis(t *testing.T) {
 		}
 	}
 }
+
+// 여는 쪽이 막힌 강조 — 러스트 쪽 hemmed_opener_pairs_with_its_mirror_on_the_same_line.
+func TestHemmedOpenerPairsWithItsMirror(t *testing.T) {
+	cases := map[string]string{
+		"값**(합계)**를 본다":                       "값<b>(합계)</b>를 본다",
+		"이름이**\"홍길동\"**이다":                    "이름이<b>\"홍길동\"</b>이다",
+		"2**(n-1) 은 거듭제곱":                     "2**(n-1) 은 거듭제곱",
+		"마스킹 4***-****-****-003* 번호":          "마스킹 4***-****-****-003* 번호",
+		"값**(합계)\n**다음** 줄":                   "값**(합계)\n<b>다음</b> 줄",
+		"underfront.* (4개), minjunkim.* (3개)": "underfront.* (4개), minjunkim.* (3개)",
+		"2**(n-1) (**주의**)":                   "2**(n-1) (<b>주의</b>)",
+		"`값**(합계)\n)**를 끝":                    "`값**(합계)\n)**를 끝",
+		"값**(합계) `x )**를\ny":                  "값<b>(합계) `x )</b>를\ny",
+	}
+	for in, want := range cases {
+		if got := strings.Join(Render(in, TelegramHTML), "\x00"); got != want {
+			t.Errorf("%q:\n  got  %q\n  want %q", in, got, want)
+		}
+	}
+}

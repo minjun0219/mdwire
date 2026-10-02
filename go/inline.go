@@ -37,10 +37,17 @@ type openMark struct {
 	// 더 긴 런(`***`)의 첫 조각인가. 안 닫히면 버리지 않고 글자로 되돌린다 — 원래 한 덩어리의
 	// 글자였다(마스킹 번호 `4***-…`).
 	split bool
+	// hemmed 는 여는 쪽이 막힌 마커인가다 — 앞이 글자이고 뒤가 구두점(`값**(합계)**를`). 열린 줄 번호에
+	// 1 을 더해 든다(0 은 아님). 같은 줄에서 거울 모양으로 닫는 마커가 오면 짝을 맺는다. 러스트 쪽과 같다.
+	hemmed uint32
+	// line 은 열린 줄 번호다. 안 닫힌 코드 스팬을 되돌려 다시 읽을 때 줄 번호를 여기로 되감는다.
+	line uint32
 }
 
 type inline struct {
 	open []openMark
+	// 지금 몇 번째 줄인가. 막힌 여는 마커는 같은 줄에서만 짝을 맺는다.
+	line uint32
 	// 줄을 넘어온 직전 글자. 블록 안에서 줄이 바뀌면 '\n' 이다.
 	prev rune
 	// 링크 텍스트를 렌더할 때만 쓰는 버퍼. 재사용해서 할당을 아낀다.
@@ -90,7 +97,10 @@ func (in *inline) shift(n int) {
 }
 
 // endLine: 줄 하나가 끝났다. 다음 줄의 첫 글자에게 앞 글자는 줄바꿈이다.
-func (in *inline) endLine() { in.prev = '\n' }
+func (in *inline) endLine() {
+	in.line++
+	in.prev = '\n'
+}
 
 // noteRaw 는 블록 층이 out 에 바로 쓴 글자를 코드 스팬 내용에도 남긴다 — 줄 사이의 구분자는
 // render 를 거치지 않는데, 되돌려 다시 읽을 때 두 줄이 한 줄로 붙으면 안 된다.
@@ -138,6 +148,10 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 
 		c := line[i]
+		// 되돌린 코드 스팬을 다시 읽을 때만 줄바꿈이 여기 온다 — 되감은 줄을 도로 센다.
+		if c == '\n' {
+			in.line++
+		}
 
 		// 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
 		if c == '!' && i+1 < len(line) && line[i+1] == '[' {
@@ -175,7 +189,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			run := runLen(line, i, '`')
 			prev := in.prevChar(line, i)
 			in.codeSrc = in.codeSrc[:0]
-			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev), before: prev})
+			in.open = append(in.open, openMark{emph: emphCode, at: len(*out), run: run, ch: '`', afterSpace: prev == noChar || unicode.IsSpace(prev), before: prev, line: in.line})
 			i += run
 			continue
 		}
@@ -249,11 +263,20 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 추측으로 연 것은 닫지 않는다. 추측은 확정되지 않는다 — 닫아 주면 여는 쪽은 사라지고
 		// 닫는 쪽만 없어져 `underfront.*`·`/* 주석 */` 의 별표가 없어졌다. 앞이 글자인 마커도
 		// 추측을 닫지 않고 열지도 않는다 — 열면 블록 끝까지 삼킨다. 글자다.
-		case same >= 0 && in.open[same].guess && (!left || !afterSpace):
+		// 막힌 여는 마커의 거울 짝 — 러스트 쪽과 같다(`값**(합계)**를`).
+		// 앞이 여는 괄호·따옴표면 거울이 아니라 다음 강조의 여는 마커다(`2**(n-1) (**주의**)`).
+		case same >= 0 && in.open[same].hemmed == in.line+1 && in.open[same].run == take &&
+			prev != noChar && !isWordChar(prev) && !unicode.IsSpace(prev) && !isOpeningBracket(prev):
+			in.open[same].guess = false
+			in.afterClose = next
+			in.closeAt(same, out, v)
+		case same >= 0 && in.open[same].guess && (!left || !afterSpace) &&
+			!(left && in.open[same].hemmed != 0 && isOpeningBracket(prev)):
 			for k := 0; k < take; k++ {
 				in.textChar(c, out, v)
 			}
 		// 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고 이쪽을 연다.
+		// 막힌 추측 뒤의 `(**주의` 도 여기다 — 막힌 마커는 글자로 돌아간다.
 		case same >= 0 && in.open[same].guess:
 			in.reopenAt(same, out, v, fresh)
 		// 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
@@ -275,6 +298,9 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		default:
 			fresh.at = len(*out)
 			fresh.guess = true
+			if prev != noChar && isWordChar(prev) && next != noChar && !unicode.IsSpace(next) && isPunct(next) {
+				fresh.hemmed = in.line + 1
+			}
 			in.open = append(in.open, fresh)
 		}
 		i += take
@@ -314,8 +340,13 @@ func (in *inline) revertCodeSpan(out *[]byte, v vocab) {
 	// 버퍼를 통째로 빌려 와서 다시 읽고 돌려준다. 새로 만들지 않는다.
 	src := in.codeSrc
 	in.codeSrc = nil
+	// 줄 번호는 코드 스팬이 열린 줄로 되감고 다시 읽으며 센다 — 안 그러면 막힌 마커의 "같은 줄"
+	// 검사가 줄을 넘어 통과한다. 다 읽으면 블록 층이 세어 둔 값으로 돌려놓는다. 러스트 쪽과 같다.
+	line := in.line
+	in.line = o.line
 	in.prev = o.ch
 	in.render(src, out, v)
+	in.line = line
 	// 다시 읽는 동안 새 코드 스팬이 열렸으면 그쪽 버퍼를 지키고, 아니면 돌려준다.
 	if len(in.codeSrc) == 0 {
 		in.codeSrc = src[:0]
@@ -332,7 +363,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	}
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
-	if old.run == 1 || (old.guess && (old.afterSpace || old.split)) {
+	if old.run == 1 || (old.guess && (old.afterSpace || old.split || old.hemmed != 0)) {
 		insertMarker(out, old.at, old.ch, old.run, v, &in.repairs)
 	} else {
 		in.repairs.DroppedMarker++
@@ -402,7 +433,8 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 	if o.guess || empty {
 		// 추측이 빗나갔다. 홑마커는 글자로 되돌린다 — 각주·글롭·곱셈. `**` 는 앞이 공백이었을
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
-		if o.afterSpace || o.run == 1 || o.split {
+		// 막힌 여는 마커도 되돌린다 — 짝 없는 `2**(n-1)` 의 `**` 는 거듭제곱이다.
+		if o.afterSpace || o.run == 1 || o.split || o.hemmed != 0 {
 			insertMarker(out, o.at, o.ch, o.run, v, &in.repairs)
 		} else {
 			in.repairs.DroppedMarker++
@@ -889,6 +921,16 @@ func canOpen(prev, next rune) bool {
 // 들어간다. 여기가 갈리면 `का_x` 의 `_` 를 러스트는 글자로 두고 Go 는 강조로 연다.
 func isAlphabetic(c rune) bool {
 	return unicode.IsLetter(c) || unicode.Is(unicode.Nl, c) || unicode.Is(unicode.Other_Alphabetic, c)
+}
+
+// isOpeningBracket 은 여는 괄호·따옴표다 — 바로 뒤의 마커는 닫는 자리가 아니라 여는 자리다.
+// ASCII `"`·`'` 는 여닫는 모양이 같아 가르지 못하므로 넣지 않는다.
+func isOpeningBracket(c rune) bool {
+	switch c {
+	case '(', '[', '{', '「', '『', '（', '【', '《', '“', '‘':
+		return true
+	}
+	return false
 }
 
 // isWordChar 는 강조 마커 앞뒤의 "글자"다. 알파벳(한글 포함)과 ASCII 숫자 — `①` 은 아니다.
