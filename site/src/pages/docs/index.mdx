@@ -23,7 +23,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 | Name | Goes to | Limit |
 |---|---|---|
 | `telegram-html` | Telegram `parse_mode: "HTML"`. Nine tags (`b i u s code pre a blockquote tg-spoiler`), no headings or tables — a table goes out as a monospace block. | 4,096 |
-| `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire only repairs and splits. | 12,000 |
+| `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire repairs, escapes a `*` meant as a character (`\*`) and splits. | 12,000 |
 | `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold that GFM would not close (before a Korean particle) is written as `<strong>`. | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
 | `plain` | Plain text — every marker removed. The fallback. | 12,000 |
@@ -45,7 +45,7 @@ The three `html` options apply only to the `html` channel.
 
 ## The repair report
 
-Rendering also counts what it had to do. The first four are **repairs** — how often the model broke
+Rendering also counts what it had to do. The first five are **repairs** — how often the model broke
 its own formatting:
 
 | Field | Counts |
@@ -54,12 +54,13 @@ its own formatting:
 | closed fence | A code fence still open at the end of the document, closed. |
 | reverted code span | A backtick run with no partner, kept as text. |
 | dropped marker | A stray `**` dropped (`tail**`, where text comes before it). |
+| guessed pair | Emphasis paired by a guess rather than by the rules — an opener CommonMark would not open (`값**(합계)**를`) matched with a mirror-shaped closer on the same line. Math with ASCII on both ends (`x**(y)**z`) is left out. A non-zero count marks an answer worth a look. <Next /> |
 
 The other six are **channel rewrites** — what the channel needed changed before posting:
 
 | Field | Counts |
 |---|---|
-| escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`). |
+| escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`; Slack's and Notion's `\*`). |
 | tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's `<strong>`, or an invisible U+2060 inside Slack's markers <Next />. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |

@@ -5,6 +5,7 @@
 const channels = ["telegram-html", "slack-markdown", "github-markdown", "notion-markdown", "plain", "html"] as const;
 
 // 정규화 보고의 열 가지 수 — ChannelCompare 와 같다.
+// npm 에 올라간 판의 필드다 — 다음 판의 `guessedPair` 는 사이트가 그 판으로 올라갈 때 더한다.
 const repairKeys = [
   "closedEmphasis",
   "closedFence",

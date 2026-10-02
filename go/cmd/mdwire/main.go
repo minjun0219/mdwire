@@ -213,10 +213,10 @@ func writeReport(w io.Writer, r mdwire.Repairs) error {
 }
 
 func repairsFields(r mdwire.Repairs) string {
-	return fmt.Sprintf("\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d,"+
+	return fmt.Sprintf("\"closedEmphasis\":%d,\"closedFence\":%d,\"revertedCodeSpan\":%d,\"droppedMarker\":%d,\"guessedPair\":%d,"+
 		"\"escapedChar\":%d,\"tagEmphasis\":%d,\"strippedHtml\":%d,\"rewrittenBullet\":%d,"+
 		"\"rewrittenTable\":%d,\"convertedMarker\":%d",
-		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
+		r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker, r.GuessedPair,
 		r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 }
 

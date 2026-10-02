@@ -26,7 +26,8 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    Markdown converter. Typical cases: unpaired `**`, emphasis that spans a line break in wrapped
    prose, unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
-   tags; Slack `markdown_text` takes standard Markdown directly. GitHub takes it too, but
+   tags; Slack `markdown_text` takes standard Markdown directly, with a `*` meant as a character
+   escaped (`\*`) so Slack does not re-read it as emphasis. GitHub takes it too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
    character goes out escaped (`\~`, `\<`), and emphasis that GFM would not close (`**(a)**`
    followed directly by a Korean particle) goes out as `<strong>`. Notion renders that bold as is
@@ -40,7 +41,7 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    covers streaming: a chunk boundary must not land inside `**bold**`.
 
 The pipeline has one option. **Repair report:** how many times the normalizer stepped
-in — unclosed emphasis, unclosed fence, unpaired backticks, dropped markers — and what it
+in — unclosed emphasis, unclosed fence, unpaired backticks, dropped markers, guessed pairs — and what it
 rewrote for the channel — escaped characters, tags for emphasis, stripped HTML, bullets,
 tables, converted markers — so you can log how often the model breaks its own formatting
 and see what a channel changes before you adopt it.

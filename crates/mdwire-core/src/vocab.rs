@@ -225,10 +225,16 @@ impl Vocab {
     /// **노션은 `*` 와 `\` 를 이스케이프한다**(실측 2026-10-01, 커넥터). 마스킹 번호가 GitHub 처럼
     /// 뭉개지고(`1***-****-001*` → `1***-**--001*`), 홀로 쓴 `\` 는 사라진다. `~` 와 `<` 는
     /// 노션이 글자로 그려 손대지 않는다.
+    ///
+    /// **슬랙 `markdown_text` 는 `*` 를 이스케이프한다**(실측 2026-10-02, `chat.postMessage`). 글자로 둔
+    /// 별표를 슬랙이 CommonMark 로 다시 읽어 `x**(y)**z 와 2**(n-1)**2` 의 `**z 와 2**` 를, 마스킹 번호
+    /// `4***-****-****-003*` 의 `-****-` 를 굵게로 그렸다. `\*` 는 글자로 그린다(`\~` `\<` `\_` 도).
+    /// `~` 는 홑으로는 긋지 않아 두고, `<` 는 슬랙이 태그로 읽지 않는다.
     pub fn escapes(&self, c: char) -> bool {
         match self.channel {
             Channel::GithubMarkdown => matches!(c, '~' | '<' | '*'),
             Channel::NotionMarkdown => matches!(c, '*' | '\\'),
+            Channel::SlackMarkdown => c == '*',
             _ => false,
         }
     }

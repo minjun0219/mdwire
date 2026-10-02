@@ -52,7 +52,7 @@ func TestBatchKeepsGoingAndCountsFailures(t *testing.T) {
 		t.Fatalf("에러가 %v — 못 읽은 11줄을 세야 한다\n%s", err, out.String())
 	}
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
-	if got := lines[0]; got != `{"line":1,"id":"a\"1<&>","closedEmphasis":0,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,`+
+	if got := lines[0]; got != `{"line":1,"id":"a\"1<&>","closedEmphasis":0,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"guessedPair":0,`+
 		`"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":1}` {
 		t.Errorf("1줄: %s", got)
 	}

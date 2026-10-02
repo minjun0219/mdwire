@@ -130,7 +130,10 @@ pub struct Repairs {
     /// Unmatched `**` markers that were dropped.
     #[wasm_bindgen(js_name = droppedMarker)]
     pub dropped_marker: usize,
-    /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`, `\*`).
+    /// Emphasis paired by a guess — an opener CommonMark would not open (`값**(합계)**를`) matched with a mirror-shaped closer on the same line. Math (`x**(y)**z`) is left out.
+    #[wasm_bindgen(js_name = guessedPair)]
+    pub guessed_pair: usize,
+    /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
     /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's `<strong>`, Slack's U+2060).
@@ -157,6 +160,7 @@ impl From<mdwire::Repairs> for Repairs {
             closed_fence: r.closed_fence,
             reverted_code_span: r.reverted_code_span,
             dropped_marker: r.dropped_marker,
+            guessed_pair: r.guessed_pair,
             escaped_char: r.escaped_char,
             tag_emphasis: r.tag_emphasis,
             stripped_html: r.stripped_html,

@@ -132,6 +132,9 @@ func TestHemmedOpenerPairsWithItsMirror(t *testing.T) {
 		"값**(합계)**를 본다":                       "값<b>(합계)</b>를 본다",
 		"이름이**\"홍길동\"**이다":                    "이름이<b>\"홍길동\"</b>이다",
 		"2**(n-1) 은 거듭제곱":                     "2**(n-1) 은 거듭제곱",
+		"x**(y)**z 와 2**(n-1)**2":             "x**(y)**z 와 2**(n-1)**2",
+		"a**(b)**를 본다":                        "a<b>(b)</b>를 본다",
+		"x**(y)**z 와 값**(합계)**를":              "x**(y)**z 와 값<b>(합계)</b>를",
 		"마스킹 4***-****-****-003* 번호":          "마스킹 4***-****-****-003* 번호",
 		"값**(합계)\n**다음** 줄":                   "값**(합계)\n<b>다음</b> 줄",
 		"underfront.* (4개), minjunkim.* (3개)": "underfront.* (4개), minjunkim.* (3개)",
@@ -141,6 +144,29 @@ func TestHemmedOpenerPairsWithItsMirror(t *testing.T) {
 	}
 	for in, want := range cases {
 		if got := strings.Join(Render(in, TelegramHTML), "\x00"); got != want {
+			t.Errorf("%q:\n  got  %q\n  want %q", in, got, want)
+		}
+	}
+}
+
+// 추측으로 짝지은 강조는 보고에서 센다 — 러스트 쪽과 같다.
+func TestGuessedPairIsReported(t *testing.T) {
+	r := RenderWith("값**(합계)**를 · 2**(n-1) · x**(y)**z", TelegramHTML, Options{}).Repairs
+	if r.GuessedPair != 1 || r.DroppedMarker != 0 || !r.Repaired() {
+		t.Errorf("%+v", r)
+	}
+}
+
+// 슬랙은 글자 별표를 이스케이프한다 — 러스트 쪽 slack_escapes_literal_asterisks.
+func TestSlackEscapesLiteralAsterisks(t *testing.T) {
+	cases := map[string]string{
+		"x**(y)**z 와 2**(n-1)**2":                 `x\*\*(y)\*\*z 와 2\*\*(n-1)\*\*2`,
+		"underfront.* (4개), 2 ** 3":               `underfront.\* (4개), 2 \*\* 3`,
+		"**굵게** 와 *기울임*":                          "**굵게** 와 *기울임*",
+		"카드 4***-****-003* 번호, underfront.* (4개)": `카드 4\*\*\*-\*\*\*\*-003\* 번호, underfront.\* (4개)`,
+	}
+	for in, want := range cases {
+		if got := strings.Join(Render(in, SlackMarkdown), "\x00"); got != want {
 			t.Errorf("%q:\n  got  %q\n  want %q", in, got, want)
 		}
 	}

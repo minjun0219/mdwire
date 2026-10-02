@@ -175,9 +175,9 @@ func TestParityWithRustCore(t *testing.T) {
 				failures++
 			}
 			r := rendered.Repairs
-			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d,`+
+			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d,"guessedPair":%d,`+
 				`"escapedChar":%d,"tagEmphasis":%d,"strippedHtml":%d,"rewrittenBullet":%d,"rewrittenTable":%d,"convertedMarker":%d}`,
-				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
+				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker, r.GuessedPair,
 				r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 			if report != strings.TrimSpace(stderr.String()) {
 				t.Errorf("#%d %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, ch.Name(), input, report, stderr.String())

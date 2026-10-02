@@ -94,7 +94,7 @@ const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML;
 
 ```go
 type Repairs struct {
-	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker int
+	ClosedEmphasis, ClosedFence, RevertedCodeSpan, DroppedMarker, GuessedPair int
 	// 채널에 맞춰 바꾼 것
 	EscapedChar, TagEmphasis, StrippedHTML, RewrittenBullet, RewrittenTable, ConvertedMarker int
 }

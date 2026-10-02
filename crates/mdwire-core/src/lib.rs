@@ -173,7 +173,7 @@ pub enum Images {
     Load,
 }
 
-/// Counts of what normalization repaired and what was changed to fit the channel. The first four
+/// Counts of what normalization repaired and what was changed to fit the channel. The first five
 /// (repairs) measure **how often the model breaks formatting**; the last six (changes) measure
 /// **what a channel changes, before adopting it** — to ask about each separately, use
 /// [`Repairs::any`] and [`Repairs::changed`].
@@ -187,8 +187,14 @@ pub struct Repairs {
     pub reverted_code_span: usize,
     /// Orphaned `**` dropped (preceded by text, like `꼬리**`).
     pub dropped_marker: usize,
+    /// Emphasis paired by a guess rather than by the rules — an opener CommonMark would not open
+    /// (`값**(합계)**를`, a letter before it and punctuation after) matched with a mirror-shaped closer
+    /// on the same line. Math is left out — ASCII letters or digits on both ends (`x**(y)**z`) never
+    /// pair — so what remains is the rare shape that is bold or math only by context. A non-zero
+    /// count marks an answer worth a look.
+    pub guessed_pair: usize,
     /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`,
-    /// `\*`).
+    /// `\*`; Slack's and Notion's `\*`).
     pub escaped_char: usize,
     /// Emphasis emitted differently because the channel cannot read the markers in that position
     /// (`**「설정」**가`) — `<strong>` on GitHub, U+2060 inserted inside the markers on Slack.
@@ -214,6 +220,7 @@ impl Repairs {
         self.closed_fence += other.closed_fence;
         self.reverted_code_span += other.reverted_code_span;
         self.dropped_marker += other.dropped_marker;
+        self.guessed_pair += other.guessed_pair;
         self.escaped_char += other.escaped_char;
         self.tag_emphasis += other.tag_emphasis;
         self.stripped_html += other.stripped_html;
@@ -222,12 +229,12 @@ impl Repairs {
         self.converted_marker += other.converted_marker;
     }
 
-    /// Whether normalization **repaired** anything — the first four (closed emphasis and fences,
-    /// reverted backticks, dropped markers). It asks whether the model broke formatting. Changes
+    /// Whether normalization **repaired** anything — the first five (closed emphasis and fences,
+    /// reverted backticks, dropped markers, guessed pairs). It asks whether the model broke formatting. Changes
     /// made to fit the channel (escapes, bullets, tables …) are not counted — that is
     /// [`Repairs::changed`].
     pub fn any(&self) -> bool {
-        self.closed_emphasis + self.closed_fence + self.reverted_code_span + self.dropped_marker > 0
+        self.closed_emphasis + self.closed_fence + self.reverted_code_span + self.dropped_marker + self.guessed_pair > 0
     }
 
     /// Whether **anything at all** was done, repair or channel change. It asks whether the output
