@@ -38,6 +38,9 @@ Each returned part is one message. Send them in order.
   and `build.target: "esnext"`.
 - **Rust** → `cargo add mdwire-core` (imported as `mdwire`).
 - **Go** → `go get github.com/minjun0219/mdwire/go@latest`.
+- **A screen that draws Markdown with `@lezer/markdown` or CodeMirror** → `@minjun0219/mdwire/lezer`:
+  `parser.configure([GFM, koreanEmphasis])` makes that parser read emphasis the way mdwire does
+  (`**설정(config)**을` becomes bold instead of showing asterisks). No WASM.
 - **Python or anything else** → the CLI: `cargo install mdwire-cli`, or
   `go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest`, or a binary from
   https://github.com/minjun0219/mdwire/releases.

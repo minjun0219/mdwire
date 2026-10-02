@@ -22,10 +22,13 @@ npm pkg set type=module >/dev/null
 npm install --no-audit --no-fund "$TGZ" >/dev/null
 # React 는 선택 peer 의존이다 — `./react` 를 쓰는 소비자처럼 같이 깐다.
 npm install --no-audit --no-fund react react-dom @types/react >/dev/null
-cp "$ROOT/scripts/smoke.mjs" "$ROOT/scripts/smoke.ts" .
+# `./lezer` 도 선택 peer 의존이다 — lezer 로 그리는 소비자(CodeMirror)처럼 같이 깐다.
+npm install --no-audit --no-fund @lezer/markdown >/dev/null
+cp "$ROOT/scripts/smoke.mjs" "$ROOT/scripts/smoke.ts" "$ROOT/scripts/smoke-lezer.mjs" .
 
 # 1. Node 에서 ESM 으로 import — `node` 조건이 CommonJS 빌드로 이어져야 한다.
 node smoke.mjs
+node smoke-lezer.mjs
 
 # 2. Bun — 같은 파일을 그대로. Bun 은 `node` 조건을 골라 CommonJS 빌드를 읽고, wasm 은
 #    `fs` 로 디스크에서 읽는다(2026-09-29 확인). 빌드 단계 없이 TypeScript ESM 으로 도는
@@ -33,6 +36,7 @@ node smoke.mjs
 #    CI 에서는 건너뛰지 않는다 — 러너에 Bun 이 없어 조용히 건너뛰던 적이 있다.
 if command -v bun >/dev/null; then
   bun smoke.mjs | sed 's/^/bun: /'
+  bun smoke-lezer.mjs | sed 's/^/bun: /'
 elif [ -n "${CI:-}" ]; then
   echo "CI 에 bun 이 없다 — ci.yml 에서 깔아야 한다" >&2
   exit 1

@@ -89,7 +89,8 @@ await append(t.finish());
 React 에서는 `@minjun0219/mdwire/react` 가 `createElement` 로 요소를 만들며 `innerHTML` 을
 쓰지 않습니다. 이스케이프, 허용 태그, 링크 스킴은 코어의 `html` 채널 한 곳에서 정하고, 태그마다 어떤
 컴포넌트로 렌더링할지는 사용하는 쪽이 정합니다. 다른 프레임워크에서는 `@minjun0219/mdwire/events` 로 같은
-출력을 `open` / `text` / `close` 이벤트 목록으로 받을 수 있습니다.
+출력을 `open` / `text` / `close` 이벤트 목록으로 받을 수 있습니다. `@lezer/markdown` 이나 CodeMirror 로 마크다운을
+그리는 화면은 `@minjun0219/mdwire/lezer` 로 그 파서가 mdwire 와 같은 규칙으로 강조를 읽게 할 수 있습니다.
 
 ```jsx
 import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
