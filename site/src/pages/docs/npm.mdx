@@ -139,3 +139,21 @@ toEvents(html); // [{ type: "open", tag: "p", attrs: {} }, { type: "text", text:
 The same `html` output as a flat `open` / `text` / `close` / `void` list, for other frameworks.
 Attributes carry only what the core emits: `href` on `a`, `class` (`language-…`) on `code`, `style`
 (`text-align:…`) on `th` and `td`, `start` on `ol`, and `src` · `alt` on `img` when images load.
+
+## lezer — `@minjun0219/mdwire/lezer` <Next />
+
+```ts
+import { GFM, parser } from "@lezer/markdown";
+import { koreanEmphasis } from "@minjun0219/mdwire/lezer";
+
+const p = parser.configure([GFM, koreanEmphasis]); // after GFM: it replaces Emphasis and Strikethrough by name
+// CodeMirror: markdown({ base: markdownLanguage, extensions: [koreanEmphasis] })
+```
+
+For screens that draw Markdown with `@lezer/markdown` or CodeMirror instead of going through mdwire. The extension
+reads emphasis with [the same rules](/docs/emphasis/) as the core, so `**설정(config)**을` becomes bold instead of
+leaving its asterisks on screen. No WASM; `@lezer/markdown` (1.5 or later) is an optional peer dependency.
+
+Three things differ from the core, by design: markers that do not pair stay as text (the core drops some of them),
+emphasis left open at the end of a paragraph stays as text (the core closes it), and a run of four or more `*` is
+text. Checked against the core's output on 6,965 real paragraphs.

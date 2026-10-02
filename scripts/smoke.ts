@@ -34,3 +34,9 @@ const streamOpts: MarkdownStreamOptions = {
   onSettled: (html: string, changed: boolean) => void [html, changed],
 };
 void [useMarkdownStream, streamOpts, revised];
+
+// lezer 확장 — 서브패스 타입이 서고, `@lezer/markdown` 의 설정 타입에 그대로 들어간다.
+import { koreanEmphasis } from "@minjun0219/mdwire/lezer";
+import type { MarkdownConfig } from "@lezer/markdown";
+const lezerConfig: MarkdownConfig = koreanEmphasis;
+void lezerConfig;

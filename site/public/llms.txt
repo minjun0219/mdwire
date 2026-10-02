@@ -43,7 +43,7 @@ Things that are easy to get wrong:
 
 ## Packages
 
-- [npm `@minjun0219/mdwire`](https://www.npmjs.com/package/@minjun0219/mdwire): `render`, `renderWithReport`, `Streamer`; `@minjun0219/mdwire/react` (`Markdown`, `useMarkdownStream`) and `@minjun0219/mdwire/events`
+- [npm `@minjun0219/mdwire`](https://www.npmjs.com/package/@minjun0219/mdwire): `render`, `renderWithReport`, `Streamer`; `@minjun0219/mdwire/react` (`Markdown`, `useMarkdownStream`), `@minjun0219/mdwire/events`, and `@minjun0219/mdwire/lezer` (`koreanEmphasis`, a `@lezer/markdown` extension that reads emphasis the way mdwire does)
 - [crates.io `mdwire-core`](https://crates.io/crates/mdwire-core): the Rust library, imported as `mdwire`
 - [crates.io `mdwire-cli`](https://crates.io/crates/mdwire-cli): the `mdwire` command — `mdwire --channel <name> [--stream] [--report]`
 - [Go `github.com/minjun0219/mdwire/go`](https://pkg.go.dev/github.com/minjun0219/mdwire/go): the Go implementation, library and CLI

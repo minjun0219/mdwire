@@ -96,7 +96,9 @@ await append(t.finish());
 In React, `@minjun0219/mdwire/react` builds elements with `createElement` — no
 `innerHTML`. Escaping, the tag set and link schemes are decided once, in the core's `html`
 channel; you choose which component draws each tag. `@minjun0219/mdwire/events` gives the
-same output as an `open` / `text` / `close` event list for other frameworks.
+same output as an `open` / `text` / `close` event list for other frameworks. A screen that draws
+Markdown with `@lezer/markdown` or CodeMirror can use `@minjun0219/mdwire/lezer` instead, which makes
+that parser read emphasis the way mdwire does.
 
 ```jsx
 import { Markdown, useMarkdownStream } from "@minjun0219/mdwire/react";
