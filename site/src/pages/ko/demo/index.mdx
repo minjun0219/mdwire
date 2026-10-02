@@ -1,7 +1,7 @@
 ---
 layout: ../../../layouts/Doc.astro
 title: 데모
-description: 브라우저에서 실행되는 mdwire 데모. 답변 하나를 텔레그램과 슬랙으로 변환하고, 렌더러 다섯 개에 스트리밍하고, 깨진 에이전트 출력을 정규화 전후로 비교합니다.
+description: 브라우저에서 실행되는 mdwire 데모 세 가지입니다. 텔레그램과 슬랙 변환 비교, 렌더러 다섯 개 스트리밍, 깨진 마크다운 고치기를 바로 해 볼 수 있습니다.
 ---
 import DemoHashRedirect from "../../../components/DemoHashRedirect.astro";
 
@@ -14,10 +14,10 @@ import DemoHashRedirect from "../../../components/DemoHashRedirect.astro";
 
 - **[Telegram vs. Slack](/ko/demo/channels/)**: 에이전트 답변 하나를 두 채널용으로 변환합니다. 화면에 보이는
   것이 채널로 나가는 텍스트 그대로입니다.
-- **[Streaming](/ko/demo/streaming/)**: 같은 답을 같은 토큰으로 잘라 react-markdown, Streamdown,
+- **[Streaming](/ko/demo/streaming/)**: 같은 답변을 같은 토큰으로 잘라 react-markdown, Streamdown,
   Streamdown 앞에 둔 mdwire, mdwire React 훅에 동시에 흘려 보냅니다.
 - **[깨진 마크다운 고치기](/ko/demo/repair/)**: 실제로 깨졌던 에이전트 출력과 mdwire 가 보내는 결과를 나란히
-  놓습니다. 바뀐 부분을 모두 표시하고, 바뀐 횟수를 센 정규화 보고도 보여 줍니다.
+  놓습니다. 바뀐 부분을 모두 표시하고 그 횟수를 센 정규화 보고도 보여 줍니다.
 
 입력은 [테스트 케이스](https://github.com/minjun0219/mdwire/tree/main/corpus/cases)에서 가져왔고, 모두 실제로
 겪은 문제입니다. 입력을 직접 고쳐 봐도 됩니다.

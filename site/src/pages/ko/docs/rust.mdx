@@ -10,7 +10,7 @@ import Badges from "../../../components/Badges.astro";
 
 <Badges only={["crates"]} />
 
-mdwire 의 코어입니다. 표준 라이브러리만 쓰고 외부 의존성이 없습니다. 크레이트 이름은 `mdwire-core` 이고,
+mdwire 의 코어입니다. 표준 라이브러리 외에는 의존성이 없습니다. 크레이트 이름은 `mdwire-core` 이고,
 라이브러리는 `mdwire` 로 import 합니다. 전체 rustdoc 은 [docs.rs/mdwire-core](https://docs.rs/mdwire-core)에
 있습니다.
 
@@ -28,8 +28,7 @@ assert_eq!(parts, vec!["<b>제목</b>\n\n<b>굵게</b> 있는 문단"]);
 ```
 
 `render(input: &str, channel: Channel) -> Vec<String>` 은 완성된 문서를 변환합니다. 길이 제한을 넘으면
-열린 마크업이 없는 지점에서 나눕니다. 렌더링 결과를 글자 수로 자르지 않고, 문서 구조를 보고 자를
-지점을 고릅니다.
+글자 수로 자르지 않고 열린 마크업이 없는 지점을 골라 나눕니다.
 
 ## `render_with`
 
@@ -72,7 +71,7 @@ let mut s = Streamer::new(Channel::TelegramHtml);
 let mut acc = String::new();
 s.push_into("앞말 **굵", &mut acc);
 assert_eq!(acc, "앞말 ");                                   // 지금까지 확정된 출력
-assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>"); // 지금 화면에 그릴 것
+assert_eq!(format!("{acc}{}", s.preview()), "앞말 <b>굵</b>"); // 지금 화면에 표시할 내용
 
 s.push_into("게** 끝", &mut acc);
 let last = format!("{acc}{}", s.preview());
@@ -84,13 +83,13 @@ assert!(!s.revised());                                       // 마지막 화면
 | | |
 |---|---|
 | `Streamer::new(channel)` · `Streamer::with_options(channel, options)` | 문서 하나에 스트리머 하나를 씁니다. |
-| `push(&mut self, chunk) -> &str` | 지금 보내도 안전한 출력. 다음 호출 전까지만 빌려줍니다. |
+| `push(&mut self, chunk) -> &str` | 지금 보내도 안전한 출력입니다. 다음 호출 전까지만 빌려줍니다. |
 | `push_into(&mut self, chunk, out: &mut String)` | 같은 출력을 호출자 버퍼에 씁니다. 청크마다 할당이 없습니다. |
-| `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | 남은 출력. 열린 마크업은 닫아서 반환합니다. |
-| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | 메시지 전체를 다시 렌더링할 때 붙이는 뒷부분. 비용이 열린 블록 수에 비례하므로 화면을 그릴 때만 호출하세요. |
+| `finish(&mut self) -> &str` · `finish_into(&mut self, out)` | 남은 출력입니다. 열린 마크업은 닫아서 반환합니다. |
+| `preview(&mut self) -> &str` · `preview_into(&mut self, out)` | 메시지 전체를 다시 렌더링할 때 붙이는 뒷부분입니다. 비용이 열린 블록 수에 비례하므로 화면을 갱신할 때만 호출하세요. |
 | `close_open(&self, out: &mut String)` | 이미 보낸 블록 마크업의 닫는 태그만 붙입니다. |
 | `revised(&self) -> bool` | `finish` 다음에 호출합니다. 완성본이 마지막 `preview` 와 다른지 알려 줍니다. 참이면 "다를 수 있다"는 뜻입니다. |
-| `repairs(&self) -> Repairs` | 지금까지 고친 것. |
+| `repairs(&self) -> Repairs` | 지금까지 센 정규화 보고를 반환합니다. |
 
 계약(`push` 출력은 확정이고, 이어 붙이면 `render` 결과와 같다)은 [Concepts](/ko/docs/#스트리밍-계약)에
 있습니다.
@@ -103,9 +102,9 @@ pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, 
 
 | | |
 |---|---|
-| `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …). |
-| `Channel::all()` | 모든 채널. |
-| `Channel::limit(self) -> usize` | 조각 길이 제한. `Html` 은 `usize::MAX` 입니다. |
+| `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …)과 채널을 서로 바꿉니다. |
+| `Channel::all()` | 모든 채널을 반환합니다. |
+| `Channel::limit(self) -> usize` | 조각 길이 제한을 반환합니다. `Html` 은 `usize::MAX` 입니다. |
 
 ## `Repairs`
 

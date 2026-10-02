@@ -10,7 +10,7 @@ import Badges from "../../../components/Badges.astro";
 
 <Badges only={["npm", "downloads"]} />
 
-Rust 코어를 WASM 으로 컴파일하고, React 와 이벤트 목록을 위한 JS 를 직접 작성해 더한 패키지입니다.
+Rust 코어를 WASM 으로 컴파일한 패키지입니다. React 와 이벤트 목록용 진입점은 JS 로 직접 작성했습니다.
 Node, Bun, 번들러에서 동작합니다.
 
 ```sh
@@ -71,12 +71,12 @@ s.free();
 
 | 메서드 | 반환 | |
 |---|---|---|
-| `push(chunk)` | `string` | 지금 보내도 안전한 출력. 확정입니다. |
-| `preview()` | `string` | 메시지 전체를 다시 렌더링할 때 붙이는 뒷부분. 상태를 바꾸지 않습니다. 청크마다가 아니라 화면을 그릴 때만 호출하세요. |
-| `closeOpen()` | `string` | 이미 보낸 블록 마크업만 닫는 뒷부분. 상태를 바꾸지 않습니다. |
-| `finish()` | `string` | 남은 출력. 열린 마크업은 닫아서 반환합니다. |
+| `push(chunk)` | `string` | 지금 보내도 안전한 출력입니다. 이 출력은 확정입니다. |
+| `preview()` | `string` | 메시지 전체를 다시 렌더링할 때 붙이는 뒷부분입니다. 상태를 바꾸지 않습니다. 청크마다 부르지 말고 화면을 갱신할 때만 호출하세요. |
+| `closeOpen()` | `string` | 이미 보낸 블록 마크업만 닫는 뒷부분입니다. 상태를 바꾸지 않습니다. |
+| `finish()` | `string` | 남은 출력입니다. 열린 마크업은 닫아서 반환합니다. |
 | `revised()` | `boolean` | `finish` 다음에 호출합니다. 완성본이 마지막 `preview()` 화면과 다른지 알려 줍니다. |
-| `repairs()` | `Repairs` | 지금까지 고친 것. `finish` 다음에는 문서 전체에 대한 값입니다. |
+| `repairs()` | `Repairs` | 지금까지 센 정규화 보고입니다. `finish` 다음에는 문서 전체에 대한 값입니다. |
 | `free()` | | WASM 메모리를 해제합니다. |
 
 덧붙이기만 하는 채널(슬랙 `appendStream`)에는 `push` 결과를 그대로 보내고 `preview()` 는 호출하지
@@ -101,8 +101,8 @@ interface RenderOptions {
 
 | 필드 | |
 |---|---|
-| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` | 고친 것 |
-| `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | 채널에 맞춰 바꾼 것 |
+| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` | 고친 횟수입니다. |
+| `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | 채널에 맞춰 바꾼 횟수입니다. |
 
 각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.
 
@@ -122,8 +122,8 @@ const settled = useMarkdownStream({ eager: false });        // 확정된 출력�
 
 | | |
 |---|---|
-| `<Markdown text components? options? />` | 완성된 답을 렌더링합니다. `components` 로 태그(`a`, `code` …)를 직접 만든 컴포넌트에 연결합니다. |
-| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | 스트리밍용 훅. `{ elements, push, finish }` 를 반환합니다. `eager`(기본 `true`)면 보류 중인 내용도 먼저 렌더링하고, `false` 면 확정된 출력만 렌더링합니다. `onSettled(html, revised)` 는 `finish` 다음에 호출됩니다. 옵션은 `onSettled` 를 빼고 처음 한 번만 읽습니다. |
+| `<Markdown text components? options? />` | 완성된 답변을 렌더링합니다. `components` 로 태그(`a`, `code` …)를 직접 만든 컴포넌트에 연결합니다. |
+| `useMarkdownStream({ components?, options?, eager?, onSettled? })` | 스트리밍용 훅입니다. `{ elements, push, finish }` 를 반환합니다. `eager`(기본 `true`)면 보류 중인 내용도 먼저 렌더링하고, `false` 면 확정된 출력만 렌더링합니다. `onSettled(html, revised)` 는 `finish` 다음에 호출됩니다. 옵션은 `onSettled` 를 빼고 처음 한 번만 읽습니다. |
 | `toElements(html, components?, schemes?)` | `html` 채널 출력(스트리밍이라면 누적 출력 + `preview()`)을 React 노드로 바꿉니다. `schemes` 는 코어에 준 값과 같게 주세요. |
 
 ## 이벤트 — `@minjun0219/mdwire/events`
@@ -134,7 +134,7 @@ import { toEvents } from "@minjun0219/mdwire/events";
 toEvents(html); // [{ type: "open", tag: "p", attrs: {} }, { type: "text", text: "…" }, { type: "close", tag: "p" }, …]
 ```
 
-같은 `html` 출력을 `open` / `text` / `close` / `void` 이벤트의 평평한 목록으로 풉니다. React 가 아닌
+같은 `html` 출력을 `open` / `text` / `close` / `void` 이벤트가 중첩 없이 이어진 목록으로 바꿉니다. React 가 아닌
 프레임워크에서 쓰는 진입점입니다. 속성은 코어가 출력하는 것만 담깁니다. `a` 의 `href`, `code` 의
 `class`(`language-…`), `th` · `td` 의 `style`(`text-align:…`), `ol` 의 `start`, 이미지를 불러올 때
 `img` 의 `src` · `alt` 입니다.
