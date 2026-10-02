@@ -202,6 +202,20 @@ out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{})
 log.Printf("%+v", out.Repairs)
 ```
 
+## For coding agents
+
+mdwire ships an [agent skill](skills/mdwire/SKILL.md) that tells a coding agent when to reach for it,
+which channel and entry point to pick, and how to stream. It follows the Agent Skills format, so agents
+that read `SKILL.md` can use it directly. In Claude Code it installs as a plugin:
+
+```sh
+/plugin marketplace add minjun0219/mdwire
+/plugin install mdwire@mdwire
+```
+
+The site also serves [`llms.txt`](https://mdwire.minjun.dev/llms.txt), and its pages register a WebMCP
+tool, `mdwire_render`, so a browser agent on the site can run mdwire in the page.
+
 ## Building
 
 ```sh

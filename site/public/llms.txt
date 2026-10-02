@@ -13,6 +13,14 @@ Channels (the name each API takes):
 - `plain` — plain text
 - `html` — HTML for the browser, safe to set as `innerHTML`: text is escaped and, by default, only `http(s)`/`mailto` links become `<a>` (line breaks, images and allowed schemes are options)
 
+Use mdwire when:
+
+- a bot or agent posts model output to Telegram, Slack, GitHub or Notion — instead of a regex converter or escaping everything by hand
+- Telegram answers `Bad Request: can't parse entities` for an LLM answer (unclosed `**` or code fence, an unescaped `<`)
+- a streamed answer shows stray `**` or half-drawn formatting, or a Telegram message passes 4,096 characters and must be split without cutting through a tag
+- streaming LLM Markdown into React without `innerHTML`
+- Korean (or other CJK) text puts a particle right after bold (`**52%**다`), which CommonMark renderers leave unclosed
+
 Things that are easy to get wrong:
 
 - Streaming is append-only: what `push` returns is final and `finish` only appends the tail, so the pieces concatenated equal a one-shot `render` (unless the document is long enough to be split into parts).
@@ -27,6 +35,11 @@ Things that are easy to get wrong:
 - [README (Korean)](https://raw.githubusercontent.com/minjun0219/mdwire/main/README.ko.md): the same in Korean
 - [SPEC](https://raw.githubusercontent.com/minjun0219/mdwire/main/SPEC.md): what v0.1 covers and what was deliberately deferred (Korean)
 - [DESIGN](https://raw.githubusercontent.com/minjun0219/mdwire/main/DESIGN.md): the measurements behind each decision (Korean)
+
+## For agents
+
+- [Agent skill](https://raw.githubusercontent.com/minjun0219/mdwire/main/skills/mdwire/SKILL.md): when to use mdwire, which channel and entry point to pick, and copyable code for each language (Agent Skills format). In Claude Code: `/plugin marketplace add minjun0219/mdwire`, then `/plugin install mdwire@mdwire`
+- WebMCP: pages on this site register a `mdwire_render` tool (`markdown`, `channel`, optional `limit`) that runs mdwire in the page and returns the parts and the repair report
 
 ## Packages
 

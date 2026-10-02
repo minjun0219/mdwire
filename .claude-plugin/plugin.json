@@ -1,0 +1,10 @@
+{
+  "name": "mdwire",
+  "displayName": "mdwire",
+  "description": "Send LLM-generated Markdown to Telegram, Slack, GitHub and Notion without it breaking — repaired, rendered for each channel and split within its limit, streaming included.",
+  "author": { "name": "minjun0219", "url": "https://github.com/minjun0219" },
+  "homepage": "https://mdwire.minjun.dev",
+  "repository": "https://github.com/minjun0219/mdwire",
+  "license": "MIT",
+  "keywords": ["markdown", "llm", "telegram", "slack", "github", "notion", "streaming", "chatbot"]
+}

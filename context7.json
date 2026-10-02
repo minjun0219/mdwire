@@ -1,0 +1,17 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "mdwire",
+  "description": "Send LLM-generated Markdown to Telegram, Slack, GitHub and Notion without it breaking: repaired, rendered for each channel and split within its limit, streaming included. Rust core, npm (WASM, React), Go and a CLI.",
+  "folders": ["site/src/pages/docs", "site/src/pages/why", "skills"],
+  "excludeFolders": ["site/src/pages/ko", "corpus", "crates", "go", "examples", "scripts", "site/node_modules"],
+  "excludeFiles": ["CHANGELOG.md", "AGENTS.md", "README.ko.md"],
+  "rules": [
+    "Pass the model's Markdown to mdwire as is: do not pre-escape it or run it through another Markdown converter first.",
+    "Pick the channel by where the text goes: telegram-html with parse_mode \"HTML\", slack-markdown as chat.postMessage markdown_text, github-markdown, notion-markdown, plain, or html for innerHTML.",
+    "render returns an array of parts; send each part as its own message, in order.",
+    "When streaming, push() output is final. A channel that redraws the whole message sends accumulated output + preview(); an append-only channel (Slack appendStream) sends each push() piece and never calls preview().",
+    "renderWithReport results, their repairs and Streamer live in WASM memory: call free() or use `using`.",
+    "Under Vite, add vite-plugin-wasm and set build.target to \"esnext\".",
+    "From Python or any other language, pipe through the mdwire CLI: parts are separated by NUL."
+  ]
+}

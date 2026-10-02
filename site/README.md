@@ -20,6 +20,8 @@ mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
   을 옮긴 것이다. 예제의 샘플이나 패널이 바뀌면 같이 고친다. react-markdown · Streamdown 은 데모 페이지만 싣는다.
 - `public/llms.txt` 는 LLM 이 읽을 요약이다([llmstxt.org](https://llmstxt.org) 형식). 모든 페이지 푸터에서 링크한다. 채널·API·문서 위치가
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
+- 페이지마다 WebMCP 도구 `mdwire_render` 를 등록한다(`src/webmcp.ts`, 레이아웃이 싣는다). 브라우저에 `modelContext` 가
+  없으면 아무것도 하지 않고, wasm 은 도구가 처음 불릴 때 받는다. 채널이 바뀌면 도구의 `enum` 도 고친다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.

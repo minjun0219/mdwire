@@ -46,6 +46,8 @@ Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — �
 - `crates/mdwire-wasm` — npm `@minjun0219/mdwire`의 바인딩(`scripts/build-npm.sh`)
 - `crates/mdwire-harness` — 코퍼스 대조·불변식 채점(`mdwire-check`), `crates/mdwire-bench` — 할당·처리량
 - `go/` — Go 이식, `corpus/` — 정본 케이스
+- `skills/mdwire/SKILL.md` — 코딩 에이전트용 스킬(Agent Skills 형식). `.claude-plugin/` 이 저장소를 Claude Code
+  플러그인 마켓플레이스로 만든다. `context7.json` 은 Context7 색인 설정. 공개 API·채널이 바뀌면 스킬과 `rules` 도 고친다
 - `site/` — 문서·데모 사이트(Astro, 독립 패키지). npm 에 올라간 패키지를 쓴다 — 릴리스 하루 뒤
   `site-bump.yml` 이 판을 올리는 PR 을 연다. 배포는 `site/README.md`
 
