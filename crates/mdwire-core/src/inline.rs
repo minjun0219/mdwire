@@ -45,6 +45,9 @@ struct Open {
     /// **여는 쪽이 막힌 마커**인가 — 앞이 글자이고 뒤가 구두점이라 CommonMark 가 열지 않는 자리
     /// (`값**(합계)**를`). 열린 줄 번호를 든다. 같은 줄에서 거울 모양으로 닫는 마커가 오면 짝을 맺는다.
     hemmed: Option<u32>,
+    /// 열린 줄 번호. 안 닫힌 코드 스팬을 되돌려 다시 읽을 때 줄 번호를 여기로 되감는다 —
+    /// 블록 층은 줄마다 `end_line` 을 이미 불렀고, 되돌린 내용은 그 줄들을 다시 지난다.
+    line: u32,
 }
 
 #[derive(Clone)]
@@ -184,6 +187,10 @@ impl Inline {
             }
 
             let c = line[i];
+            // 되돌린 코드 스팬을 다시 읽을 때만 줄바꿈이 여기 온다 — 되감은 줄을 도로 센다.
+            if c == '\n' {
+                self.line += 1;
+            }
 
             // 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
             if c == '!' && line.get(i + 1) == Some(&'[') {
@@ -237,6 +244,7 @@ impl Inline {
                     before: prev,
                     split: false,
                     hemmed: None,
+                    line: self.line,
                 });
                 i += run;
                 continue;
@@ -332,22 +340,29 @@ impl Inline {
                 // 오면 그 짝이다 — 닫는 쪽이 "구두점 + 조사" 인 모양을 닫아 주는 규칙의 거울이다. 글롭
                 // (`.* (4개)`)·주석(`/* */`)은 여는 쪽 뒤가 공백이라, 마스킹 번호(`4***-****`)는 길이가
                 // 달라 여기 걸리지 않는다.
+                // 앞이 여는 괄호·따옴표면 거울이 아니라 다음 강조의 여는 마커다 — `2**(n-1) (**주의**)`
+                // 의 둘째 `**` 를 닫기로 삼키면 `(` 까지 굵어지고 셋째가 글자로 남는다.
                 Some(at)
                     if self.open[at].hemmed == Some(self.line)
                         && self.open[at].run == take
-                        && prev.is_some_and(|p| !is_word_char(p) && !p.is_whitespace()) =>
+                        && prev.is_some_and(|p| !is_word_char(p) && !p.is_whitespace() && !is_opening_bracket(p)) =>
                 {
                     self.open[at].guess = false;
                     self.after_close = next;
                     self.close_at(at, out, v)
                 }
-                Some(at) if self.open[at].guess && (!left || !after_space) => {
+                Some(at)
+                    if self.open[at].guess
+                        && (!left || !after_space)
+                        && !(left && self.open[at].hemmed.is_some() && prev.is_some_and(is_opening_bracket)) =>
+                {
                     for _ in 0..take {
                         self.text_char(c, out, v);
                     }
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
-                // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다.
+                // 이쪽을 연다. `/* a */ 다음 *z*` 의 `*z` 가 여기다. 막힌 추측 뒤의 `(**주의`
+                // 도 여기다 — 막힌 마커는 글자로 돌아가고 `**주의**` 가 온전히 열린다.
                 Some(at) if self.open[at].guess => self.reopen_at(at, out, v, (emph, take, c, after_space, prev, split)),
                 // 같은 종류가 열려 있고 앞이 공백이 아니면 여기가 닫는 자리다. 규칙 1.
                 Some(at) if !after_space => {
@@ -378,6 +393,7 @@ impl Inline {
                     before: prev,
                     split,
                     hemmed: None,
+                    line: self.line,
                 }),
                 // 열 수도 닫을 수도 없다. 일단 열어 두고 안 닫히면 글자로 되돌린다. 규칙 3.
                 None => self.open.push(Open {
@@ -391,6 +407,7 @@ impl Inline {
                     split,
                     hemmed: (prev.is_some_and(is_word_char) && next.is_some_and(|n| !n.is_whitespace() && is_punct(n)))
                         .then_some(self.line),
+                    line: self.line,
                 }),
             }
             i += take;
@@ -431,9 +448,14 @@ impl Inline {
         }
         // 버퍼를 통째로 빌려 와서 다시 읽고 돌려준다. 새로 만들지 않는다.
         let src = std::mem::take(&mut self.code_src);
-        // 다시 읽는 내용은 백틱 바로 뒤에서 시작한다.
+        // 다시 읽는 내용은 백틱 바로 뒤에서 시작한다. 줄 번호는 코드 스팬이 열린 줄로 되감고
+        // 다시 읽으며 센다 — 안 그러면 막힌 마커의 "같은 줄" 검사가 줄을 넘어 통과한다
+        // (`` `값**(합계)⏎)**를 ``). 다 읽으면 블록 층이 세어 둔 값으로 돌려놓는다.
+        let line = self.line;
+        self.line = open.line;
         self.prev = Some(open.ch);
         self.render(&src, out, v);
+        self.line = line;
         // 다시 읽는 동안 새 코드 스팬이 열렸으면 그쪽 버퍼를 지키고, 아니면 돌려준다.
         if self.code_src.is_empty() {
             self.code_src = src;
@@ -467,7 +489,7 @@ impl Inline {
         } else {
             self.repairs.dropped_marker += 1;
         }
-        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, before, split, hemmed: None });
+        self.open.push(Open { emph, at: out.len(), run: take, ch: c, guess: false, after_space, before, split, hemmed: None, line: self.line });
     }
 
     fn prev_char(&self, line: &[char], i: usize) -> Option<char> {
@@ -761,6 +783,7 @@ impl Inline {
                             before: self.prev_char(line, i),
                         split: false,
                         hemmed: None,
+                        line: self.line,
                     }),
                 }
                 self.prev = Some('>');
@@ -1046,6 +1069,12 @@ fn can_open(prev: Option<char>, next: Option<char>) -> bool {
     next.is_some_and(|n| {
         !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| !is_word_char(p)))
     })
+}
+
+/// 여는 괄호·따옴표 — 바로 뒤의 마커는 닫는 자리가 아니라 여는 자리다. ASCII `"`·`'` 는
+/// 여닫는 모양이 같아 가르지 못하므로 넣지 않는다.
+fn is_opening_bracket(c: char) -> bool {
+    matches!(c, '(' | '[' | '{' | '「' | '『' | '（' | '【' | '《' | '“' | '‘')
 }
 
 /// 강조 마커 앞뒤의 "글자". 알파벳(한글 포함)과 ASCII 숫자다 — `①` 같은 기호는 아니다.

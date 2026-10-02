@@ -135,6 +135,9 @@ func TestHemmedOpenerPairsWithItsMirror(t *testing.T) {
 		"마스킹 4***-****-****-003* 번호":          "마스킹 4***-****-****-003* 번호",
 		"값**(합계)\n**다음** 줄":                   "값**(합계)\n<b>다음</b> 줄",
 		"underfront.* (4개), minjunkim.* (3개)": "underfront.* (4개), minjunkim.* (3개)",
+		"2**(n-1) (**주의**)":                   "2**(n-1) (<b>주의</b>)",
+		"`값**(합계)\n)**를 끝":                    "`값**(합계)\n)**를 끝",
+		"값**(합계) `x )**를\ny":                  "값<b>(합계) `x )</b>를\ny",
 	}
 	for in, want := range cases {
 		if got := strings.Join(Render(in, TelegramHTML), "\x00"); got != want {

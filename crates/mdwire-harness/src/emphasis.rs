@@ -423,13 +423,20 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 if mode != Mode::CommonMark
                     && stack[at].hemmed == Some(line)
                     && stack[at].marker.chars().count() == take
-                    && prev.is_some_and(|p| !(p.is_alphabetic() || p.is_ascii_digit()) && !p.is_whitespace()) =>
+                    && prev.is_some_and(|p| {
+                        !(p.is_alphabetic() || p.is_ascii_digit()) && !p.is_whitespace() && !is_opening_bracket(p)
+                    }) =>
             {
                 stack[at].guess = false;
                 close_to(&mut stack, &mut root, at, scan)
             }
             // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
-            Some(at) if stack[at].guess && (!left || !after_space) => {
+            // 막힌 추측 뒤의 `(**주의` 는 여는 마커라 아래로 보낸다(`2**(n-1) (**주의**)`).
+            Some(at)
+                if stack[at].guess
+                    && (!left || !after_space)
+                    && !(left && stack[at].hemmed.is_some() && prev.is_some_and(is_opening_bracket)) =>
+            {
                 *scan.literal.entry(c).or_default() += take;
                 push_text(&mut stack, &mut root, &marker)
             }
@@ -630,6 +637,11 @@ pub(crate) fn can_open(prev: Option<char>, next: Option<char>) -> bool {
     next.is_some_and(|n| {
         !n.is_whitespace() && (!is_punct(n) || prev.is_none_or(|p| !(p.is_alphabetic() || p.is_ascii_digit())))
     })
+}
+
+/// 여는 괄호·따옴표 — 코어의 `is_opening_bracket` 과 같다.
+fn is_opening_bracket(c: char) -> bool {
+    matches!(c, '(' | '[' | '{' | '「' | '『' | '（' | '【' | '《' | '“' | '‘')
 }
 
 pub(crate) fn is_punct(c: char) -> bool {
@@ -907,5 +919,14 @@ mod angle_tests {
         let fixed = "***중요(필수)\u{2060}*\u{2060}**를";
         assert!(scan_markdown(fixed, Mode::CommonMark).unpaired.is_empty());
         assert!(!scan_markdown("**설정(config)**을", Mode::CommonMark).unpaired.is_empty());
+    }
+
+    /// 막힌 여는 마커 뒤에 괄호 안의 강조가 오면 거울이 아니다 — 규칙은 코어와 같다.
+    #[test]
+    fn opening_bracket_marker_is_not_a_mirror() {
+        let scan = scan_markdown("2**(n-1) (**주의**)", Mode::Repair);
+        assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "주의".into() }]);
+        let scan = scan_markdown("값**(합계)**를", Mode::Repair);
+        assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "(합계)".into() }]);
     }
 }
