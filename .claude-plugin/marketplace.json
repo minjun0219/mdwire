@@ -1,0 +1,12 @@
+{
+  "name": "mdwire",
+  "description": "mdwire — send LLM Markdown to chat channels without it breaking.",
+  "owner": { "name": "minjun0219", "url": "https://github.com/minjun0219" },
+  "plugins": [
+    {
+      "name": "mdwire",
+      "source": "./",
+      "description": "Skill: convert agent Markdown for Telegram HTML, Slack markdown_text, GitHub, Notion, plain text or safe HTML, with streaming and length-safe splitting."
+    }
+  ]
+}

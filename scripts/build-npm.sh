@@ -42,11 +42,11 @@ cat > "$OUT/package.json" <<JSON
 {
   "name": "@minjun0219/mdwire",
   "version": "$VERSION",
-  "description": "Streaming Markdown renderer for chat channels and the browser. Telegram HTML, Slack markdown_text, GitHub, HTML, React.",
+  "description": "Send LLM-generated Markdown to Telegram, Slack, GitHub and Notion without it breaking: repaired, rendered for each channel and split within its limit, streaming included. Also safe HTML and React.",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/minjun0219/mdwire" },
   "homepage": "https://mdwire.minjun.dev",
-  "keywords": ["markdown", "telegram", "slack", "github", "react", "streaming", "llm", "wasm"],
+  "keywords": ["markdown", "llm", "ai", "agent", "chatbot", "telegram", "telegram-bot", "slack", "slack-bot", "github", "notion", "react", "streaming", "wasm"],
   "type": "module",
   "main": "./node/mdwire.js",
   "types": "./bundler/mdwire.d.ts",

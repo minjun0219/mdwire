@@ -191,6 +191,20 @@ out := mdwire.RenderWith(input, mdwire.SlackMarkdown, mdwire.Options{})
 log.Printf("%+v", out.Repairs)
 ```
 
+## 코딩 에이전트에게
+
+mdwire 에는 [에이전트 스킬](skills/mdwire/SKILL.md)이 들어 있습니다. 코딩 에이전트에게 언제 mdwire 를 쓸지,
+어떤 채널과 진입점을 고를지, 스트리밍은 어떻게 하는지를 알려 줍니다. Agent Skills 형식을 따르므로
+`SKILL.md` 를 읽는 에이전트는 그대로 쓸 수 있습니다. Claude Code 에서는 플러그인으로 설치합니다.
+
+```sh
+/plugin marketplace add minjun0219/mdwire
+/plugin install mdwire@mdwire
+```
+
+사이트는 [`llms.txt`](https://mdwire.minjun.dev/llms.txt)도 제공하고, 페이지마다 WebMCP 도구
+`mdwire_render` 를 등록합니다. 사이트를 연 브라우저 에이전트가 페이지 안에서 mdwire 를 바로 돌릴 수 있습니다.
+
 ## 빌드
 
 ```sh
