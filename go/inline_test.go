@@ -110,3 +110,18 @@ func TestBlocksMatchRustCore(t *testing.T) {
 		}
 	}
 }
+
+// 슬랙의 조사 앞 강조 — 겹친 강조도 안쪽 마커에 조이너를 끼운다. 러스트 쪽 github_uses_tags_where_gfm_cannot_pair_markers.
+func TestSlackJoinerForNestedEmphasis(t *testing.T) {
+	cases := map[string]string{
+		"**설정(config)**을":      "**설정(config)\u2060**을",
+		"***중요(필수)***를":        "***중요(필수)\u2060*\u2060**를",
+		"①***\"인용\"*** 끝":      "①**\u2060*\u2060\"인용\"*** 끝",
+		"**마통**이 · **(중요)** 다": "**마통**이 · **(중요)** 다",
+	}
+	for in, want := range cases {
+		if got := strings.Join(Render(in, SlackMarkdown), "\x00"); got != want {
+			t.Errorf("%q:\n  got  %q\n  want %q", in, got, want)
+		}
+	}
+}

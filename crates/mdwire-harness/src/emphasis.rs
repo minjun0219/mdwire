@@ -67,6 +67,10 @@ pub enum Mode {
     Repair,
     /// 출력용. 복구하지 않는다. 짝이 안 맞으면 그대로 고발한다.
     Strict,
+    /// 출력용 — `Strict` 에 CommonMark 의 **닫기 판정(우측 flanking)** 을 더한다. 출력을 CommonMark 로
+    /// 다시 읽는 채널(슬랙 `markdown_text`)에 쓴다. 닫는 마커 앞이 구두점이고 뒤가 글자면 그 채널은 닫지
+    /// 않으므로, 우리 복구 규칙으로는 짝이 맞아도 채널 화면에는 별표가 남는다.
+    CommonMark,
 }
 
 /// 마크다운 문자열에서 강조 범위를 뽑는다.
@@ -320,7 +324,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 i = close + run;
                 continue;
             }
-            if mode == Mode::Strict {
+            if mode != Mode::Repair {
                 scan.unpaired.push(unpaired(&ch, i, run));
             }
             push_text(&mut stack, &mut root, &ch[i..i + run].iter().collect::<String>());
@@ -399,6 +403,9 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         }
 
         let left = can_open(prev, next) && !intraword;
+        // CommonMark 의 우측 flanking — `CommonMark` 모드에서만 닫기에 쓴다.
+        let right = !after_space && (!prev.is_some_and(is_punct) || next.is_none_or(|n| n.is_whitespace() || is_punct(n)));
+        let closes = mode != Mode::CommonMark || right;
 
         match open_same {
             // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
@@ -425,7 +432,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 stack.push(Open { kind, marker, guess: false, buf: String::new() });
             }
             // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
-            Some(at) if !after_space => close_to(&mut stack, &mut root, at, scan),
+            Some(at) if !after_space && closes => close_to(&mut stack, &mut root, at, scan),
             // 여는 자리의 마커가 또 왔다 — 먼저 열린 쪽이 진다. 마커는 버린다(엄격 모드에서는
             // 짝 없음). 규칙은 코어와 같다.
             Some(at) if left && at + 1 == stack.len() => {
@@ -434,7 +441,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     let restored = format!("{}{}", old.marker, old.buf);
                     push_text(&mut stack, &mut root, &restored);
                 } else {
-                    if mode == Mode::Strict {
+                    if mode != Mode::Repair {
                         scan.unpaired.push(Unpaired { marker: old.marker.clone(), context: snippet(&old.buf) });
                     }
                     let buf = old.buf;
@@ -444,11 +451,17 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
             }
             // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
             Some(_) if left => {
-                if mode == Mode::Strict {
+                if mode != Mode::Repair {
                     scan.unpaired.push(unpaired(&ch, i, take));
                 }
             }
-            Some(at) => close_to(&mut stack, &mut root, at, scan),
+            Some(at) if closes => close_to(&mut stack, &mut root, at, scan),
+            // CommonMark 가 닫지 않는 자리다 — 채널 화면에는 마커가 글자로 남는다.
+            Some(_) if !left => {
+                *scan.literal.entry(c).or_default() += take;
+                push_text(&mut stack, &mut root, &marker)
+            }
+            Some(_) => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
             None if left => stack.push(Open { kind, marker, guess: false, buf: String::new() }),
             // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
             // 일단 열어 두고, 안 닫히면 글자로 되돌린다.
@@ -465,7 +478,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
 
     // 블록이 끝났다. 열린 것을 정리한다.
     while let Some(open) = stack.pop() {
-        if mode == Mode::Strict {
+        if mode != Mode::Repair {
             scan.unpaired.push(Unpaired {
                 marker: open.marker.clone(),
                 context: snippet(&open.buf),
@@ -862,5 +875,17 @@ mod angle_tests {
     fn angle_link_label_is_the_span_text() {
         let scan = scan_markdown("**<https://a.com/p|TS 7 RC>** 다", Mode::Repair);
         assert_eq!(scan.spans, vec![Span { kind: Kind::Bold, text: "TS 7 RC".into() }]);
+    }
+
+    /// CommonMark 모드는 슬랙이 못 닫는 짝을 고발한다 — 겹친 강조에서 바깥 조이너만 넣었을 때
+    /// 안쪽 기울임이 `)` 와 조이너 사이에 끼어 못 닫혔다(실측 2026-10-02).
+    #[test]
+    fn commonmark_mode_reports_what_slack_cannot_close() {
+        let broken = "***중요(필수)*\u{2060}**를";
+        assert!(scan_markdown(broken, Mode::Strict).unpaired.is_empty());
+        assert!(!scan_markdown(broken, Mode::CommonMark).unpaired.is_empty());
+        let fixed = "***중요(필수)\u{2060}*\u{2060}**를";
+        assert!(scan_markdown(fixed, Mode::CommonMark).unpaired.is_empty());
+        assert!(!scan_markdown("**설정(config)**을", Mode::CommonMark).unpaired.is_empty());
     }
 }
