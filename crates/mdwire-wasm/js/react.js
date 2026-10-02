@@ -40,11 +40,11 @@ function propsOf(tag, attrs, key, schemes) {
 }
 
 /**
- * html 채널 출력을 React 노드 배열로 바꾼다. 스트리밍 누적본을 직접 다루는 쪽이 쓴다 —
- * `toElements(acc + streamer.closeOpen())`.
+ * Converts html channel output into an array of React nodes. Use it when you handle the
+ * accumulated stream output yourself: `toElements(acc + streamer.closeOpen())`.
  * @param {string} html
- * @param {Partial<Record<string, import("react").ElementType>>} [components] 태그별로 갈아 끼울 컴포넌트.
- * @param {string[]} [schemes] 링크·이미지로 받는 스킴. 코어에 준 `options.html.schemes` 와 같게.
+ * @param {Partial<Record<string, import("react").ElementType>>} [components] Components that replace individual tags.
+ * @param {string[]} [schemes] Schemes allowed for links and images. Same as the `options.html.schemes` given to the core.
  */
 export function toElements(html, components = {}, schemes = DEFAULT_SCHEMES) {
   const root = { tag: null, children: [] };
@@ -84,9 +84,9 @@ export function toElements(html, components = {}, schemes = DEFAULT_SCHEMES) {
 }
 
 /**
- * 에이전트 마크다운을 그린다 — 완성된 글용. 스트리밍 중인 누적본을 토큰마다 넘기면 매번
- * 처음부터 다시 변환해 전체 비용이 제곱으로 늘고, 반쪽 마커(`**굵`, 여는 백틱, `##`)가 잠깐 글자로
- * 보였다가 사라진다. 스트리밍은 [`useMarkdownStream`].
+ * Renders agent markdown, for complete text. If you pass the accumulated stream on every token,
+ * it reconverts from scratch each time, so total cost grows quadratically, and half-written markers
+ * (`**bo`, an opening backtick, `##`) briefly show up as text and then vanish. For streaming, use [`useMarkdownStream`].
  * @param {import("./react.d.ts").MarkdownProps} props
  */
 export function Markdown({ text, components, options }) {
@@ -95,15 +95,16 @@ export function Markdown({ text, components, options }) {
 }
 
 /**
- * 스트리밍용 훅. 토큰이 오는 대로 `push(chunk)`, 끝나면 `finish()`.
+ * Hook for streaming. Call `push(chunk)` as tokens arrive and `finish()` at the end.
  *
- * 기본(`eager: true`)은 **붙든 것도 먼저 그린다** — 열린 강조는 닫아서, 표는 지금까지 온 행으로,
- * 코드 스팬은 닫아서(`Streamer.preview()`). 추측이라 뒤 토큰이 모양을 바꿀 수 있지만 완성본은
- * 일괄 변환과 같다. `eager: false` 면 확정된 것만 보인다(append-only, SPEC 8.2) — 짝이 안 맞은
- * 강조·판정 전 접두사는 확정될 때 나온다.
+ * By default (`eager: true`) it **also draws what is held back**: open emphasis closed, tables with
+ * the rows received so far, code spans closed (`Streamer.preview()`). This is a guess, so later tokens
+ * may change the shape, but the final output matches a one-shot conversion. With `eager: false`, only
+ * final output is shown (append-only, SPEC 8.2): unmatched emphasis and prefixes not yet decided
+ * appear once they become final.
  *
- * 끝나면 `onSettled(html, revised)` — `revised` 는 완성본이 마지막으로 **화면에 그려진** 것과
- * 다른가다. 같으면 훅은 다시 그리지 않는다.
+ * At the end it calls `onSettled(html, revised)`. `revised` tells whether the final output differs
+ * from what was last **drawn on screen**. If they match, the hook does not redraw.
  * @param {import("./react.d.ts").MarkdownStreamOptions} [opts]
  */
 export function useMarkdownStream({ components, options, eager = true, onSettled } = {}) {

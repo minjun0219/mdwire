@@ -1,13 +1,14 @@
-//! 표시 폭 — 고정폭 글꼴에서 한 글자가 차지하는 칸 수.
+//! Display width — the number of cells a character takes in a monospace font.
 //!
-//! **표의 열은 문자 수가 아니라 표시 폭으로 맞춘다**(`SPEC.md` 7절). 한글·한자·가나·
-//! 전각기호·이모지는 두 칸을 차지한다. `chars().count()` 로 맞추면 한글이 든 표는
-//! 반드시 어긋난다 — 절반쯤 어긋나는 것이 아니라, 열 하나에 한글 한 글자가 들어갈 때마다
-//! 한 칸씩 밀린다.
+//! **Table columns are aligned by display width, not character count** (`SPEC.md` section 7).
+//! Hangul, Han characters, kana, fullwidth symbols, and emoji take two cells. Aligning with
+//! `chars().count()` always misaligns a table that contains Hangul — not occasionally, but by
+//! one cell for every Hangul character in a column.
 //!
-//! 유니코드 East Asian Width 의 `W`·`F` 를 폭 2 로, 결합 문자와 폭 없는 제어 문자를
-//! 폭 0 으로 본다. 코어에 의존성을 두지 않으므로 구간표를 직접 들고 있다
-//! (`AGENTS.md`). 전각 구간은 좁아서 표로 박아도 유지가 된다.
+//! Unicode East Asian Width `W` and `F` count as width 2; combining characters and zero-width
+//! control characters count as width 0. The core has no dependencies, so it carries its own
+//! range tables (`AGENTS.md`). The wide ranges are few enough that hardcoding them stays
+//! maintainable.
 
 /// 폭 0 — 결합 문자, 폭 없는 공백, 변형 선택자.
 const ZERO: &[(u32, u32)] = &[
@@ -148,7 +149,7 @@ const WIDE: &[(u32, u32)] = &[
     (0x30000, 0x3FFFD),
 ];
 
-/// 한 글자의 표시 폭. 0, 1, 2 중 하나.
+/// The display width of one character: 0, 1, or 2.
 pub fn char_width(c: char) -> usize {
     let cp = c as u32;
     if cp == 0 {
@@ -171,14 +172,14 @@ pub fn char_width(c: char) -> usize {
     1
 }
 
-/// CJK 인접 강조 정책이 보는 "CJK 문자"인가.
+/// Whether this is a "CJK character" as the CJK-adjacent emphasis policy sees it.
 ///
-/// **표시 폭과는 다른 질문이다.** 둘을 한 함수로 쓰면 두 군데가 틀린다 —
-/// 반각 가타카나(`ｱｲｳ`)는 폭이 1이지만 CJK 라 패딩이 필요하고, 이모지는 폭이 2지만
-/// CJK 가 아니라 패딩이 필요 없다.
+/// **This is a different question from display width.** Using one function for both gets two
+/// cases wrong — halfwidth katakana (`ｱｲｳ`) has width 1 but is CJK and needs padding, while
+/// emoji have width 2 but are not CJK and need no padding.
 ///
-/// 판정 기준은 CommonMark 의 CJK-friendly 개정안을 따른다 — East Asian Width 가
-/// `W`·`F`·`H` 이면서 이모지 표현이 아니거나, 스크립트가 Hangul 이면 CJK 다.
+/// The rule follows the CJK-friendly amendment to CommonMark — a character is CJK if its East
+/// Asian Width is `W`, `F`, or `H` and it is not emoji presentation, or if its script is Hangul.
 /// (<https://github.com/tats-u/markdown-cjk-friendly>)
 pub fn is_cjk(c: char) -> bool {
     in_ranges(CJK, c as u32)
@@ -212,11 +213,11 @@ const CJK: &[(u32, u32)] = &[
     (0x30000, 0x3FFFD),
 ];
 
-/// 문자열의 표시 폭.
+/// The display width of a string.
 ///
-/// 이모지 결합 연쇄(ZWJ 로 이어진 가족 이모지 등)는 구성 요소를 각각 세므로
-/// 실제 표시보다 넓게 나올 수 있다. 표를 어긋나게 만드는 쪽이 아니라 여유를 주는
-/// 방향이라 v0.1 은 이대로 둔다.
+/// Emoji sequences (such as family emoji joined with ZWJ) count each component separately, so
+/// the result can be wider than what is displayed. That errs toward extra room rather than a
+/// misaligned table, so v0.1 leaves it as is.
 pub fn str_width(s: &str) -> usize {
     s.chars().map(char_width).sum()
 }
