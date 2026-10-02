@@ -55,6 +55,8 @@ assert.equal(report.repairs.closedEmphasis, 1);
 assert.equal(report.repairs.closedFence, 1);
 // 채널에 맞춰 바꾼 것도 센다 — GitHub 의 `\~` 이스케이프.
 assert.equal(renderWithReport("약 ~40km", "github-markdown").repairs.escapedChar, 1);
+// 추측으로 짝지은 강조도 센다 — 여는 쪽이 막힌 `값**(합계)**를`.
+assert.equal(renderWithReport("값**(합계)**를", "telegram-html").repairs.guessedPair, 1);
 const rs = new Streamer("slack-markdown");
 rs.push("**열고 안 닫힘");
 rs.finish();

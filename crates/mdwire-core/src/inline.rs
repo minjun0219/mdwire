@@ -325,6 +325,8 @@ impl Inline {
             }
 
             let left = can_open(prev, next) && !intraword;
+            // 여는 쪽이 막힌 자리인가 — 앞이 글자, 뒤가 구두점(`값**(합계)`).
+            let hemmed_here = prev.is_some_and(is_word_char) && next.is_some_and(|n| !n.is_whitespace() && is_punct(n));
 
             match same {
                 // **추측으로 연 것은 닫지 않는다.** 추측은 확정되지 않는다 — 닫아 주면
@@ -337,19 +339,34 @@ impl Inline {
                 // 블록 끝까지 삼킨다. 글자다.
                 // **막힌 여는 마커의 거울 짝.** `값**(합계)**를` 의 첫 `**` 는 앞이 글자, 뒤가 구두점이라
                 // 열지 못하고 추측으로 열렸다. 같은 줄에서 같은 길이의 마커가 거울 모양(앞이 구두점)으로
-                // 오면 그 짝이다 — 닫는 쪽이 "구두점 + 조사" 인 모양을 닫아 주는 규칙의 거울이다. 글롭
-                // (`.* (4개)`)·주석(`/* */`)은 여는 쪽 뒤가 공백이라, 마스킹 번호(`4***-****`)는 길이가
-                // 달라 여기 걸리지 않는다.
+                // 오면 그 짝이다 — 닫는 쪽이 "구두점 + 조사" 인 모양을 닫아 주는 규칙의 거울이라, 닫는
+                // 마커 **뒤에도 글자(조사)가 와야** 한다. 뒤가 공백이면 글롭(`underfront.*`)이고, 그걸 짝으로
+                // 받으면 마스킹 번호 `4***-…-003*` 의 홑 `*` 가 같은 줄 멀리의 글롭과 묶인다(실측). 글롭·주석
+                // (`/* */`)은 여는 쪽 뒤가 공백이라, 마스킹 번호는 길이가 달라 여기 걸리지 않는다. **양 끝이 다 ASCII 영숫자면 수식이다**(`x**(y)**z`,
+                // `2**(n-1)**2`) — 한국어 강조는 여는 쪽 앞이나 닫는 쪽 뒤에 한글이 온다. 백틱으로
+                // 감싸 달라고 모델에게 부탁하지 않아도 되게 여기서 가른다.
                 // 앞이 여는 괄호·따옴표면 거울이 아니라 다음 강조의 여는 마커다 — `2**(n-1) (**주의**)`
                 // 의 둘째 `**` 를 닫기로 삼키면 `(` 까지 굵어지고 셋째가 글자로 남는다.
                 Some(at)
                     if self.open[at].hemmed == Some(self.line)
                         && self.open[at].run == take
-                        && prev.is_some_and(|p| !is_word_char(p) && !p.is_whitespace() && !is_opening_bracket(p)) =>
+                        && prev.is_some_and(|p| !is_word_char(p) && !p.is_whitespace() && !is_opening_bracket(p))
+                        && next.is_some_and(is_word_char)
+                        && !(self.open[at].before.is_some_and(|c| c.is_ascii_alphanumeric())
+                            && next.is_some_and(|c| c.is_ascii_alphanumeric())) =>
                 {
                     self.open[at].guess = false;
+                    self.repairs.guessed_pair += 1;
                     self.after_close = next;
                     self.close_at(at, out, v)
+                }
+                // 막힌 여는 마커가 또 왔다 — 앞의 것은 짝이 없었다(`x**(y)**z 와 값**(합계)**를` 의 `x**`).
+                // 글자로 되돌리고 이쪽을 새 막힌 마커로 연다. 두면 앞의 것이 뒤의 거울 짝을 가로챈다.
+                Some(at) if self.open[at].hemmed.is_some() && hemmed_here => {
+                    self.reopen_at(at, out, v, (emph, take, c, after_space, prev, split));
+                    let top = self.open.last_mut().expect("방금 넣었다");
+                    top.guess = true;
+                    top.hemmed = Some(self.line);
                 }
                 Some(at)
                     if self.open[at].guess
@@ -405,8 +422,7 @@ impl Inline {
                     after_space,
                     before: prev,
                     split,
-                    hemmed: (prev.is_some_and(is_word_char) && next.is_some_and(|n| !n.is_whitespace() && is_punct(n)))
-                        .then_some(self.line),
+                    hemmed: hemmed_here.then_some(self.line),
                     line: self.line,
                 }),
             }

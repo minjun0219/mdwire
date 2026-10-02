@@ -114,4 +114,5 @@ const { elements, push, finish } = useMarkdownStream();       // streaming: push
 - `render` is enough when you do not need the repair report.
 - `limit` below 256 is raised to 256; every part needs room to close and reopen markup.
 - The repair report (`renderWithReport`, `mdwire --report`) counts how often the model broke its own
-  formatting — useful to log per answer.
+  formatting — useful to log per answer. `guessedPair` counts emphasis mdwire paired by a guess
+  (`값**(합계)**를`); a non-zero count marks an answer worth a look.

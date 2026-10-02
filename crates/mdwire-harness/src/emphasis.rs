@@ -269,6 +269,8 @@ struct Open {
     guess: bool,
     /// 여는 쪽이 막힌 마커(`값**(합계)**를`)면 열린 줄 번호. 같은 줄의 거울 모양 마커와 짝짓는다. 규칙은 코어와 같다.
     hemmed: Option<usize>,
+    /// 여는 마커 앞 글자. 막힌 마커의 짝을 가를 때만 본다 — 양 끝이 ASCII 영숫자면 수식이다.
+    before: Option<char>,
     buf: String,
 }
 
@@ -425,10 +427,30 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     && stack[at].marker.chars().count() == take
                     && prev.is_some_and(|p| {
                         !(p.is_alphabetic() || p.is_ascii_digit()) && !p.is_whitespace() && !is_opening_bracket(p)
-                    }) =>
+                    })
+                    && next.is_some_and(|n| n.is_alphabetic() || n.is_ascii_digit())
+                    && !(stack[at].before.is_some_and(|c| c.is_ascii_alphanumeric())
+                        && next.is_some_and(|c| c.is_ascii_alphanumeric())) =>
             {
                 stack[at].guess = false;
                 close_to(&mut stack, &mut root, at, scan)
+            }
+            // 막힌 여는 마커가 또 왔다 — 앞의 것은 글자로 되돌리고 이쪽을 새 막힌 마커로 연다. 규칙은 코어와 같다.
+            Some(at) if stack[at].hemmed.is_some() && hemmed => {
+                while stack.len() > at + 1 {
+                    let inner = stack.pop().expect("at 보다 위에 있다");
+                    if !inner.guess && !inner.buf.trim().is_empty() {
+                        scan.raw.push(inner.buf.to_string());
+                        scan.spans.push(Span { kind: inner.kind, text: normalize_ws(&inner.buf) });
+                    }
+                    let text = if inner.guess { format!("{}{}", inner.marker, inner.buf) } else { inner.buf };
+                    push_text(&mut stack, &mut root, &text);
+                }
+                let old = stack.pop().expect("at 은 유효한 인덱스다");
+                *scan.literal.entry(c).or_default() += old.marker.chars().count();
+                let restored = format!("{}{}", old.marker, old.buf);
+                push_text(&mut stack, &mut root, &restored);
+                stack.push(Open { kind, marker, guess: true, hemmed: Some(line), before: prev, buf: String::new() });
             }
             // 추측으로 연 것은 닫지 않는다 — 닫는 자리의 마커는 글자다. 규칙은 코어와 같다.
             // 막힌 추측 뒤의 `(**주의` 는 여는 마커라 아래로 보낸다(`2**(n-1) (**주의**)`).
@@ -456,7 +478,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 *scan.literal.entry(c).or_default() += old.marker.chars().count();
                 let restored = format!("{}{}", old.marker, old.buf);
                 push_text(&mut stack, &mut root, &restored);
-                stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() });
+                stack.push(Open { kind, marker, guess: false, hemmed: None, before: None, buf: String::new() });
             }
             // 같은 종류가 열려 있고 앞이 공백이 아니면 닫는 자리다.
             Some(at) if !after_space && closes => close_to(&mut stack, &mut root, at, scan),
@@ -474,7 +496,7 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                     let buf = old.buf;
                     push_text(&mut stack, &mut root, &buf);
                 }
-                stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() });
+                stack.push(Open { kind, marker, guess: false, hemmed: None, before: None, buf: String::new() });
             }
             // 안쪽에 다른 종류가 열려 있으면 갈아 끼우지 못한다. 버린다.
             Some(_) if left => {
@@ -488,12 +510,12 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
                 *scan.literal.entry(c).or_default() += take;
                 push_text(&mut stack, &mut root, &marker)
             }
-            Some(_) => stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() }),
-            None if left => stack.push(Open { kind, marker, guess: false, hemmed: None, buf: String::new() }),
+            Some(_) => stack.push(Open { kind, marker, guess: false, hemmed: None, before: None, buf: String::new() }),
+            None if left => stack.push(Open { kind, marker, guess: false, hemmed: None, before: None, buf: String::new() }),
             // 열 수도 닫을 수도 없다. 그래도 80열 wrap 이 `... **\n강조**` 를 만들어 낸다.
             // 일단 열어 두고, 안 닫히면 글자로 되돌린다.
             None if mode == Mode::Repair || (mode == Mode::Strict && hemmed) => {
-                stack.push(Open { kind, marker, guess: true, hemmed: hemmed.then_some(line), buf: String::new() })
+                stack.push(Open { kind, marker, guess: true, hemmed: hemmed.then_some(line), before: prev, buf: String::new() })
             }
             None => {
                 *scan.literal.entry(c).or_default() += take;

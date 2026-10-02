@@ -274,6 +274,10 @@ func (v vocab) escapes(c rune) bool {
 	case NotionMarkdown:
 		// 노션은 마스킹 번호의 별표를 먹고 홀로 쓴 역슬래시를 지운다(실측 2026-10-01).
 		return c == '*' || c == '\\'
+	case SlackMarkdown:
+		// 슬랙은 글자로 둔 별표를 CommonMark 로 다시 읽어 `x**(y)**z` 의 `**z 와 2**` 와 마스킹 번호의
+		// `-****-` 를 굵게로 그렸다. `\*` 는 글자로 그린다(실측 2026-10-02).
+		return c == '*'
 	}
 	return false
 }

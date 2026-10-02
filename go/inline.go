@@ -257,6 +257,8 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 
 		left := canOpen(prev, next) && !intraword
+		// 여는 쪽이 막힌 자리인가 — 앞이 글자, 뒤가 구두점. 러스트 쪽 hemmed_here.
+		hemmedHere := prev != noChar && isWordChar(prev) && next != noChar && !unicode.IsSpace(next) && isPunct(next)
 		fresh := openMark{emph: e, run: take, ch: c, afterSpace: afterSpace, before: prev, split: split}
 
 		switch {
@@ -265,11 +267,21 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 추측을 닫지 않고 열지도 않는다 — 열면 블록 끝까지 삼킨다. 글자다.
 		// 막힌 여는 마커의 거울 짝 — 러스트 쪽과 같다(`값**(합계)**를`).
 		// 앞이 여는 괄호·따옴표면 거울이 아니라 다음 강조의 여는 마커다(`2**(n-1) (**주의**)`).
+		// 양 끝이 다 ASCII 영숫자면 수식이라 짝짓지 않는다(`x**(y)**z`).
 		case same >= 0 && in.open[same].hemmed == in.line+1 && in.open[same].run == take &&
-			prev != noChar && !isWordChar(prev) && !unicode.IsSpace(prev) && !isOpeningBracket(prev):
+			prev != noChar && !isWordChar(prev) && !unicode.IsSpace(prev) && !isOpeningBracket(prev) &&
+			next != noChar && isWordChar(next) &&
+			!(isASCIIAlnum(in.open[same].before) && next != noChar && isASCIIAlnum(next)):
 			in.open[same].guess = false
+			in.repairs.GuessedPair++
 			in.afterClose = next
 			in.closeAt(same, out, v)
+		// 막힌 여는 마커가 또 왔다 — 앞의 것은 글자로 되돌리고 이쪽을 새 막힌 마커로 연다. 러스트 쪽과 같다.
+		case same >= 0 && in.open[same].hemmed != 0 && hemmedHere:
+			in.reopenAt(same, out, v, fresh)
+			top := &in.open[len(in.open)-1]
+			top.guess = true
+			top.hemmed = in.line + 1
 		case same >= 0 && in.open[same].guess && (!left || !afterSpace) &&
 			!(left && in.open[same].hemmed != 0 && isOpeningBracket(prev)):
 			for k := 0; k < take; k++ {
@@ -298,7 +310,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		default:
 			fresh.at = len(*out)
 			fresh.guess = true
-			if prev != noChar && isWordChar(prev) && next != noChar && !unicode.IsSpace(next) && isPunct(next) {
+			if hemmedHere {
 				fresh.hemmed = in.line + 1
 			}
 			in.open = append(in.open, fresh)

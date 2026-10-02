@@ -37,6 +37,8 @@ var fuzzPieces = []string{
 	"가", "나다", "한글 조사가", "이다.", "word", "x", "2", "का_x", "&", "😀", "①", "•", ".md", "@id", "#40",
 	// 브라우저 채널이 막아야 하는 것들 — 스킴, 이벤트 속성, 속성값에 드는 info, 마스킹 번호.
 	"[x](javascript:alert(1))", "[m](MAILTO:a@b.c)", `<span onclick="x">`, "</span>", "<SUB>", "```x\" y=\"z\n", "4***-****-003*",
+	// 한국어 조사 앞 강조 — 러스트 쪽 PIECES 와 같다.
+	"**설정(config)**을", "값**(합계)**를", "***중요(필수)***를", "x**(y)**z", "2**(n-1)", "「", "」", "**「캐시」**가",
 }
 
 func fuzzDoc(r *xorshift) string {
@@ -175,9 +177,9 @@ func TestParityWithRustCore(t *testing.T) {
 				failures++
 			}
 			r := rendered.Repairs
-			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d,`+
+			report := fmt.Sprintf(`{"closedEmphasis":%d,"closedFence":%d,"revertedCodeSpan":%d,"droppedMarker":%d,"guessedPair":%d,`+
 				`"escapedChar":%d,"tagEmphasis":%d,"strippedHtml":%d,"rewrittenBullet":%d,"rewrittenTable":%d,"convertedMarker":%d}`,
-				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker,
+				r.ClosedEmphasis, r.ClosedFence, r.RevertedCodeSpan, r.DroppedMarker, r.GuessedPair,
 				r.EscapedChar, r.TagEmphasis, r.StrippedHTML, r.RewrittenBullet, r.RewrittenTable, r.ConvertedMarker)
 			if report != strings.TrimSpace(stderr.String()) {
 				t.Errorf("#%d %s: 고친 것이 러스트와 다르다\n  입력: %q\n  go   %s\n  rust %s", round, ch.Name(), input, report, stderr.String())

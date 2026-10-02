@@ -3,6 +3,7 @@ layout: ../../../layouts/Doc.astro
 title: npm (JS · React)
 description: "@minjun0219/mdwire 패키지의 render, renderWithReport, Streamer, 그리고 React · events 진입점을 설명합니다."
 ---
+import Next from "../../../components/Next.astro";
 import Badges from "../../../components/Badges.astro";
 
 
@@ -101,7 +102,7 @@ interface RenderOptions {
 
 | 필드 | |
 |---|---|
-| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` | 고친 횟수입니다. |
+| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` · `guessedPair` <Next /> | 고친 횟수입니다. |
 | `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | 채널에 맞춰 바꾼 횟수입니다. |
 
 각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.

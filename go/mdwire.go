@@ -78,7 +78,7 @@ const (
 )
 
 // Repairs counts what normalization fixed and what was changed to fit the
-// channel. The first four fields (fixes) measure how often a model breaks
+// channel. The first five fields (fixes) measure how often a model breaks
 // formatting. The last six (changes) measure what a channel changes, before
 // you adopt it. To ask about each group separately, use Repaired and Changed.
 type Repairs struct {
@@ -90,6 +90,10 @@ type Repairs struct {
 	RevertedCodeSpan int
 	// DroppedMarker counts unmatched `**` markers that were dropped.
 	DroppedMarker int
+	// GuessedPair counts emphasis paired by a guess rather than by the rules — an opener CommonMark
+	// would not open (`값**(합계)**를`) matched with a mirror-shaped closer on the same line. Math
+	// (`x**(y)**z`, ASCII on both ends) is left out. A non-zero count marks an answer worth a look.
+	GuessedPair int
 	// EscapedChar counts characters escaped because the channel would read them
 	// as syntax (GitHub's \~, \< and \*).
 	EscapedChar int
@@ -109,9 +113,9 @@ type Repairs struct {
 }
 
 // Repaired reports whether normalization fixed anything. It looks only at the
-// first four fields. Repairs::any in the Rust core.
+// first five fields. Repairs::any in the Rust core.
 func (r Repairs) Repaired() bool {
-	return r.ClosedEmphasis+r.ClosedFence+r.RevertedCodeSpan+r.DroppedMarker > 0
+	return r.ClosedEmphasis+r.ClosedFence+r.RevertedCodeSpan+r.DroppedMarker+r.GuessedPair > 0
 }
 
 // Changed reports whether anything was fixed or changed to fit the channel.
@@ -123,6 +127,7 @@ func (r *Repairs) add(o Repairs) {
 	r.ClosedFence += o.ClosedFence
 	r.RevertedCodeSpan += o.RevertedCodeSpan
 	r.DroppedMarker += o.DroppedMarker
+	r.GuessedPair += o.GuessedPair
 	r.EscapedChar += o.EscapedChar
 	r.TagEmphasis += o.TagEmphasis
 	r.StrippedHTML += o.StrippedHTML

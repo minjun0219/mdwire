@@ -12,6 +12,7 @@ const channels = [
 ] as const;
 
 // 정규화 보고의 열 가지 수 — 앞 넷은 고친 것, 뒤 여섯은 채널에 맞춰 바꾼 것.
+// npm 에 올라간 판의 필드다 — 다음 판의 `guessedPair` 는 사이트가 그 판으로 올라갈 때 더한다.
 const keys = [
   "closedEmphasis",
   "closedFence",

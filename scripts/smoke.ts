@@ -12,7 +12,7 @@ const revised: boolean = s.revised();
 const opts: RenderOptions = { limit: 4096 };
 const withOpts: string[] = render("*굵게*", "slack-markdown", opts);
 const report = renderWithReport("**열림", "telegram-html", opts);
-const closed: number = report.repairs.closedEmphasis + s.repairs().closedFence;
+const closed: number = report.repairs.closedEmphasis + s.repairs().closedFence + report.repairs.guessedPair;
 const reportParts: string[] = report.parts;
 void [parts, n, out, withOpts, closed, reportParts];
 
