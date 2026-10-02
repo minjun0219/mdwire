@@ -11,7 +11,7 @@ import { ui } from "../src/i18n.ts";
 import { hasMarkdown, markdownPath } from "../src/markdownCopies.ts";
 
 // llms-full.txt 에 싣는 차례 — 개요, 배경(왜 또 만들었나 · 사례), 개념, 언어별 API 순.
-const fullOrder = ["", "why", "why/cases", "docs", "docs/npm", "docs/rust", "docs/go", "docs/cli"];
+const fullOrder = ["", "why", "why/cases", "docs", "docs/npm", "docs/rust", "docs/go", "docs/cli", "docs/emphasis"];
 
 // `src/pages` 안의 원본 위치. 묶음의 첫 페이지(`docs`, `why`)는 `docs/index.mdx`, 개요는 `index.mdx`.
 const sourceOf = (lang, rest) => {

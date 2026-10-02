@@ -1,0 +1,78 @@
+---
+layout: ../../layouts/Doc.astro
+title: Emphasis before Korean particles
+description: Why CommonMark parsers leave `**설정(config)**을` unclosed, the rule mdwire reads it with, and what each channel needs on output — written so other parsers can adopt it.
+---
+
+# Emphasis before Korean particles
+
+Korean attaches particles (`을`, `는`, `이다`, `로` …) directly to the word before them, with no space. When
+the emphasized word ends in punctuation — a parenthesis, quote, backtick, period or `%` — CommonMark will not
+close the emphasis:
+
+```text
+**설정(config)**을   **"배포 금지"**는   **`git revert`**로   **끝.**이라서   **52%**다
+```
+
+Every CommonMark parser (micromark, markdown-it, lezer, GFM itself) leaves these asterisks as text, and when
+there are several on one line the pairs cross and the bold lands on the text between them. LLMs write this
+shape all the time. This page states the rule mdwire uses to read it and what each channel needs on output,
+so another parser can adopt the same behavior.
+
+## Why CommonMark refuses
+
+A closing `**` must be **right-flanking**: not preceded by whitespace, and either not preceded by
+punctuation or followed by whitespace or punctuation. In `**설정(config)**을` the closing run is preceded by
+`)` (punctuation) and followed by `을` (a letter), so it is not right-flanking and cannot close. The rule
+exists for English, where a word after the run means the run belongs to that word. In Korean the word after
+it is a particle of the emphasized word.
+
+The mirror case exists for openers — an opening run preceded by a letter and followed by punctuation
+(`값**(합계)**`) is not left-flanking — but it is rare in Korean output.
+
+## The reading rule
+
+mdwire reads emphasis with three changes to CommonMark. Punctuation here means ASCII punctuation plus the
+CJK punctuation LLMs write (`，。、！？；：·…—～「」『』（）【】《》`). A **word character** is a letter in any
+script or an ASCII digit — symbols such as `①` or `🔥` are not.
+
+1. **Close** — a run closes an open emphasis of the same kind whenever the character before the run is not
+   whitespace. The flanking test on the closing side is dropped.
+2. **Open** — a run opens when the character after it is not whitespace, and either that character is not
+   punctuation or the character before the run is not a word character. This is CommonMark's left-flanking
+   test, except that `①**"…"**` opens (a leading symbol is not a word character).
+3. **First opener loses** — when a same-kind emphasis is already open and the new run is preceded by
+   whitespace and can open, the earlier run is the stray one: it does not pair, and the new run opens. Reading it as a close instead inverts the range — that is
+   the line-wrap failure in `채널**이다. …⏎**신분 공개**이`.
+
+Two details keep the rule safe on real text:
+
+- `_` after a letter or digit never **opens** (`snake_case`, `2026-04-29_제목` stay text), but it may close
+  (`_진료_가`).
+- Emphasis still open at the end of the block is closed there and counted as a repair. It never spreads
+  across blocks.
+
+The full reader also handles guesses that turn out wrong (`2 ** 3`, glob `*`), masked numbers
+(`4***-****`) and code spans; see `crates/mdwire-core/src/inline.rs` and the
+[test cases](https://github.com/minjun0219/mdwire/tree/main/corpus/cases) `punct-before-closing-emphasis`,
+`emphasis-across-linebreak`, `asterisk-is-a-letter` and `masked-number-asterisks`.
+
+## Writing it back out
+
+Reading the emphasis correctly is half the job: the channel that renders the output may run CommonMark's
+rule again. Measured per channel:
+
+| Channel | Renders `**설정(config)**을`? | What to send |
+|---|---|---|
+| GitHub (GFM) | No — asterisks stay | `<strong>설정(config)</strong>을` — tags ignore flanking. Only for pairs GFM cannot read. |
+| Slack `markdown_text` | No — asterisks stay | `**설정(config)` + U+2060 + `**을` — an invisible word joiner before the closing run. It is neither whitespace nor punctuation, so the run becomes right-flanking. A joiner **after** the run does not help. |
+| Notion | Yes | As is. `<strong>` would show as text. |
+| Telegram HTML · browser HTML | — | Tags, so the question does not arise. |
+
+Use U+2060 rather than U+200B: both render, but U+200B is a line-break opportunity and U+2060 is not. For an
+opener that cannot open, the joiner goes right after the opening run. Measured on 2026-09-30 (GitHub,
+`POST /markdown`) and 2026-10-01 (Slack, `chat.postMessage`; Notion, through its API).
+
+To decide when a pair needs this, check both sides with CommonMark's flanking test against the original
+neighbors: the character before the opening run and after the closing run. Only pairs that fail get
+rewritten; everything else stays as written.

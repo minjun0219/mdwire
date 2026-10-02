@@ -59,6 +59,7 @@ Docs pages are Markdown at the page path plus `.md` (`/docs/npm/` → `/docs/npm
 - [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
 - [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, options, the repair report, the streaming contract
 - [Docs: npm](https://mdwire.minjun.dev/docs/npm.md) · [Rust](https://mdwire.minjun.dev/docs/rust.md) · [Go](https://mdwire.minjun.dev/docs/go.md) · [CLI](https://mdwire.minjun.dev/docs/cli.md): the API of each
+- [Docs: emphasis before Korean particles](https://mdwire.minjun.dev/docs/emphasis.md): why CommonMark parsers leave `**설정(config)**을` unclosed, the reading rule mdwire uses, and what GitHub, Slack and Notion need on output
 - [Full docs](https://mdwire.minjun.dev/llms-full.txt): the overview, why, cases and every docs page above in one file
 
 ## Optional

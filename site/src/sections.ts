@@ -17,6 +17,7 @@ export function sectionItems(section: Section, lang: Locale): { page: string; la
       { page: "docs/rust", label: t.docs.rust },
       { page: "docs/go", label: t.docs.go },
       { page: "docs/cli", label: t.docs.cli },
+      { page: "docs/emphasis", label: t.docs.emphasis },
     ],
     demo: [
       { page: "demo", label: t.demo.index },
