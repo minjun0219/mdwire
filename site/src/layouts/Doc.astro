@@ -164,8 +164,10 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
       <p class="footer-by">by <a href="https://minjun.kim/?utm_source=mdwire&utm_medium=referral&utm_content=footer">minjun.kim</a></p>
     </footer>
     <script>
+      import { initAnalytics } from "../analytics";
       import { registerWebMcp } from "../webmcp";
 
+      initAnalytics();
       registerWebMcp();
 
       // 글을 고치지 않는 편의 기능 — 스크립트가 없어도 본문은 그대로 읽힌다. 문구는 `main` 의 data-* 에서 읽는다.

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
-import { defineConfig } from "astro/config";
+import { defineConfig, envField } from "astro/config";
 import wasm from "vite-plugin-wasm";
 import agents from "./integrations/agents.mjs";
 
@@ -70,6 +70,15 @@ function wideCells() {
 export default defineConfig({
   site: "https://mdwire.minjun.dev",
   integrations: [react(), mdx(), versionFile(), agents()],
+  // 방문 집계(PostHog)의 빌드 변수 — Workers Builds 의 프로덕션 빌드 변수에만 넣는다(`README.md` 배포 절). 둘 다 없을 수
+  // 있다 — 없는 빌드(로컬 · 프리뷰 · 포크)는 `src/analytics.ts` 가 초기화하지 않고 SDK 코드도 담지 않는다. 호스트는 기본값을
+  // 두지 않는다 — posthog-js 자체 기본값(`https://us.i.posthog.com`)으로 조용히 프록시를 우회하는 걸 막는다.
+  env: {
+    schema: {
+      POSTHOG_KEY: envField.string({ context: "client", access: "public", optional: true }),
+      POSTHOG_HOST: envField.string({ context: "client", access: "public", optional: true, url: true }),
+    },
+  },
   markdown: { shikiConfig: { transformers: [wideCells()] } },
   i18n: {
     locales: ["en", "ko"],
