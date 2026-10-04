@@ -91,7 +91,7 @@ assert!(!s.revised());                                       // 마지막 화면
 | `revised(&self) -> bool` | `finish` 다음에 호출합니다. 완성본이 마지막 `preview` 와 다른지 알려 줍니다. 참이면 "다를 수 있다"는 뜻입니다. |
 | `repairs(&self) -> Repairs` | 지금까지 센 정규화 보고를 반환합니다. |
 
-계약(`push` 출력은 확정이고, 이어 붙이면 `render` 결과와 같다)은 [Concepts](/ko/docs/#스트리밍-계약)에
+계약(`push` 출력은 확정이고, 이어 붙이면 `render` 결과와 같다)은 [Concepts](/mdwire/ko/docs/#스트리밍-계약)에
 있습니다.
 
 ## `Channel`
@@ -126,7 +126,7 @@ pub struct Repairs {
 ```
 
 `any()` 는 하나라도 고쳤는지(앞의 네 필드), `changed()` 는 고쳤든 바꿨든 하나라도 했는지 알려 줍니다.
-각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.
+각 필드가 세는 것은 [Concepts](/mdwire/ko/docs/#정규화-보고)에 있습니다.
 
 ## `mdwire::width`
 

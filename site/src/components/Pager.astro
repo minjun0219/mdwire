@@ -3,6 +3,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { sectionItems, type Section } from "../sections";
+import { stripBase } from "../urls";
 
 interface Props {
   section: Section;
@@ -10,7 +11,7 @@ interface Props {
 
 const lang = localeOf(Astro.currentLocale);
 const t = ui[lang].pager;
-const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const rest = stripBase(Astro.url.pathname).replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const items = sectionItems(Astro.props.section, lang);
 const i = items.findIndex((item) => item.page === rest);
 const prev = i > 0 ? items[i - 1] : undefined;

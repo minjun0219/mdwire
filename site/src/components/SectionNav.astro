@@ -4,6 +4,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { sectionItems, type Section } from "../sections";
+import { stripBase } from "../urls";
 
 interface Props {
   section: Section;
@@ -12,7 +13,7 @@ interface Props {
 
 const lang = localeOf(Astro.currentLocale);
 const t = ui[lang];
-const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+const rest = stripBase(Astro.url.pathname).replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const items = sectionItems(Astro.props.section, lang);
 // 절 이름은 ` — ` 앞만 — "React — @minjun0219/mdwire/react" 는 좁은 칸에서 글자 단위로 끊긴다.
 const sections = (Astro.props.headings ?? [])

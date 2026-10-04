@@ -1,8 +1,12 @@
 # site
 
-mdwire 문서·데모 사이트. <https://mdwire.minjun.dev> 에 올린다.
+mdwire 문서·데모 사이트. <https://minjun.kim/mdwire/> 에 올린다 — 개인 사이트의 하위 경로다. 옛 주소 `mdwire.minjun.dev` 도 같은
+빌드를 그대로 서빙한다(정본 · canonical 은 새 주소).
 
 - Astro 정적 사이트. 문서는 MDX(`src/pages/`), 데모만 React island 다.
+- `base` 가 `/mdwire` 다. 링크는 `getRelativeLocaleUrl` 로 만들면 붙고, 손으로 쓴 절대 경로(`/og.png`)와 `Astro.url.pathname` 을
+  읽는 곳은 `src/urls.ts` 의 `withBase` · `stripBase` 를 거친다. MDX 본문의 사이트 안 링크는 `](/mdwire/docs/)` 처럼 base 를
+  적어서 쓴다 — Astro 7 의 기본 마크다운 처리기는 플러그인으로 붙여 줄 길이 없다.
 - 영어 `/`, 한국어 `/ko/` 두 벌이다 — README 가 두 벌인 것과 같은 원칙. 한쪽 페이지를 고치면
   같은 커밋에서 다른 쪽도 고친다.
 - **npm 에 올라간 `@minjun0219/mdwire` 를 쓴다.** 로컬 `pkg/` 를 쓰는 `examples/` 와 다르다 —
@@ -52,8 +56,8 @@ woff2 를 싣고 `html:lang(ko)` 에만 쓴다 — 영어 페이지는 본문 �
 pnpm install
 pnpm run dev           # http://localhost:4321
 pnpm run check         # 타입 검사
-pnpm run build         # dist/ — 끝에 dist/_version.txt 를 쓴다
-pnpm exec wrangler dev # dist/ 를 Workers 와 같은 방식으로 서빙해 본다
+pnpm run build         # dist/mdwire/ — 끝에 dist/mdwire/_version.txt 를 쓴다
+pnpm exec wrangler dev # dist/ 를 Workers 와 같은 방식으로 서빙해 본다 — http://localhost:8787/mdwire/
 ```
 
 **번들러에서 mdwire 를 쓸 때** 필요한 설정이 `astro.config.mjs` 에 있다 — `examples/react-streaming`
@@ -64,11 +68,22 @@ pnpm exec wrangler dev # dist/ 를 Workers 와 같은 방식으로 서빙해 본
 Cloudflare Workers Static Assets 에 Workers Builds(Git 연결)로 올린다. 설정은 `wrangler.jsonc` —
 Worker 스크립트 없이 `dist/` 만 올린다. 계정 ID 와 토큰은 저장소에 두지 않는다.
 
-`/_version.txt` 는 빌드한 커밋이다(Workers Builds 는 `WORKERS_CI_COMMIT_SHA`, 로컬은 `git`,
+주소는 `minjun.kim/mdwire/` 다. `minjun.kim` 존의 Workers Routes(`minjun.kim/mdwire` · `minjun.kim/mdwire/*`)가 이 워커로
+보낸다 — 개인 사이트 워커의 Custom Domain 앞에서 라우트가 먼저 받는다. 정적 자산은 요청 경로 그대로 찾으므로 산출물은
+`dist/mdwire/` 에 나오고(`astro.config.mjs` 의 `base` · `outDir`), `_headers` 만 빌드 끝에 `dist/` 로 올린다.
+
+옛 주소 `mdwire.minjun.dev` 는 Custom Domain 으로 붙여 두고 같은 빌드를 서빙한다. 파일은 `/mdwire/…` 아래에 있으므로 `minjun.dev`
+존의 URL Rewrite 규칙(Transform Rule, 대시보드)이 그 호스트의 요청 경로 앞에 `/mdwire` 를 붙인다 — 조건은 호스트가
+`mdwire.minjun.dev` 이고 경로가 `/mdwire` 로 시작하지 않을 때. 페이지 안 링크는 `/mdwire/…` 라 옛 호스트에서 누르면
+`mdwire.minjun.dev/mdwire/…` 로 가는데, 그 경로는 그대로 파일이 있어 역시 서빙된다. 두 주소를 합치는(301) 건 나중 일이다.
+`robots.txt` 는 두지 않는다 — 하위 경로의 것은 읽히지 않는다. 사이트맵은 각 페이지의 `<link rel="sitemap">` 과 개인 사이트의
+`robots.txt` 가 가리킨다.
+
+`/mdwire/_version.txt` 는 빌드한 커밋이다(Workers Builds 는 `WORKERS_CI_COMMIT_SHA`, 로컬은 `git`,
 커밋 안 된 변경이 있으면 `-dirty`). 서빙 중인 것이 올린 그것인지 이걸로 본다:
 
 ```sh
-curl -s https://mdwire.minjun.dev/_version.txt   # 머지한 커밋과 같아야 한다
+curl -s https://minjun.kim/mdwire/_version.txt   # 머지한 커밋과 같아야 한다
 ```
 
 Workers Builds 설정(대시보드):
@@ -81,6 +96,8 @@ Workers Builds 설정(대시보드):
 | Preview builds | 켠다 — Preview command 는 기본값 `npx wrangler preview`. 프리뷰는 따로 기본 설정(Previews Base configuration)을 쓰니 거기에도 빌드 명령을 넣는다 |
 | Build watch paths | 포함 `site/**` (저장소 루트 기준) |
 | Production branch | `main` |
+
+프리뷰는 `<브랜치>.mdwire.minjun.dev/mdwire/` 에 뜬다 — base 가 붙은 채로 보면 된다.
 
 빌드 변수(Variables and secrets — 프로덕션과 프리뷰가 따로다). 방문 집계를 켜는 곳은 여기뿐이고, **프로덕션에만 넣는다** —
 프리뷰는 보내지 않는다. 둘 중 하나라도 없으면 집계가 꺼진다(스키마는 `astro.config.mjs`).

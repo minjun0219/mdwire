@@ -3,6 +3,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { localeOf, ui } from "../i18n";
 import { hasMarkdown, markdownPath } from "../markdownCopies";
+import { stripBase, withBase } from "../urls";
 import SectionNav from "../components/SectionNav.astro";
 import Pager from "../components/Pager.astro";
 // 한국어 본문 글꼴. 유니코드 범위로 나뉜 woff2 라 페이지에 쓰인 글자의 조각만 받는다 — 영어 페이지는 받지 않는다.
@@ -20,8 +21,9 @@ const lang = localeOf(Astro.currentLocale);
 const t = ui[lang];
 const other = lang === "en" ? "ko" : "en";
 
-// 같은 문서의 다른 언어 주소 — `/ko` 를 떼면 언어와 무관한 경로가 남는다.
-const rest = Astro.url.pathname.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
+// 같은 문서의 다른 언어 주소 — base 와 `/ko` 를 떼면 언어와 무관한 경로가 남는다.
+const path = stripBase(Astro.url.pathname);
+const rest = path.replace(/^\/ko(?=\/|$)/, "").replace(/^\/|\/$/g, "");
 const href = (page: string) => getRelativeLocaleUrl(lang, page);
 // 언어 전환 — 같은 문서의 각 언어 주소. 404 는 언어별 페이지가 없다 — 각 언어의 개요로 보낸다.
 const langHref = (l: "en" | "ko") => getRelativeLocaleUrl(l, rest === "404" ? "" : rest);
@@ -41,22 +43,21 @@ const summary = description ?? t.tagline;
 // 검색 엔진과 링크 미리보기에 내보낼 것. 404 는 색인하지 않고 짝도 대지 않는다.
 const notFound = rest === "404";
 const site = Astro.site!;
-const url = new URL(Astro.url.pathname, site).href;
+const url = new URL(withBase(path), site).href;
+const home = new URL(withBase("/"), site).href;
 const urlOf = (l: "en" | "ko") => new URL(getRelativeLocaleUrl(l, rest), site).href;
 const ogLocale = { en: "en_US", ko: "ko_KR" } as const;
 // 개요와 문서는 원문 마크다운 사본이 있다(`/docs/npm.md`) — 에이전트는 HTML 대신 그걸 읽는다.
 const markdown =
-  !notFound && hasMarkdown(rest)
-    ? new URL(markdownPath(Astro.url.pathname.replace(/^\/|\/$/g, "")), site).href
-    : undefined;
+  !notFound && hasMarkdown(rest) ? new URL(withBase(markdownPath(path.replace(/^\/|\/$/g, ""))), site).href : undefined;
 
 // 구조화 데이터(schema.org). 개요는 소프트웨어 자체를, 나머지는 그 소프트웨어를 다루는 글로 밝힌다.
 const software = {
   "@type": "SoftwareSourceCode",
-  "@id": `${site.href}#software`,
+  "@id": `${home}#software`,
   name: "mdwire",
   description: ui.en.tagline,
-  url: site.href,
+  url: home,
   codeRepository: "https://github.com/minjun0219/mdwire",
   license: "https://opensource.org/licenses/MIT",
   programmingLanguage: ["Rust", "Go", "JavaScript", "WebAssembly"],
@@ -87,7 +88,7 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
     <title>{pageTitle}</title>
     <meta name="description" content={summary} />
     <meta name="theme-color" content="#0f766e" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
     {
       notFound ? (
         <meta name="robots" content="noindex" />
@@ -101,7 +102,7 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
       )
     }
     {markdown && <link rel="alternate" type="text/markdown" href={markdown} />}
-    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="sitemap" type="application/xml" href={withBase("/sitemap.xml")} />
     <meta property="og:type" content={rest === "" ? "website" : "article"} />
     <meta property="og:site_name" content="mdwire" />
     <meta property="og:title" content={pageTitle} />
@@ -109,7 +110,7 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
     <meta property="og:url" content={url} />
     <meta property="og:locale" content={ogLocale[lang]} />
     <meta property="og:locale:alternate" content={ogLocale[other]} />
-    <meta property="og:image" content={new URL("/og.png", site).href} />
+    <meta property="og:image" content={new URL(withBase("/og.png"), site).href} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content={`mdwire — ${ui.en.tagline}`} />
@@ -159,7 +160,7 @@ const ldJson = ld && JSON.stringify(ld).replace(/</g, "\\u003c");
         <span aria-hidden="true">·</span>
         <a href="https://github.com/minjun0219/mdwire/blob/main/LICENSE">{t.license}</a>
         <span aria-hidden="true">·</span>
-        <a href="/llms.txt" type="text/plain">llms.txt</a>
+        <a href={withBase("/llms.txt")} type="text/plain">llms.txt</a>
       </p>
       <p class="footer-by">by <a href="https://minjun.kim/?utm_source=mdwire&utm_medium=referral&utm_content=footer">minjun.kim</a></p>
     </footer>

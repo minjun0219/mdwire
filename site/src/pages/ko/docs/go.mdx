@@ -74,7 +74,7 @@ s.FinishTo(&out)
 | `Revised() bool` | `Finish` 다음에 호출합니다. 완성본이 마지막 미리보기와 다른지 알려 줍니다. |
 | `Repairs() Repairs` | 지금까지 센 정규화 보고를 반환합니다. |
 
-계약은 [Concepts](/ko/docs/#스트리밍-계약)에 있습니다.
+계약은 [Concepts](/mdwire/ko/docs/#스트리밍-계약)에 있습니다.
 
 ## `Channel`
 
@@ -101,7 +101,7 @@ type Repairs struct {
 ```
 
 `Repaired()` 는 하나라도 고쳤는지(앞의 네 필드), `Changed()` 는 고쳤든 바꿨든 하나라도 했는지 알려
-줍니다. 각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.
+줍니다. 각 필드가 세는 것은 [Concepts](/mdwire/ko/docs/#정규화-보고)에 있습니다.
 
 ## 표시 폭
 
@@ -110,4 +110,4 @@ type Repairs struct {
 ## CLI
 
 `go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest` 로 Rust 와 같은 CLI 를 설치할 수 있습니다.
-플래그도 같고, `-V`/`--version` 만 없습니다. 자세한 내용은 [CLI](/ko/docs/cli/)를 참고하세요.
+플래그도 같고, `-V`/`--version` 만 없습니다. 자세한 내용은 [CLI](/mdwire/ko/docs/cli/)를 참고하세요.

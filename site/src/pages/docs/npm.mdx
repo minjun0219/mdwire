@@ -23,7 +23,7 @@ from disk, everything else gets the ESM bundler build. **Under a bundler** the W
 ES module — Vite needs `vite-plugin-wasm` and `build.target: "esnext"` (for the top-level `await`).
 See [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js).
 
-Channel names are the strings listed on [Concepts](/docs/).
+Channel names are the strings listed on [Concepts](/mdwire/docs/).
 
 ## `render(input, channel, options?)`
 
@@ -47,7 +47,7 @@ out.repairs.closedEmphasis;  // see "Repairs" below
 out.free();                  // the result lives in WASM memory
 ```
 
-`render` plus the [repair report](/docs/#the-repair-report). The result and its `repairs` are WASM
+`render` plus the [repair report](/mdwire/docs/#the-repair-report). The result and its `repairs` are WASM
 objects: call `free()` when done, or use `using` (`Symbol.dispose`).
 
 ## `limit(channel)`
@@ -81,7 +81,7 @@ s.free();
 | `free()` | | Releases the WASM memory. |
 
 For an append-only channel (Slack `appendStream`), send each `push` piece and never call `preview()`.
-See [the streaming contract](/docs/#the-streaming-contract).
+See [the streaming contract](/mdwire/docs/#the-streaming-contract).
 
 ## `RenderOptions`
 
@@ -106,7 +106,7 @@ integer throws an `Error`.
 | `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` · `guessedPair` <Next /> | Repairs |
 | `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | Channel rewrites |
 
-What each counts: [Concepts](/docs/#the-repair-report).
+What each counts: [Concepts](/mdwire/docs/#the-repair-report).
 
 ## React — `@minjun0219/mdwire/react`
 
@@ -151,7 +151,7 @@ const p = parser.configure([GFM, koreanEmphasis]); // after GFM: it replaces Emp
 ```
 
 For screens that draw Markdown with `@lezer/markdown` or CodeMirror instead of going through mdwire. The extension
-reads emphasis with [the same rules](/docs/emphasis/) as the core, so `**설정(config)**을` becomes bold instead of
+reads emphasis with [the same rules](/mdwire/docs/emphasis/) as the core, so `**설정(config)**을` becomes bold instead of
 leaving its asterisks on screen. No WASM; `@lezer/markdown` (1.5 or later) is an optional peer dependency.
 
 Three things differ from the core, by design: markers that do not pair stay as text (the core drops some of them),
