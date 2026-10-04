@@ -3,7 +3,7 @@
 English | [한국어](README.ko.md)
 
 Send LLM-generated Markdown to chat channels without it breaking.
-Docs, API reference and a live demo: [mdwire.minjun.dev](https://mdwire.minjun.dev).
+Docs, API reference and a live demo: [minjun.kim/mdwire](https://minjun.kim/mdwire/).
 
 Agents emit Markdown. Chat channels don't take it as is — each has its own subset, its own
 escaping rules, and its own length limit. Existing converters assume the input is
@@ -216,7 +216,7 @@ that read `SKILL.md` can use it directly. In Claude Code it installs as a plugin
 /plugin install mdwire@mdwire
 ```
 
-The site also serves [`llms.txt`](https://mdwire.minjun.dev/llms.txt), and its pages register a WebMCP
+The site also serves [`llms.txt`](https://minjun.kim/mdwire/llms.txt), and its pages register a WebMCP
 tool, `mdwire_render`, so a browser agent on the site can run mdwire in the page.
 
 ## Building

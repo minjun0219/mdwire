@@ -3,7 +3,7 @@
 [English](README.md) | 한국어
 
 LLM 이 만든 마크다운을 채팅 채널로 깨지지 않게 보냅니다.
-문서 · API · 데모: [mdwire.minjun.dev](https://mdwire.minjun.dev).
+문서 · API · 데모: [minjun.kim/mdwire](https://minjun.kim/mdwire/).
 
 에이전트는 마크다운을 출력합니다. 하지만 채팅 채널은 그 마크다운을 그대로 받지 않습니다. 채널마다
 받는 문법이 다르고, 이스케이프 규칙이 다르고, 길이 제한이 다릅니다. 기존 변환기는 입력이 CommonMark
@@ -204,7 +204,7 @@ mdwire 에는 [에이전트 스킬](skills/mdwire/SKILL.md)이 들어 있습니�
 /plugin install mdwire@mdwire
 ```
 
-사이트는 [`llms.txt`](https://mdwire.minjun.dev/llms.txt)도 제공하고, 페이지마다 WebMCP 도구
+사이트는 [`llms.txt`](https://minjun.kim/mdwire/llms.txt)도 제공하고, 페이지마다 WebMCP 도구
 `mdwire_render` 를 등록합니다. 사이트를 연 브라우저 에이전트가 페이지 안에서 mdwire 를 바로 실행할 수 있습니다.
 
 ## 빌드

@@ -8,6 +8,6 @@ import type { MarkdownConfig } from "@lezer/markdown";
  * `markdown({ base: markdownLanguage, extensions: [koreanEmphasis] })`.
  *
  * Markers that pair become `StrongEmphasis` / `Emphasis` / `Strikethrough` nodes; markers that do not pair stay as
- * text. The rules are documented at https://mdwire.minjun.dev/docs/emphasis/.
+ * text. The rules are documented at https://minjun.kim/mdwire/docs/emphasis/.
  */
 export declare const koreanEmphasis: MarkdownConfig;
