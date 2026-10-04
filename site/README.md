@@ -104,8 +104,8 @@ Workers Builds 설정(대시보드):
 
 | 변수 | 값 |
 |---|---|
-| `POSTHOG_KEY` | PostHog 프로젝트의 공개 키(`phc_…`) |
-| `POSTHOG_HOST` | 자체 리버스 프록시 주소(URL) |
+| `PUBLIC_POSTHOG_KEY` | PostHog 프로젝트의 공개 키(`phc_…`) |
+| `PUBLIC_POSTHOG_HOST` | 자체 리버스 프록시 주소(URL) |
 
 빌드 명령은 대시보드에 꼭 넣는다 — `wrangler.jsonc` 의 `build.command` 는 로컬 `wrangler deploy` · `wrangler dev` 용이고,
 Workers Builds 는 문서상 그 설정을 따르지 않는다. 의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
