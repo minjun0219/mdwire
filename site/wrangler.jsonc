@@ -17,6 +17,10 @@
     { "pattern": "minjun.kim/mdwire/*", "zone_name": "minjun.kim" },
     { "pattern": "mdwire.minjun.dev", "custom_domain": true }
   ],
+  // `routes` 가 있으면 wrangler 가 workers.dev 주소를 끄고, 프리뷰 URL 의 기본값도 그걸 따라간다. PR 프리뷰(D-020 게이트)는
+  // 프리뷰 URL 을 쓰니 명시해서 켠다. 프로덕션 workers.dev 주소는 필요 없다.
+  "workers_dev": false,
+  "preview_urls": true,
   // 자산 디렉터리는 `dist/`, 페이지는 그 아래 `dist/mdwire/`(Astro `base` · `outDir`) — 요청 경로 그대로 파일을 찾기 때문이다.
   // `_headers` 는 루트에서만 읽혀 빌드 끝에 `dist/` 로 올린다(`astro.config.mjs`).
   "assets": {
