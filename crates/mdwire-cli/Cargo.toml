@@ -17,7 +17,7 @@ path = "src/main.rs"
 # **버전을 같이 적는다.** crates.io 에 올릴 때 `path` 는 지워지고 버전만 남는다 — 없으면
 # `cargo package` 가 여기서 멈춘다.
 [dependencies]
-mdwire-core = { path = "../mdwire-core", version = "0.1.11" }
+mdwire-core = { path = "../mdwire-core", version = "0.1.12" }
 # `--batch jsonl` 의 입력을 읽는다. 코어가 아니라 CLI 층이라 의존을 둔다(`AGENTS.md`).
 # `raw_value` — `id` 를 다시 직렬화하지 않고 받은 글자 그대로 돌려주려고 쓴다.
 serde_json = { version = "1", features = ["raw_value"] }
