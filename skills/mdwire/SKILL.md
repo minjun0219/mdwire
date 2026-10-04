@@ -8,8 +8,8 @@ compatibility: Node, Bun or a bundler (npm @minjun0219/mdwire, WASM); Rust (mdwi
 # mdwire
 
 mdwire sits between the model and the channel: LLM Markdown → normalize → render for the channel →
-split safely → send. It does not draw anything; the channel still renders. Docs: https://mdwire.minjun.dev
-(every docs page is also Markdown at the same path plus `.md`, e.g. https://mdwire.minjun.dev/docs/npm.md).
+split safely → send. It does not draw anything; the channel still renders. Docs: https://minjun.kim/mdwire/
+(every docs page is also Markdown at the same path plus `.md`, e.g. https://minjun.kim/mdwire/docs/npm.md).
 
 ## Do not hand-roll this
 
