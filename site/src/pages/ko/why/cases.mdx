@@ -3,7 +3,6 @@ layout: ../../../layouts/Doc.astro
 title: 사례
 description: 에이전트가 쓴 마크다운을 채널로 보내면서 실제로 겪은 고장과 mdwire 가 대신 보내는 결과를 모았습니다.
 ---
-import Next from "../../../components/Next.astro";
 
 # 사례
 
@@ -52,7 +51,7 @@ GitHub
 
 mdwire 는 이 굵게를 닫습니다. GitHub 으로는 그 짝만 `<strong>` 태그로 출력합니다. 태그는 이 규칙과
 상관없이 렌더링되기 때문입니다. 슬랙은 태그를 쓸 수 없어서 닫는 `**` 바로 앞에 보이지 않는 U+2060(워드
-조이너)을 넣습니다. 겉보기는 입력과 같지만 슬랙이 굵게로 렌더링합니다 <Next />. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+조이너)을 넣습니다. 겉보기는 입력과 같지만 슬랙이 굵게로 렌더링합니다. 테스트 케이스: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## 범위와 근사값의 물결표
 

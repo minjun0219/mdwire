@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: Cases
 description: Real failures from sending agent-written Markdown to chat channels, and what mdwire sends instead.
 ---
-import Next from "../../components/Next.astro";
 
 # Cases
 
@@ -53,7 +52,7 @@ Telegram
 
 mdwire closes this bold. For GitHub it writes just those pairs as `<strong>` tags, which render regardless of
 the rule. Slack has no tags, so mdwire puts an invisible U+2060 (word joiner) right before the closing `**` —
-the line looks the same, but Slack now renders the bold <Next />. Test case: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
+the line looks the same, but Slack now renders the bold. Test case: [`punct-before-closing-emphasis`](https://github.com/minjun0219/mdwire/tree/main/corpus/cases/punct-before-closing-emphasis)
 
 ## Tildes for ranges and approximations
 
