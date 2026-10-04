@@ -35,7 +35,7 @@ function toMarkdown(source, { lang, site, url }) {
       lines.push(
         line
           .replaceAll(/<Next\s*\/>/g, `(${ui[lang].next})`)
-          // 사이트 안 링크는 사본 밖에서도 닿게 절대 주소로.
+          // 사이트 안 링크는 사본 밖에서도 닿게 절대 주소로. 본문 링크에 base(`/mdwire`)가 이미 들어 있다.
           .replaceAll(/\]\((\/[^)]*)\)/g, (_, path) => `](${new URL(path, site)})`),
       );
     } else {
@@ -53,17 +53,23 @@ const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
 export default function agents() {
   let site;
+  // 사이트가 사는 하위 경로(`/mdwire`). 주소를 만들 때마다 앞에 붙인다. `pages[].pathname` 에 들어 있으면 떼고 본다.
+  let base;
   return {
     name: "mdwire-agent-files",
     hooks: {
       "astro:config:done": ({ config }) => {
         site = config.site;
+        base = config.base.replace(/\/$/, "");
       },
       "astro:build:done": async ({ dir, pages }) => {
         // 언어와 무관한 경로 → 그 페이지가 있는 언어들.
         const byRest = new Map();
         for (const { pathname } of pages) {
-          const path = pathname.replace(/\/$/, "");
+          let path = pathname.replace(/^\/|\/$/g, "");
+          const b = base.slice(1);
+          if (b && path === b) path = "";
+          else if (b && path.startsWith(`${b}/`)) path = path.slice(b.length + 1);
           if (path === "404") continue;
           const lang = path === "ko" || path.startsWith("ko/") ? "ko" : "en";
           const rest = path.replace(/^ko(\/|$)/, "");
@@ -72,7 +78,7 @@ export default function agents() {
         }
         const pageUrl = (lang, rest) => {
           const path = [lang === "en" ? "" : lang, rest].filter(Boolean).join("/");
-          return new URL(path ? `/${path}/` : "/", site).href;
+          return new URL(`${base}${path ? `/${path}/` : "/"}`, site).href;
         };
 
         const urls = [];
@@ -110,8 +116,8 @@ export default function agents() {
         const head =
           "# mdwire — full documentation\n\n" +
           "> Every page of the English docs in one file. The index with links is " +
-          `${new URL("/llms.txt", site)}; each page also exists alone as Markdown (e.g. ` +
-          `${new URL("/docs/npm.md", site)}).\n`;
+          `${new URL(`${base}/llms.txt`, site)}; each page also exists alone as Markdown (e.g. ` +
+          `${new URL(`${base}/docs/npm.md`, site)}).\n`;
         const pagesText = fullOrder.filter((r) => full.has(r)).map((r) => full.get(r).replace(/^# /, "## "));
         // 사본 안의 헤딩을 한 단씩 내려 한 문서의 절이 되게 한다.
         const body = pagesText.map((md) => demote(md)).join("\n");

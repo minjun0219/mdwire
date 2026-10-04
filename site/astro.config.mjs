@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { rename, writeFile } from "node:fs/promises";
 import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
 import { defineConfig, envField } from "astro/config";
@@ -67,9 +67,27 @@ function wideCells() {
   };
 }
 
+// Workers Static Assets 는 `_headers` 를 자산 디렉터리의 루트에서만 읽는다. 페이지는 `dist/mdwire/` 아래에 나오니(`base`),
+// `public/` 에서 함께 복사된 `_headers` 를 한 단 위(`dist/`)로 올린다.
+function assetsRoot() {
+  return {
+    name: "mdwire-assets-root",
+    hooks: {
+      "astro:build:done": async ({ dir }) => {
+        await rename(new URL("_headers", dir), new URL("../_headers", dir));
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  site: "https://mdwire.minjun.dev",
-  integrations: [react(), mdx(), versionFile(), agents()],
+  // `minjun.kim` 의 `/mdwire/` 아래에 산다 — 워커는 `minjun.kim/mdwire*` 라우트로 요청을 받고, 정적 자산은 요청 경로
+  // 그대로 찾으므로 산출물도 `dist/mdwire/` 에 둔다(`wrangler.jsonc` 의 자산 디렉터리는 `dist/`). Astro 는 자기가 만드는
+  // 링크에만 base 를 붙이므로 MDX 본문의 사이트 안 링크는 `/mdwire/docs/` 처럼 base 를 적어서 쓴다.
+  site: "https://minjun.kim",
+  base: "/mdwire",
+  outDir: "./dist/mdwire",
+  integrations: [react(), mdx(), versionFile(), agents(), assetsRoot()],
   // 방문 집계(PostHog)의 빌드 변수 — Workers Builds 의 프로덕션 빌드 변수에만 넣는다(`README.md` 배포 절). 둘 다 없을 수
   // 있다 — 없는 빌드(로컬 · 프리뷰 · 포크)는 `src/analytics.ts` 가 초기화하지 않고 SDK 코드도 담지 않는다. 호스트는 기본값을
   // 두지 않는다 — posthog-js 자체 기본값(`https://us.i.posthog.com`)으로 조용히 프록시를 우회하는 걸 막는다.

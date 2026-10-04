@@ -8,7 +8,7 @@ description: There are plenty of Markdown converters already. Three gaps we foun
 # Why another one
 
 We found three gaps in existing tools. The real failures, and what mdwire sends instead, are collected under
-[Cases](/why/cases/).
+[Cases](/mdwire/why/cases/).
 
 ## Emphasis spanning lines is common
 
@@ -34,4 +34,4 @@ and escapes a literal `~` as `\~`.
 Some browser renderers, like Streamdown, patch unclosed syntax while tokens stream in. The Telegram and Slack
 converters we looked at all take the whole document and convert it in one pass. When tokens arrive
 incrementally, markup splits across chunk boundaries. mdwire's streamer returns only what is safe to send
-now ([the streaming contract](/docs/#the-streaming-contract)).
+now ([the streaming contract](/mdwire/docs/#the-streaming-contract)).

@@ -23,7 +23,7 @@ npm install @minjun0219/mdwire
 쓴다면 `vite-plugin-wasm` 과 `build.target: "esnext"`(top-level `await` 용)가 필요합니다.
 [`examples/react-streaming/vite.config.js`](https://github.com/minjun0219/mdwire/blob/main/examples/react-streaming/vite.config.js) 를 참고하세요.
 
-채널 이름은 [Concepts](/ko/docs/)에 나온 문자열을 씁니다.
+채널 이름은 [Concepts](/mdwire/ko/docs/)에 나온 문자열을 씁니다.
 
 ## `render(input, channel, options?)`
 
@@ -47,7 +47,7 @@ out.repairs.closedEmphasis;  // 아래 "Repairs" 참고
 out.free();                  // 결과는 WASM 메모리에 있음
 ```
 
-`render` 에 [정규화 보고](/ko/docs/#정규화-보고)를 더한 함수입니다. 결과와 그 `repairs` 는 WASM 객체이므로,
+`render` 에 [정규화 보고](/mdwire/ko/docs/#정규화-보고)를 더한 함수입니다. 결과와 그 `repairs` 는 WASM 객체이므로,
 다 쓰면 `free()` 로 해제하거나 `using`(`Symbol.dispose`)으로 감싸 쓰세요.
 
 ## `limit(channel)`
@@ -81,7 +81,7 @@ s.free();
 | `free()` | | WASM 메모리를 해제합니다. |
 
 덧붙이기만 하는 채널(슬랙 `appendStream`)에는 `push` 결과를 그대로 보내고 `preview()` 는 호출하지
-않습니다. [스트리밍 계약](/ko/docs/#스트리밍-계약)을 참고하세요.
+않습니다. [스트리밍 계약](/mdwire/ko/docs/#스트리밍-계약)을 참고하세요.
 
 ## `RenderOptions`
 
@@ -105,7 +105,7 @@ interface RenderOptions {
 | `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` · `guessedPair` <Next /> | 고친 횟수입니다. |
 | `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | 채널에 맞춰 바꾼 횟수입니다. |
 
-각 필드가 세는 것은 [Concepts](/ko/docs/#정규화-보고)에 있습니다.
+각 필드가 세는 것은 [Concepts](/mdwire/ko/docs/#정규화-보고)에 있습니다.
 
 ## React — `@minjun0219/mdwire/react`
 
@@ -151,7 +151,7 @@ const p = parser.configure([GFM, koreanEmphasis]); // GFM 뒤에 둡니다 — E
 ```
 
 mdwire 를 거치지 않고 `@lezer/markdown` 이나 CodeMirror 로 마크다운을 그리는 화면을 위한 확장입니다. 코어와
-[같은 규칙](/ko/docs/emphasis/)으로 강조를 읽어서 `**설정(config)**을` 이 별표 대신 굵게로 보입니다. WASM 이 없고,
+[같은 규칙](/mdwire/ko/docs/emphasis/)으로 강조를 읽어서 `**설정(config)**을` 이 별표 대신 굵게로 보입니다. WASM 이 없고,
 `@lezer/markdown`(1.5 이상)은 선택 peer 의존성입니다.
 
 코어와 다른 점은 셋이고 모두 의도한 것입니다. 짝을 맺지 못한 마커는 글자로 남깁니다(코어는 일부를 버립니다).

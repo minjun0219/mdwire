@@ -1,8 +1,12 @@
 ---
+import { getRelativeLocaleUrl } from "astro:i18n";
 import Doc from "../layouts/Doc.astro";
 ---
 
 <Doc frontmatter={{ title: "Not found", description: "Page not found." }}>
   <h1>404</h1>
-  <p>This page does not exist. <a href="/">Back to the overview</a> · <a href="/ko/">소개로 돌아가기</a></p>
+  <p>
+    This page does not exist. <a href={getRelativeLocaleUrl("en", "")}>Back to the overview</a> ·
+    <a href={getRelativeLocaleUrl("ko", "")}>소개로 돌아가기</a>
+  </p>
 </Doc>

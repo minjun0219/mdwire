@@ -74,7 +74,7 @@ s.FinishTo(&out)
 | `Revised() bool` | After `Finish`: does the result differ from the last preview? |
 | `Repairs() Repairs` | What was repaired so far. |
 
-The contract is on [Concepts](/docs/#the-streaming-contract).
+The contract is on [Concepts](/mdwire/docs/#the-streaming-contract).
 
 ## `Channel`
 
@@ -102,7 +102,7 @@ type Repairs struct {
 ```
 
 `Repaired()` — did it repair anything (the first four). `Changed()` — did it repair
-or rewrite anything. What each field counts: [Concepts](/docs/#the-repair-report).
+or rewrite anything. What each field counts: [Concepts](/mdwire/docs/#the-repair-report).
 
 ## Widths
 
@@ -111,4 +111,4 @@ or rewrite anything. What each field counts: [Concepts](/docs/#the-repair-report
 ## CLI
 
 `go install github.com/minjun0219/mdwire/go/cmd/mdwire@latest` installs the same CLI as the Rust one,
-with the same flags except `-V`/`--version`. See [CLI](/docs/cli/).
+with the same flags except `-V`/`--version`. See [CLI](/mdwire/docs/cli/).

@@ -52,15 +52,15 @@ Things that are easy to get wrong:
 
 Docs pages are Markdown at the page path plus `.md` (`/docs/npm/` → `/docs/npm.md`, `/ko/docs/` → `/ko/docs.md`).
 
-- [Overview](https://mdwire.minjun.dev/index.md): what mdwire does
-- [Why another one](https://mdwire.minjun.dev/why.md): three gaps in existing tools (emphasis across lines, Korean notation, streaming)
-- [Cases](https://mdwire.minjun.dev/why/cases.md): real failures (emphasis across lines, bold before a Korean particle, tildes, masked numbers, unclosed fences, Korean tables, splitting) and what mdwire sends instead
-- [Demos](https://mdwire.minjun.dev/demo/), all in the browser: [Telegram vs. Slack](https://mdwire.minjun.dev/demo/channels/) (one agent answer converted for both), [Streaming](https://mdwire.minjun.dev/demo/streaming/) (token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook), [Before and after repair](https://mdwire.minjun.dev/demo/repair/) (broken agent output next to what mdwire sends, with the repair report)
-- [Korean](https://mdwire.minjun.dev/ko/): the site in Korean
-- [Docs: concepts](https://mdwire.minjun.dev/docs.md): channels, options, the repair report, the streaming contract
-- [Docs: npm](https://mdwire.minjun.dev/docs/npm.md) · [Rust](https://mdwire.minjun.dev/docs/rust.md) · [Go](https://mdwire.minjun.dev/docs/go.md) · [CLI](https://mdwire.minjun.dev/docs/cli.md): the API of each
-- [Docs: emphasis before Korean particles](https://mdwire.minjun.dev/docs/emphasis.md): why CommonMark parsers leave `**설정(config)**을` unclosed, the reading rule mdwire uses, and what GitHub, Slack and Notion need on output
-- [Full docs](https://mdwire.minjun.dev/llms-full.txt): the overview, why, cases and every docs page above in one file
+- [Overview](https://minjun.kim/mdwire/index.md): what mdwire does
+- [Why another one](https://minjun.kim/mdwire/why.md): three gaps in existing tools (emphasis across lines, Korean notation, streaming)
+- [Cases](https://minjun.kim/mdwire/why/cases.md): real failures (emphasis across lines, bold before a Korean particle, tildes, masked numbers, unclosed fences, Korean tables, splitting) and what mdwire sends instead
+- [Demos](https://minjun.kim/mdwire/demo/), all in the browser: [Telegram vs. Slack](https://minjun.kim/mdwire/demo/channels/) (one agent answer converted for both), [Streaming](https://minjun.kim/mdwire/demo/streaming/) (token by token into react-markdown, Streamdown, mdwire in front of Streamdown, and mdwire's React hook), [Before and after repair](https://minjun.kim/mdwire/demo/repair/) (broken agent output next to what mdwire sends, with the repair report)
+- [Korean](https://minjun.kim/mdwire/ko/): the site in Korean
+- [Docs: concepts](https://minjun.kim/mdwire/docs.md): channels, options, the repair report, the streaming contract
+- [Docs: npm](https://minjun.kim/mdwire/docs/npm.md) · [Rust](https://minjun.kim/mdwire/docs/rust.md) · [Go](https://minjun.kim/mdwire/docs/go.md) · [CLI](https://minjun.kim/mdwire/docs/cli.md): the API of each
+- [Docs: emphasis before Korean particles](https://minjun.kim/mdwire/docs/emphasis.md): why CommonMark parsers leave `**설정(config)**을` unclosed, the reading rule mdwire uses, and what GitHub, Slack and Notion need on output
+- [Full docs](https://minjun.kim/mdwire/llms-full.txt): the overview, why, cases and every docs page above in one file
 
 ## Optional
 
