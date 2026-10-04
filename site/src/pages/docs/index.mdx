@@ -61,7 +61,7 @@ The other six are **channel rewrites** — what the channel needed changed befor
 | Field | Counts |
 |---|---|
 | escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`; Slack's and Notion's `\*`). |
-| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's `<strong>`, or an invisible U+2060 inside Slack's markers <Next />. |
+| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's `<strong>`, or an invisible U+2060 inside Slack's markers. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
 | rewritten table | Tables rewritten (separator and cell spacing, or turned into a monospace block). |
