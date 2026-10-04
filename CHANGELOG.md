@@ -2,6 +2,23 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.12 — 2026-10-04
+
+### 새로 할 수 있는 것
+
+- **npm** — lezer 확장 — @lezer/markdown 이 mdwire 규칙으로 강조를 읽는다 ([#103](https://github.com/minjun0219/mdwire/pull/103))
+- **core** — 추측으로 짝지은 강조를 세고 슬랙은 글자 별표를 이스케이프한다 ([#102](https://github.com/minjun0219/mdwire/pull/102))
+
+### 고친 것
+
+- **core** — 여는 쪽이 막힌 강조를 같은 줄의 거울 마커와 짝짓는다 ([#100](https://github.com/minjun0219/mdwire/pull/100))
+- **core** — 슬랙에서 겹친 강조가 조사 앞에서 깨지지 않게 한다 ([#99](https://github.com/minjun0219/mdwire/pull/99))
+
+### 문서
+
+- 사이트 주소를 minjun.kim/mdwire 로 고친다 ([#108](https://github.com/minjun0219/mdwire/pull/108))
+- 한국어 문서를 korean-writing 점검대로 다듬는다 ([#98](https://github.com/minjun0219/mdwire/pull/98))
+
 ## 0.1.11 — 2026-10-02
 
 ### 새로 할 수 있는 것
