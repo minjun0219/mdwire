@@ -1,7 +1,7 @@
 # site
 
-mdwire 문서·데모 사이트. <https://minjun.kim/mdwire/> 에 올린다 — 개인 사이트의 하위 경로다. 옛 주소 `mdwire.minjun.dev` 도 같은
-빌드를 그대로 서빙한다(정본 · canonical 은 새 주소).
+mdwire 문서·데모 사이트. <https://minjun.kim/mdwire/> 에 올린다 — 개인 사이트의 하위 경로다. 옛 주소 `mdwire.minjun.dev` 는 새 주소로
+301 이다.
 
 - Astro 정적 사이트. 문서는 MDX(`src/pages/`), 데모만 React island 다.
 - `base` 가 `/mdwire` 다. 링크는 `getRelativeLocaleUrl` 로 만들면 붙고, 손으로 쓴 절대 경로(`/og.png`)와 `Astro.url.pathname` 을
@@ -72,10 +72,11 @@ Worker 스크립트 없이 `dist/` 만 올린다. 계정 ID 와 토큰은 저장
 보낸다 — 개인 사이트 워커의 Custom Domain 앞에서 라우트가 먼저 받는다. 정적 자산은 요청 경로 그대로 찾으므로 산출물은
 `dist/mdwire/` 에 나오고(`astro.config.mjs` 의 `base` · `outDir`), `_headers` 만 빌드 끝에 `dist/` 로 올린다.
 
-옛 주소 `mdwire.minjun.dev` 는 Custom Domain 으로 붙여 두고 같은 빌드를 서빙한다. 파일은 `/mdwire/…` 아래에 있으므로 `minjun.dev`
-존의 URL Rewrite 규칙(Transform Rule, 대시보드)이 그 호스트의 요청 경로 앞에 `/mdwire` 를 붙인다 — 조건은 호스트가
-`mdwire.minjun.dev` 이고 경로가 `/mdwire` 로 시작하지 않을 때. 페이지 안 링크는 `/mdwire/…` 라 옛 호스트에서 누르면
-`mdwire.minjun.dev/mdwire/…` 로 가는데, 그 경로는 그대로 파일이 있어 역시 서빙된다. 두 주소를 합치는(301) 건 나중 일이다.
+옛 주소 `mdwire.minjun.dev` 는 Custom Domain 으로 붙여 두고, `minjun.dev` 존의 Redirect Rule 둘이 새 주소로 301 보낸다(규칙은
+존에 있다 — `_redirects` 파일은 호스트 단위 리다이렉트를 지원하지 않는다). 경로가 `/mdwire` 로 시작하면 `https://minjun.kim` + 경로,
+아니면 `https://minjun.kim/mdwire` + 경로 — 병행 서빙 기간에 나간 `mdwire.minjun.dev/mdwire/…` 링크가 `/mdwire/mdwire/…` 로 가지
+않게 하는 순서다. 같은 존에 병행 서빙용 URL Rewrite 규칙(`mdwire-site-subpath`)이 꺼진 채 남아 있다 — 리다이렉트 앞 단계라
+켜도 효과가 없고, 되돌릴 때 쓴다.
 `robots.txt` 는 두지 않는다 — 하위 경로의 것은 읽히지 않는다. 사이트맵은 각 페이지의 `<link rel="sitemap">` 과 개인 사이트의
 `robots.txt` 가 가리킨다.
 
