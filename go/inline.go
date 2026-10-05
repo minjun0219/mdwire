@@ -2,6 +2,7 @@ package mdwire
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -45,7 +46,13 @@ type openMark struct {
 }
 
 type inline struct {
-	open []openMark
+	// 링크·이미지 라벨의 재귀 깊이. 러스트와 같은 한도로 호출 스택을 보호한다.
+	targetDepth uint8
+	// 실제로 내보낼 <a> 안의 라벨을 렌더하는가. <a> 안에 <a>를 만들 수 없다.
+	inAnchor bool
+	// `[`가 든 줄의 대괄호·주소 색인(indexLinks). 비우기만 하고 재사용한다.
+	links []linkBounds
+	open  []openMark
 	// 지금 몇 번째 줄인가. 막힌 여는 마커는 같은 줄에서만 짝을 맺는다.
 	line uint32
 	// 줄을 넘어온 직전 글자. 블록 안에서 줄이 바뀌면 '\n' 이다.
@@ -119,6 +126,11 @@ func (in *inline) isOpen() bool { return len(in.open) > 0 }
 // 끝에 걸친 채로 들어오면 안 된다. 마커는 다음 글자를 봐야 열기/닫기가 갈리기 때문이고, 그
 // 판단은 호출자(블록 층)가 한다.
 func (in *inline) render(line []rune, out *[]byte, v vocab) {
+	// 대괄호가 없는 산문은 색인하지 않는다. 버퍼는 빌려 와 재사용한다 — 되돌린 코드 스팬을 다시
+	// 읽는 render 가 같은 배열을 덮어쓰지 않게 비워 둔다.
+	links := in.links[:0]
+	in.links = nil
+	indexed := false
 	i := 0
 	for i < len(line) {
 		// 코드 스팬 안에서는 강조 마커가 글자다.
@@ -155,7 +167,11 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 
 		// 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
 		if c == '!' && i+1 < len(line) && line[i+1] == '[' {
-			if t0, t1, u0, u1, ok := findLink(line, i+1); ok {
+			if !indexed {
+				links = indexLinks(line, links)
+				indexed = true
+			}
+			if t0, t1, u0, u1, ok := findLink(line, i+1, links); ok {
 				in.renderImage(line[t0:t1], line[u0:u1], out, v)
 				i = u1 + 1
 				continue
@@ -163,7 +179,11 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 
 		if c == '[' {
-			if t0, t1, u0, u1, ok := findLink(line, i); ok {
+			if !indexed {
+				links = indexLinks(line, links)
+				indexed = true
+			}
+			if t0, t1, u0, u1, ok := findLink(line, i, links); ok {
 				in.renderLink(line[t0:t1], line[u0:u1], out, v)
 				i = u1 + 1
 				continue
@@ -317,6 +337,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 		i += take
 	}
+	in.links = links[:0]
 	if len(line) > 0 {
 		// 다음 호출의 첫 글자에게 앞 글자를 남긴다. 한 줄을 나눠 넣어도 flanking 판정이 이어진다.
 		in.prev = line[len(line)-1]
@@ -735,7 +756,11 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		if !bare && !v.htmlOut() && !v.isPlain() {
 			in.repairs.ConvertedMarker++
 		}
-		v.link(string(text), string(url), out)
+		if in.inAnchor {
+			v.unlinked(string(text), string(url), out)
+		} else {
+			v.link(string(text), string(url), out)
+		}
 		in.scratch = text
 		in.prev = '>'
 		return closeAt + 1
@@ -851,43 +876,78 @@ func (in *inline) renderImage(alt, url []rune, out *[]byte, v vocab) {
 
 func (in *inline) renderTarget(text, url []rune, out *[]byte, v vocab, image bool) {
 	scratch := in.scratch[:0]
+	href := string(url)
+	loads := image && v.loadsImage(href)
+	labelVocab := v
+	if loads {
+		labelVocab = newVocab(Plain, Options{})
+	}
 	// 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
-	nested := newInline()
-	nested.render(text, &scratch, v)
-	nested.finishBlock(&scratch, v)
-	in.repairs.add(nested.repairs)
-	if image {
-		v.image(string(scratch), string(url), out)
+	if in.targetDepth < maxTargetDepth {
+		nested := newInline()
+		nested.targetDepth = in.targetDepth + 1
+		// 라벨이 들어갈 자리가 실제 <a>일 때만 안쪽 링크를 글자로 내린다.
+		nested.inAnchor = in.inAnchor || (!loads && v.makesAnchor(href))
+		// 표 칸 안의 라벨도 줄을 바꿀 수 없다.
+		nested.inCell = in.inCell
+		nested.render(text, &scratch, labelVocab)
+		nested.finishBlock(&scratch, labelVocab)
+		in.repairs.add(nested.repairs)
 	} else {
-		v.link(string(scratch), string(url), out)
+		// 한도 아래와 같은 글자 escape를 쓰되, 다시 파싱하지 않는다.
+		for _, c := range text {
+			in.textChar(c, &scratch, labelVocab)
+		}
+	}
+	// <a> 안의 링크와 이미지 링크 폴백은 주소를 글자로 보존한다.
+	if in.inAnchor && !loads {
+		v.unlinked(string(scratch), href, out)
+	} else if image {
+		v.image(string(scratch), href, out)
+	} else {
+		v.link(string(scratch), href, out)
 	}
 	in.scratch = scratch
 }
 
-// findLink 는 `[텍스트](url)` 을 찾는다. 한 줄 안에서만 본다(SPEC 8절).
-// 돌려주는 것은 텍스트 구간, 주소 구간, 찾았는가.
-func findLink(line []rune, at int) (t0, t1, u0, u1 int, ok bool) {
-	j := at + 1
-	depth := 0
-	for j < len(line) {
-		if line[j] == '[' {
-			depth++
-		} else if line[j] == ']' {
-			if depth == 0 {
-				break
+const maxTargetDepth uint8 = 32
+
+type linkBounds struct{ bracket, paren int }
+
+// 대괄호 짝과 주소 끝을 역순 한 번으로 links 에 색인한다. 짝 없는 `[`마다 다시 훑지 않는다.
+// `]`의 bracket으로 다음 `]`를 이어 별도 스택 없이 짝을 맞춘다.
+func indexLinks(line []rune, links []linkBounds) []linkBounds {
+	missing := len(line)
+	links = slices.Grow(links[:0], len(line))[:len(line)]
+	closeAt, paren := missing, missing
+	for i := len(line) - 1; i >= 0; i-- {
+		links[i] = linkBounds{missing, missing}
+		switch line[i] {
+		case ')':
+			paren = i
+		case ']':
+			links[i] = linkBounds{closeAt, paren}
+			closeAt = i
+		case '[':
+			if closeAt < missing {
+				end := closeAt
+				closeAt = links[end].bracket
+				if end+1 < len(line) && line[end+1] == '(' && links[end].paren < missing {
+					links[i] = linkBounds{end, links[end].paren}
+				}
 			}
-			depth--
 		}
-		j++
 	}
-	if j+1 >= len(line) || line[j+1] != '(' {
+	return links
+}
+
+// findLink 는 한 줄 안의 `[텍스트](url)`을 색인에서 찾는다(SPEC 8절).
+func findLink(line []rune, at int, links []linkBounds) (t0, t1, u0, u1 int, ok bool) {
+	b := links[at]
+	if b.bracket >= len(line) {
 		return 0, 0, 0, 0, false
 	}
-	k := indexRune(line[j+2:], ')')
-	if k < 0 {
-		return 0, 0, 0, 0, false
-	}
-	return at + 1, j, j + 2, j + 2 + k, true
+	return at + 1, b.bracket, b.bracket + 2, b.paren, true
 }
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때

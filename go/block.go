@@ -185,6 +185,7 @@ func (e *engine) clone() *engine {
 	in.scratch = slices.Clone(in.scratch)
 	in.codeSrc = slices.Clone(in.codeSrc)
 	in.strippedTags = slices.Clone(in.strippedTags)
+	in.links = nil // 색인은 render 한 번 안에서만 뜻이 있다. 나눠 쓰지 않게 비운다.
 	in.wrap = nil
 	c.inline = &in
 	c.pending = slices.Clone(e.pending)

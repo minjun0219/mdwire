@@ -304,6 +304,27 @@ func (v vocab) escape(s string, out *[]byte) {
 	}
 }
 
+// 링크를 만들 수 없는 자리에서도 렌더된 본문과 주소를 보존한다.
+func (v vocab) unlinked(text, url string, out *[]byte) {
+	*out = append(*out, text...)
+	if url != "" && !escapedEq(text, url) {
+		*out = append(*out, " ("...)
+		v.escape(url, out)
+		*out = append(*out, ')')
+	}
+}
+
+// makesAnchor 는 link 가 이 주소로 <a>를 내는가다. 차단된 스킴·한도를 넘는 주소는 글자로 내려간다.
+func (v vocab) makesAnchor(url string) bool {
+	switch v.channel {
+	case TelegramHTML:
+		return escapedLen(url)+len(`<a href=""></a>`) < v.limit
+	case HTML:
+		return v.allowed(url)
+	}
+	return false
+}
+
 // link 는 링크를 적는다. 텍스트는 이미 렌더된 것을 받는다.
 func (v vocab) link(text, url string, out *[]byte) {
 	switch v.channel {
@@ -311,14 +332,8 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// 한도를 넘는 주소는 링크로 내지 않는다. 여는 태그 하나가 메시지를 다 차지하면
 		// 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다. 주소는 괄호에 넣어 글로
 		// 내보낸다 — 링크는 죽어도 내용은 산다.
-		markup := escapedLen(url) + len(`<a href=""></a>`)
-		if markup >= v.limit {
-			*out = append(*out, text...)
-			if url != "" && !escapedEq(text, url) {
-				*out = append(*out, " ("...)
-				v.escape(url, out)
-				*out = append(*out, ')')
-			}
+		if !v.makesAnchor(url) {
+			v.unlinked(text, url, out)
 			return
 		}
 		*out = append(*out, `<a href="`...)
@@ -330,13 +345,8 @@ func (v vocab) link(text, url string, out *[]byte) {
 		// innerHTML 로 들어가는 출력이라 스킴을 가린다. [x](javascript:…) 를 그대로 <a href> 로
 		// 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면 링크 없이 글과 주소만 낸다 —
 		// 내용은 살린다.
-		if !v.allowed(url) {
-			*out = append(*out, text...)
-			if url != "" && !escapedEq(text, url) {
-				*out = append(*out, " ("...)
-				v.escape(url, out)
-				*out = append(*out, ')')
-			}
+		if !v.makesAnchor(url) {
+			v.unlinked(text, url, out)
 			return
 		}
 		*out = append(*out, `<a href="`...)
@@ -394,7 +404,12 @@ func (v vocab) link(text, url string, out *[]byte) {
 	}
 }
 
-// image 는 이미지 `![alt](url)` 을 적는다. 텍스트는 이미 렌더된 대체 글이다.
+// 실제 <img>의 대체 글만 일반 텍스트로 읽는다.
+func (v vocab) loadsImage(url string) bool {
+	return v.channel == HTML && v.loadImages && v.allowed(url)
+}
+
+// image 는 이미지 `![alt](url)`을 적는다. <img>는 일반 텍스트, 나머지는 렌더된 대체 글이다.
 //
 // 브라우저는 옵션이 ImagesLoad 이고 주소가 허용 스킴일 때만 <img> 로 불러온다 — 기본은
 // 링크다(누르기 전에는 아무것도 안 불러온다). 텔레그램·plain 은 이미지 구문이 없어 링크로,
@@ -402,21 +417,14 @@ func (v vocab) link(text, url string, out *[]byte) {
 func (v vocab) image(alt, url string, out *[]byte) {
 	switch v.channel {
 	case HTML:
-		if !v.loadImages || !v.allowed(url) {
+		if !v.loadsImage(url) {
 			v.link(alt, url, out)
 			return
 		}
 		*out = append(*out, `<img src="`...)
 		appendAttr(url, out)
 		*out = append(*out, `" alt="`...)
-		// 대체 글은 이미 이스케이프된 본문이다. 속성값이라 `"` 만 더 막는다.
-		for i := 0; i < len(alt); i++ {
-			if alt[i] == '"' {
-				*out = append(*out, "&quot;"...)
-			} else {
-				*out = append(*out, alt[i])
-			}
-		}
+		appendAttr(alt, out)
 		*out = append(*out, `">`...)
 	case TelegramHTML, Plain:
 		v.link(alt, url, out)

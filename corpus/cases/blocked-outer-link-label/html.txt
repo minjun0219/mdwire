@@ -1,0 +1,3 @@
+<p><a href="https://ok.test">docs</a> (javascript:x)</p>
+
+<p><a href="https://in.test">https://in.test</a> (javascript:x)</p>

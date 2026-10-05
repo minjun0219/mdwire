@@ -1,0 +1,5 @@
+<a href="https://outer.test"><b>cat</b> (https://inner.test)</a>
+
+<a href="https://outer.test">https://inner.test</a>
+
+<a href="https://outer.test"><b>cat</b> (https://inner.test/p.png)</a>

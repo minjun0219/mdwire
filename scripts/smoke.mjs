@@ -109,3 +109,28 @@ assert.ok(
     .endsWith('<p><img src="https://a.com/c.png" alt="c"/> <a href="tel:1">t</a></p>'),
 );
 assert.throws(() => render("x", "html", { html: { images: "eager" } }), /images/);
+
+// 서식이 있는 alt 때문에 이미지 태그가 글자로 분해되던 고장 — WASM → 이벤트 → React 전체 경로.
+const imageText = '![**cat** & `x<y>` "q"](https://e.test/p.png)';
+const imageOptions = { html: { images: "load" } };
+const imageHtml = render(imageText, "html", imageOptions).join("");
+assert.equal(imageHtml, '<p><img src="https://e.test/p.png" alt="cat &amp; x&lt;y&gt; &quot;q&quot;"></p>');
+assert.deepEqual(toEvents(imageHtml), [
+  { type: "open", tag: "p", attrs: {} },
+  { type: "void", tag: "img", attrs: { src: "https://e.test/p.png", alt: 'cat & x<y> "q"' } },
+  { type: "close", tag: "p" },
+]);
+assert.ok(md(imageText, { options: imageOptions }).endsWith('<p><img src="https://e.test/p.png" alt="cat &amp; x&lt;y&gt; &quot;q&quot;"/></p>'));
+const imageStream = new Streamer("html", imageOptions);
+let imageAcc = "";
+for (const c of imageText) imageAcc += imageStream.push(c);
+assert.equal(imageAcc + imageStream.preview(), imageHtml);
+imageAcc += imageStream.finish();
+assert.equal(imageAcc, imageHtml);
+imageStream.free();
+
+// 라벨 안의 링크를 겹치면 브라우저가 바깥 링크를 중간에서 닫는다. React도 한 앵커만 세운다.
+const nestedLink = "[[**cat**](https://inner.test)](https://outer.test)";
+const nestedHtml = '<p><a href="https://outer.test"><strong>cat</strong> (https://inner.test)</a></p>';
+assert.equal(render(nestedLink, "html").join(""), nestedHtml);
+assert.equal(md(nestedLink), nestedHtml);

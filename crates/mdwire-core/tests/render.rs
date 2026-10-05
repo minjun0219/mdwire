@@ -1269,6 +1269,105 @@ fn html_policy_options() {
     assert_eq!(acc, render("사진 ![고양이](https://a.com/c.png) 끝!", Channel::Html).join(""));
 }
 
+/// 대체 글에 서식이 있어도 속성은 글자다. 엔티티는 한 번만 escape하고, 차단된 이미지는
+/// 링크 폴백의 본문 서식을 유지한다. 완성본·스트리밍·미리보기가 모두 같은 속성을 낸다.
+#[test]
+fn loaded_image_alt_is_plain_text() {
+    use mdwire::{HtmlOptions, Images, Options};
+    let opts = Options { html: HtmlOptions { images: Images::Load, ..Default::default() }, ..Default::default() };
+    for (input, alt) in [
+        ("![**cat**](https://e.test/p.png)", "cat"),
+        ("![a & <b>bold</b> \"q\" `x<y>`](https://e.test/p.png)", "a &amp; bold &quot;q&quot; x&lt;y&gt;"),
+        ("![&lt;](https://e.test/p.png)", "&amp;lt;"),
+        ("![<script>cat</script>](https://e.test/p.png)", "&lt;script&gt;cat&lt;/script&gt;"),
+    ] {
+        let want = format!("<p><img src=\"https://e.test/p.png\" alt=\"{alt}\"></p>");
+        assert_eq!(mdwire::render_with(input, Channel::Html, opts.clone()).parts.join(""), want);
+        let mut s = Streamer::with_options(Channel::Html, opts.clone());
+        let mut acc = String::new();
+        for c in input.chars() { s.push_into(&c.to_string(), &mut acc); }
+        let preview = format!("{acc}{}", s.preview());
+        s.finish_into(&mut acc);
+        assert_eq!(acc, want);
+        assert_eq!(preview, want);
+    }
+    assert_eq!(
+        mdwire::render_with("![**cat**](javascript:x)", Channel::Html, opts).parts.join(""),
+        "<p><strong>cat</strong> (javascript:x)</p>"
+    );
+}
+
+/// 링크 라벨 안의 링크·오토링크·이미지 폴백은 주소를 남기되 <a>를 겹치지 않는다.
+#[test]
+fn html_link_labels_never_nest_anchors() {
+    for (input, label) in [
+        ("[[**cat**](https://inner.test)](https://outer.test)", "<strong>cat</strong> (https://inner.test)"),
+        ("[<https://inner.test>](https://outer.test)", "https://inner.test"),
+        ("[![**cat**](https://inner.test/p.png)](https://outer.test)", "<strong>cat</strong> (https://inner.test/p.png)"),
+    ] {
+        let want = format!("<p><a href=\"https://outer.test\">{label}</a></p>");
+        assert_eq!(one(input, Channel::Html), want);
+        let mut s = Streamer::new(Channel::Html);
+        let mut acc = String::new();
+        for c in input.chars() { s.push_into(&c.to_string(), &mut acc); }
+        s.finish_into(&mut acc);
+        assert_eq!(acc, want);
+        assert_eq!(tg(input).matches("<a ").count(), 1);
+    }
+    let opts = mdwire::Options { html: mdwire::HtmlOptions { images: mdwire::Images::Load, ..Default::default() }, ..Default::default() };
+    assert_eq!(
+        mdwire::render_with("[![**cat**](https://inner.test/p.png)](https://outer.test)", Channel::Html, opts).parts.join(""),
+        "<p><a href=\"https://outer.test\"><img src=\"https://inner.test/p.png\" alt=\"cat\"></a></p>"
+    );
+}
+
+/// 바깥 링크가 `<a>`가 되지 못하면 안쪽 링크는 살아야 한다. 라벨 깊이만 보고 내리면 링크가 하나도 안 남는다.
+#[test]
+fn inner_links_survive_when_the_outer_link_is_not_an_anchor() {
+    assert_eq!(one("[[docs](https://ok.test)](javascript:x)", Channel::Html), "<p><a href=\"https://ok.test\">docs</a> (javascript:x)</p>");
+    assert_eq!(one("[<https://in.test>](javascript:x)", Channel::Html), "<p><a href=\"https://in.test\">https://in.test</a> (javascript:x)</p>");
+    // 텔레그램에서 바깥 주소가 한도를 넘어 글자로 내려갈 때도 같다.
+    let long = format!("https://e.test/{}", "x".repeat(5000));
+    let got = render(&format!("[[docs](https://ok.test)]({long})"), Channel::TelegramHtml).join("");
+    assert!(got.starts_with("<a href=\"https://ok.test\">docs</a> ("), "{}", &got[..80]);
+}
+
+/// 표 칸 안 링크 라벨의 `<br>`. 라벨도 칸 안이라 줄을 바꾸면 행이 갈린다.
+#[test]
+fn link_labels_in_cells_keep_the_row() {
+    let input = "| a | b |\n|---|---|\n| [x<br>y](https://e.test) | z |";
+    assert!(one(input, Channel::SlackMarkdown).ends_with("| [x y](https://e.test) | z |"));
+    assert!(one(input, Channel::Plain).ends_with("x y (https://e.test) | z"));
+}
+
+/// 닫히지 않은 대괄호마다 같은 꼬리를 다시 훑던 입력. 큰 줄을 완성본과 스트리밍 끝에서 본다.
+#[test]
+fn long_unclosed_brackets_preserve_text() {
+    let input = "[".repeat(100_000);
+    let want = format!("<p>{input}</p>");
+    assert_eq!(one(&input, Channel::Html), want);
+    let mut s = Streamer::new(Channel::Html);
+    let mut acc = String::new();
+    for chunk in input.as_bytes().chunks(4096) { s.push_into(std::str::from_utf8(chunk).unwrap(), &mut acc); }
+    s.finish_into(&mut acc);
+    assert_eq!(acc, want);
+    assert_eq!(one("[[broken [**ok**](https://e.test)", Channel::Html), "<p>[[broken <a href=\"https://e.test\"><strong>ok</strong></a></p>");
+}
+
+/// 라벨 재귀가 프로세스를 죽이던 입력. 한도 뒤의 원문도 HTML 본문으로 escape해야 한다.
+#[test]
+fn deeply_nested_targets_do_not_exhaust_the_stack() {
+    let input = "[".repeat(10_000) + "x <script> &" + &"](https://e.test)".repeat(10_000);
+    let got = one(&input, Channel::Html);
+    assert!(got.contains("x &lt;script&gt; &amp;"));
+    assert!(got.ends_with("</a></p>"));
+    let mut s = Streamer::new(Channel::Html);
+    let mut acc = String::new();
+    for chunk in input.as_bytes().chunks(4096) { s.push_into(std::str::from_utf8(chunk).unwrap(), &mut acc); }
+    s.finish_into(&mut acc);
+    assert_eq!(acc, got);
+}
+
 /// **미리보기는 붙든 것을 먼저 그린다.** 확정분은 여는 `**` 앞에서 멈추지만, 미리보기는 닫아서
 /// 보여 준다. 표는 지금까지 온 행으로, 코드 스팬은 닫는 백틱을 넣어서.
 #[test]
