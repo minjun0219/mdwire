@@ -265,6 +265,16 @@ impl Vocab {
         }
     }
 
+    /// 링크를 만들 수 없는 자리에서도 라벨과 주소는 보존한다. 텍스트는 이미 렌더된 본문이다.
+    pub fn unlinked(&self, text: &str, url: &str, out: &mut String) {
+        out.push_str(text);
+        if !url.is_empty() && !escaped_eq(text, url) {
+            out.push_str(" (");
+            self.escape(url, out);
+            out.push(')');
+        }
+    }
+
     /// 링크를 적는다. 텍스트는 이미 렌더된 것을 받는다.
     pub fn link(&self, text: &str, url: &str, out: &mut String) {
         match self.channel {
@@ -274,12 +284,7 @@ impl Vocab {
                 // 주소는 괄호에 넣어 글로 내보낸다 — 링크는 죽어도 내용은 산다.
                 let markup = escaped_len(url) + "<a href=\"\"></a>".len();
                 if markup >= self.limit {
-                    out.push_str(text);
-                    if !url.is_empty() && !escaped_eq(text, url) {
-                        out.push_str(" (");
-                        self.escape(url, out);
-                        out.push(')');
-                    }
+                    self.unlinked(text, url, out);
                     return;
                 }
                 out.push_str("<a href=\"");
@@ -293,12 +298,7 @@ impl Vocab {
                 // 그대로 `<a href>` 로 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면
                 // 링크 없이 글과 주소만 낸다 — 내용은 살린다.
                 if !self.allowed(url) {
-                    out.push_str(text);
-                    if !url.is_empty() && !escaped_eq(text, url) {
-                        out.push_str(" (");
-                        self.escape(url, out);
-                        out.push(')');
-                    }
+                    self.unlinked(text, url, out);
                     return;
                 }
                 out.push_str("<a href=\"");
@@ -356,25 +356,23 @@ impl Vocab {
         }
     }
 
-    /// 이미지 `![alt](url)` 을 적는다. 텍스트는 이미 렌더된 대체 글이다.
+    /// 이미지가 실제로 <img>로 나가는가. 그때만 라벨을 일반 텍스트로 읽는다.
+    pub fn loads_image(&self, url: &str) -> bool {
+        self.is_html() && self.load_images && self.allowed(url)
+    }
+
+    /// 이미지 `![alt](url)`을 적는다. <img>의 대체 글은 일반 텍스트, 나머지는 렌더된 본문이다.
     ///
     /// 브라우저는 옵션이 `Load` 이고 주소가 허용 스킴일 때만 `<img>` 로 불러온다 — 기본은
     /// 링크다(누르기 전에는 아무것도 안 불러온다). 텔레그램·plain 은 이미지 구문이 없어 링크로,
     /// 마크다운 채널은 `![alt](url)` 그대로 둔다(GitHub 은 그린다).
     pub fn image(&self, alt: &str, url: &str, out: &mut String) {
         match self.channel {
-            Channel::Html if self.load_images && self.allowed(url) => {
+            Channel::Html if self.loads_image(url) => {
                 out.push_str("<img src=\"");
                 push_attr(url, out);
                 out.push_str("\" alt=\"");
-                // 대체 글은 이미 이스케이프된 본문이다. 속성값이라 `"` 만 더 막는다.
-                for c in alt.chars() {
-                    if c == '"' {
-                        out.push_str("&quot;");
-                    } else {
-                        out.push(c);
-                    }
-                }
+                push_attr(alt, out);
                 out.push_str("\">");
             }
             Channel::Html | Channel::TelegramHtml | Channel::Plain => self.link(alt, url, out),

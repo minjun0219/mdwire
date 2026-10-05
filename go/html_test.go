@@ -152,6 +152,35 @@ func TestHTMLOptions(t *testing.T) {
 	}
 }
 
+// <img>의 대체 글은 서식을 제거한 글자다 — 러스트 쪽 loaded_image_alt_is_plain_text.
+func TestLoadedImageAltIsPlainText(t *testing.T) {
+	o := Options{HTML: HTMLOptions{Images: ImagesLoad}}
+	for _, c := range [][2]string{
+		{"![**cat**](https://e.test/p.png)", "cat"},
+		{"![a & <b>bold</b> \"q\" `x<y>`](https://e.test/p.png)", "a &amp; bold &quot;q&quot; x&lt;y&gt;"},
+		{"![&lt;](https://e.test/p.png)", "&amp;lt;"},
+		{"![<script>cat</script>](https://e.test/p.png)", "&lt;script&gt;cat&lt;/script&gt;"},
+	} {
+		want := `<p><img src="https://e.test/p.png" alt="` + c[1] + `"></p>`
+		if got := strings.Join(RenderWith(c[0], HTML, o).Parts, ""); got != want {
+			t.Fatalf("%q: got %q, want %q", c[0], got, want)
+		}
+		s := NewStreamerWith(HTML, o)
+		var acc []byte
+		for _, r := range c[0] {
+			s.PushTo(string(r), &acc)
+		}
+		preview := string(acc) + s.Preview()
+		s.FinishTo(&acc)
+		if string(acc) != want || preview != want {
+			t.Fatalf("%q: stream %q, preview %q, want %q", c[0], acc, preview, want)
+		}
+	}
+	if got := strings.Join(RenderWith("![**cat**](javascript:x)", HTML, o).Parts, ""); got != "<p><strong>cat</strong> (javascript:x)</p>" {
+		t.Fatal(got)
+	}
+}
+
 // 스킴 판정은 링크마다 불린다 — 목록을 순회만 하고 할당하지 않는다.
 func TestAllowedSchemeDoesNotAllocate(t *testing.T) {
 	def := newVocab(HTML, Options{})
