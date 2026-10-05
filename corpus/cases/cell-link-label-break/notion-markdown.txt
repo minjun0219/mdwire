@@ -1,0 +1,10 @@
+<table header-row="true">
+<tr>
+<td>a</td>
+<td>b</td>
+</tr>
+<tr>
+<td>[x<br>y](https://e.test)</td>
+<td>z</td>
+</tr>
+</table>

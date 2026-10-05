@@ -54,6 +54,10 @@ struct Open {
 pub(crate) struct Inline {
     /// 링크·이미지 라벨의 재귀 깊이. 외부 입력이 호출 스택을 다 쓰지 못하게 제한한다.
     target_depth: u8,
+    /// 실제로 내보낼 `<a>` 안의 라벨을 렌더하는가. `<a>` 안에 `<a>`를 만들 수 없다.
+    in_anchor: bool,
+    /// `[`가 든 줄의 대괄호·주소 색인([`index_links`]). 비우기만 하고 재사용한다.
+    links: Vec<(usize, usize)>,
     open: Vec<Open>,
     /// 지금 몇 번째 줄인가. 막힌 여는 마커는 같은 줄에서만 짝을 맺는다.
     line: u32,
@@ -91,6 +95,8 @@ impl Inline {
     pub fn new() -> Self {
         Self {
             target_depth: 0,
+            in_anchor: false,
+            links: Vec::new(),
             open: Vec::new(),
             line: 0,
             prev: None,
@@ -166,8 +172,10 @@ impl Inline {
     /// 열기/닫기가 갈리기 때문이고, 그 판단은 호출자(`block::Engine`)가 한다.
     pub fn render(&mut self, line: &[char], out: &mut String, v: &Vocab) {
         let mut i = 0;
-        // 대괄호가 없는 산문 경로에는 할당을 더하지 않는다. 필요한 줄만 한 번 색인한다.
-        let mut links = None;
+        // 대괄호가 없는 산문 경로는 색인하지 않는다. 버퍼는 빌려 와 재사용하고, 끝나면 비워
+        // 돌려준다 — 미리보기 복제가 색인을 복사하지 않게.
+        let mut links = std::mem::take(&mut self.links);
+        let mut indexed = false;
         while i < line.len() {
             // 코드 스팬 안에서는 강조 마커가 글자다.
             if let Some(top) = self.open.last() {
@@ -199,7 +207,11 @@ impl Inline {
 
             // 이미지 `![alt](url)`. 대체 글은 링크 텍스트처럼 인라인으로 읽는다.
             if c == '!' && line.get(i + 1) == Some(&'[') {
-                if let Some((text, url_from, url_to)) = find_link(line, i + 1, links.get_or_insert_with(|| index_links(line))) {
+                if !indexed {
+                    index_links(line, &mut links);
+                    indexed = true;
+                }
+                if let Some((text, url_from, url_to)) = find_link(line, i + 1, &links) {
                     self.render_image(&line[text.0..text.1], &line[url_from..url_to], out, v);
                     i = url_to + 1;
                     continue;
@@ -207,7 +219,11 @@ impl Inline {
             }
 
             if c == '[' {
-                if let Some((text, url_from, url_to)) = find_link(line, i, links.get_or_insert_with(|| index_links(line))) {
+                if !indexed {
+                    index_links(line, &mut links);
+                    indexed = true;
+                }
+                if let Some((text, url_from, url_to)) = find_link(line, i, &links) {
                     self.render_link(&line[text.0..text.1], &line[url_from..url_to], out, v);
                     i = url_to + 1;
                     continue;
@@ -433,6 +449,8 @@ impl Inline {
             }
             i += take;
         }
+        links.clear();
+        self.links = links;
         if let Some(&last) = line.last() {
             // 다음 호출의 첫 글자에게 앞 글자를 남긴다. 한 줄을 나눠 넣어도
             // flanking 판정이 이어지는 이유다.
@@ -725,7 +743,7 @@ impl Inline {
             if !bare && !v.html_out() && !v.is_plain() {
                 self.repairs.converted_marker += 1;
             }
-            if self.target_depth > 0 && v.html_out() {
+            if self.in_anchor {
                 v.unlinked(&text, &href, out);
             } else {
                 v.link(&text, &href, out);
@@ -857,13 +875,24 @@ impl Inline {
         scratch.clear();
         let mut href = String::with_capacity(url.len());
         href.extend(url.iter());
+        let loads = image && v.loads_image(&href);
         // <img>의 alt는 HTML 본문이 아니라 글자다. 링크로 내리는 이미지의 라벨은 서식을 유지한다.
-        let plain = Vocab::new(crate::Channel::Plain);
-        let label_vocab = if image && v.loads_image(&href) { &plain } else { v };
+        let plain;
+        let label_vocab = if loads {
+            plain = Vocab::new(crate::Channel::Plain);
+            &plain
+        } else {
+            v
+        };
         // 링크 텍스트는 자기만의 인라인 상태로 렌더한다. 바깥 강조와 섞이지 않는다.
         if self.target_depth < MAX_TARGET_DEPTH {
             let mut nested = Inline::new();
             nested.target_depth = self.target_depth + 1;
+            // 라벨이 들어갈 자리가 실제 `<a>`일 때만 안쪽 링크를 글자로 내린다. 바깥이 차단되거나
+            // 한도를 넘어 글자로 나가면 안쪽 링크는 살아도 된다.
+            nested.in_anchor = self.in_anchor || (!loads && v.makes_anchor(&href));
+            // 표 칸 안의 라벨도 줄을 바꿀 수 없다.
+            nested.in_cell = self.in_cell;
             nested.render(text, &mut scratch, label_vocab);
             nested.finish_block(&mut scratch, label_vocab);
             self.repairs.add(nested.repairs);
@@ -874,7 +903,7 @@ impl Inline {
             }
         }
         // <a> 안에 <a>를 둘 수 없다. 안쪽 링크와 이미지의 링크 폴백은 주소를 글자로 보존한다.
-        if self.target_depth > 0 && v.html_out() && !(image && v.loads_image(&href)) {
+        if self.in_anchor && !loads {
             v.unlinked(&scratch, &href, out);
         } else if image {
             v.image(&scratch, &href, out);
@@ -981,11 +1010,13 @@ fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab, re
 
 const MAX_TARGET_DEPTH: u8 = 32;
 
-/// 대괄호 짝과 그 뒤 주소의 끝을 역순 한 번으로 찾는다. 짝 없는 `[`마다 줄 끝까지 다시
-/// 훑으면 `[[[[…`에서 O(n²)이 된다. `]` 자리의 첫 값으로 다음 `]`를 이어 별도 스택도 피한다.
-fn index_links(line: &[char]) -> Vec<(usize, usize)> {
+/// 대괄호 짝과 그 뒤 주소의 끝을 역순 한 번으로 찾아 `links`에 채운다. 짝 없는 `[`마다 줄
+/// 끝까지 다시 훑으면 `[[[[…`에서 O(n²)이 된다. `]` 자리의 첫 값으로 다음 `]`를 이어 별도
+/// 스택도 피한다.
+fn index_links(line: &[char], links: &mut Vec<(usize, usize)>) {
     let missing = line.len();
-    let mut links = vec![(missing, missing); line.len()];
+    links.clear();
+    links.resize(line.len(), (missing, missing));
     let mut close = missing;
     let mut paren = missing;
     for i in (0..line.len()).rev() {
@@ -1005,7 +1036,6 @@ fn index_links(line: &[char]) -> Vec<(usize, usize)> {
             _ => {}
         }
     }
-    links
 }
 
 /// `[텍스트](url)`을 색인에서 찾는다. 한 줄 안에서만 본다(`SPEC.md` 8절).

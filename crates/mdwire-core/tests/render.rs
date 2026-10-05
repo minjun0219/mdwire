@@ -1321,6 +1321,25 @@ fn html_link_labels_never_nest_anchors() {
     );
 }
 
+/// 바깥 링크가 `<a>`가 되지 못하면 안쪽 링크는 살아야 한다. 라벨 깊이만 보고 내리면 링크가 하나도 안 남는다.
+#[test]
+fn inner_links_survive_when_the_outer_link_is_not_an_anchor() {
+    assert_eq!(one("[[docs](https://ok.test)](javascript:x)", Channel::Html), "<p><a href=\"https://ok.test\">docs</a> (javascript:x)</p>");
+    assert_eq!(one("[<https://in.test>](javascript:x)", Channel::Html), "<p><a href=\"https://in.test\">https://in.test</a> (javascript:x)</p>");
+    // 텔레그램에서 바깥 주소가 한도를 넘어 글자로 내려갈 때도 같다.
+    let long = format!("https://e.test/{}", "x".repeat(5000));
+    let got = render(&format!("[[docs](https://ok.test)]({long})"), Channel::TelegramHtml).join("");
+    assert!(got.starts_with("<a href=\"https://ok.test\">docs</a> ("), "{}", &got[..80]);
+}
+
+/// 표 칸 안 링크 라벨의 `<br>`. 라벨도 칸 안이라 줄을 바꾸면 행이 갈린다.
+#[test]
+fn link_labels_in_cells_keep_the_row() {
+    let input = "| a | b |\n|---|---|\n| [x<br>y](https://e.test) | z |";
+    assert!(one(input, Channel::SlackMarkdown).ends_with("| [x y](https://e.test) | z |"));
+    assert!(one(input, Channel::Plain).ends_with("x y (https://e.test) | z"));
+}
+
 /// 닫히지 않은 대괄호마다 같은 꼬리를 다시 훑던 입력. 큰 줄을 완성본과 스트리밍 끝에서 본다.
 #[test]
 fn long_unclosed_brackets_preserve_text() {

@@ -37,6 +37,34 @@ func TestHTMLLinkLabelsNeverNestAnchors(t *testing.T) {
 	}
 }
 
+// 바깥 링크가 <a>가 되지 못하면 안쪽 링크는 산다 — 러스트 inner_links_survive_when_the_outer_link_is_not_an_anchor.
+func TestInnerLinksSurviveWhenTheOuterLinkIsNotAnAnchor(t *testing.T) {
+	for _, c := range [][2]string{
+		{"[[docs](https://ok.test)](javascript:x)", `<p><a href="https://ok.test">docs</a> (javascript:x)</p>`},
+		{"[<https://in.test>](javascript:x)", `<p><a href="https://in.test">https://in.test</a> (javascript:x)</p>`},
+	} {
+		if got := strings.Join(Render(c[0], HTML), ""); got != c[1] {
+			t.Fatalf("%q: got %q, want %q", c[0], got, c[1])
+		}
+	}
+	long := "https://e.test/" + strings.Repeat("x", 5000)
+	got := strings.Join(Render("[[docs](https://ok.test)]("+long+")", TelegramHTML), "")
+	if !strings.HasPrefix(got, `<a href="https://ok.test">docs</a> (`) {
+		t.Fatal(got[:80])
+	}
+}
+
+// 표 칸 안 링크 라벨의 <br>은 줄을 바꾸지 않는다.
+func TestLinkLabelsInCellsKeepTheRow(t *testing.T) {
+	input := "| a | b |\n|---|---|\n| [x<br>y](https://e.test) | z |"
+	if got := strings.Join(Render(input, SlackMarkdown), ""); !strings.HasSuffix(got, "| [x y](https://e.test) | z |") {
+		t.Fatal(got)
+	}
+	if got := strings.Join(Render(input, Plain), ""); !strings.HasSuffix(got, "x y (https://e.test) | z") {
+		t.Fatal(got)
+	}
+}
+
 // 큰 대괄호 줄은 내용을 보존하고 완성본·스트리밍이 같은 답을 낸다.
 func TestLongUnclosedBracketsPreserveText(t *testing.T) {
 	input := strings.Repeat("[", 100_000)

@@ -1,0 +1,4 @@
+<table>
+<thead><tr><th>a</th><th>b</th></tr></thead>
+<tbody><tr><td><a href="https://e.test">x<br>y</a></td><td>z</td></tr></tbody>
+</table>

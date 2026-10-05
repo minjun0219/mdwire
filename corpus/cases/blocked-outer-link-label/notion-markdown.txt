@@ -1,0 +1,3 @@
+[[docs](https://ok.test)](javascript:x)
+
+[[https://in.test](https://in.test)](javascript:x)

@@ -275,6 +275,15 @@ impl Vocab {
         }
     }
 
+    /// `link`가 이 주소로 `<a>`를 내는가. 차단된 스킴·한도를 넘는 주소는 글자로 내려간다.
+    pub(crate) fn makes_anchor(&self, url: &str) -> bool {
+        match self.channel {
+            Channel::TelegramHtml => escaped_len(url) + "<a href=\"\"></a>".len() < self.limit,
+            Channel::Html => self.allowed(url),
+            _ => false,
+        }
+    }
+
     /// 링크를 적는다. 텍스트는 이미 렌더된 것을 받는다.
     pub fn link(&self, text: &str, url: &str, out: &mut String) {
         match self.channel {
@@ -282,8 +291,7 @@ impl Vocab {
                 // **한도를 넘는 주소는 링크로 내지 않는다.** 여는 태그 하나가 메시지를
                 // 다 차지하면 조각을 아무리 나눠도 내용이 한 글자도 안 들어간다.
                 // 주소는 괄호에 넣어 글로 내보낸다 — 링크는 죽어도 내용은 산다.
-                let markup = escaped_len(url) + "<a href=\"\"></a>".len();
-                if markup >= self.limit {
+                if !self.makes_anchor(url) {
                     self.unlinked(text, url, out);
                     return;
                 }
@@ -297,7 +305,7 @@ impl Vocab {
                 // **`innerHTML` 로 들어가는 출력이라 스킴을 가린다.** `[x](javascript:…)` 를
                 // 그대로 `<a href>` 로 내면 누르는 순간 스크립트가 돈다. 안전한 스킴이 아니면
                 // 링크 없이 글과 주소만 낸다 — 내용은 살린다.
-                if !self.allowed(url) {
+                if !self.makes_anchor(url) {
                     self.unlinked(text, url, out);
                     return;
                 }
