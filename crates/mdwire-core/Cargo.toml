@@ -3,6 +3,7 @@ name = "mdwire-core"
 description = "Streaming Markdown normalizer and channel renderer. No dependencies."
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
