@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: npm (JS · React)
 description: The @minjun0219/mdwire package — render, renderWithReport, Streamer, and the React and events entry points.
 ---
-import Next from "../../components/Next.astro";
 import Badges from "../../components/Badges.astro";
 
 
@@ -103,7 +102,7 @@ integer throws an `Error`.
 
 | Field | |
 |---|---|
-| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` · `guessedPair` <Next /> | Repairs |
+| `closedEmphasis` · `closedFence` · `revertedCodeSpan` · `droppedMarker` · `guessedPair` | Repairs |
 | `escapedChar` · `tagEmphasis` · `strippedHtml` · `rewrittenBullet` · `rewrittenTable` · `convertedMarker` | Channel rewrites |
 
 What each counts: [Concepts](/mdwire/docs/#the-repair-report).
@@ -140,7 +139,7 @@ The same `html` output as a flat `open` / `text` / `close` / `void` list, for ot
 Attributes carry only what the core emits: `href` on `a`, `class` (`language-…`) on `code`, `style`
 (`text-align:…`) on `th` and `td`, `start` on `ol`, and `src` · `alt` on `img` when images load.
 
-## lezer — `@minjun0219/mdwire/lezer` <Next />
+## lezer — `@minjun0219/mdwire/lezer`
 
 ```ts
 import { GFM, parser } from "@lezer/markdown";

@@ -11,7 +11,7 @@
   "dependencies": {
     "@astrojs/mdx": "^8.0.2",
     "@astrojs/react": "^7.0.0",
-    "@minjun0219/mdwire": "0.1.11",
+    "@minjun0219/mdwire": "0.1.12",
     "astro": "^7.3.5",
     "posthog-js": "^1.435.8",
     "pretendard": "^1.3.9",
