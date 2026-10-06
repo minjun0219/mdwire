@@ -3,7 +3,6 @@ layout: ../../layouts/Doc.astro
 title: CLI
 description: The mdwire command — flags, output format, the repair report and batch mode.
 ---
-import Next from "../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -59,7 +58,7 @@ One JSON line to stderr:
 {"closedEmphasis":1,"closedFence":0,"revertedCodeSpan":0,"droppedMarker":0,"escapedChar":0,"tagEmphasis":0,"strippedHtml":0,"rewrittenBullet":0,"rewrittenTable":0,"convertedMarker":0}
 ```
 
-The first four keys are repairs; the other six are channel rewrites. A fifth repair key, `guessedPair`, follows `droppedMarker` <Next />. What each counts:
+The first four keys are repairs; the other six are channel rewrites. A fifth repair key, `guessedPair`, follows `droppedMarker`. What each counts:
 [the repair report](/mdwire/docs/#the-repair-report).
 
 ## `--batch jsonl`
