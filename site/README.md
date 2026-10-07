@@ -26,9 +26,10 @@ mdwire 문서·데모 사이트. <https://minjun.kim/mdwire/> 에 올린다 — 
   바뀌면 같이 고친다. 버전 번호는 적지 않는다 — 릴리스 봇이 고치지 않는 파일이다.
 - 페이지마다 WebMCP 도구 `mdwire_render` 를 등록한다(`src/webmcp.ts`, 레이아웃이 싣는다). 브라우저에 `modelContext` 가
   없으면 아무것도 하지 않고, wasm 은 도구가 처음 불릴 때 받는다. 채널이 바뀌면 도구의 `enum` 도 고친다.
-- 방문 집계는 PostHog 다(`src/analytics.ts`, 레이아웃이 싣는다). 키와 프록시 주소는 빌드 변수로 들어온다(아래 배포 절) —
-  없는 빌드(로컬 · 프리뷰 · 포크)는 아무것도 하지 않고 SDK 코드도 담지 않는다. 페이지뷰만 집계한다 — 자동 수집 · 세션 녹화 ·
-  설문은 끈다.
+- 방문 집계는 PostHog 와 Google Analytics 4 다(`src/analytics.ts`, 레이아웃이 싣는다). PostHog 의 키 · 프록시 주소와 GA4 의
+  측정 ID 는 빌드 변수로 들어온다(아래 배포 절) — 없는 빌드(로컬 · 프리뷰 · 포크)는 아무것도 하지 않고 SDK 코드도 담지 않는다.
+  PostHog 는 페이지뷰만 집계한다 — 자동 수집 · 세션 녹화 · 설문은 끈다. GA4 는 공식 스니펫(gtag.js) 그대로이고, 페이지뷰 외에
+  더 모을 것(향상된 측정)은 GA 관리 화면에서 정한다.
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
@@ -101,12 +102,14 @@ Workers Builds 설정(대시보드):
 프리뷰는 `<브랜치>.mdwire.minjun.dev/mdwire/` 에 뜬다 — base 가 붙은 채로 보면 된다.
 
 빌드 변수(Variables and secrets — 프로덕션과 프리뷰가 따로다). 방문 집계를 켜는 곳은 여기뿐이고, **프로덕션에만 넣는다** —
-프리뷰는 보내지 않는다. 둘 중 하나라도 없으면 집계가 꺼진다(스키마는 `astro.config.mjs`).
+프리뷰는 보내지 않는다. 둘은 따로 켜진다 — PostHog 는 두 변수 중 하나라도 없으면, GA4 는 측정 ID 가 없으면 꺼진다(스키마는
+`astro.config.mjs`).
 
 | 변수 | 값 |
 |---|---|
 | `PUBLIC_POSTHOG_KEY` | PostHog 프로젝트의 공개 키(`phc_…`) |
 | `PUBLIC_POSTHOG_HOST` | 자체 리버스 프록시 주소(URL) |
+| `PUBLIC_GA_MEASUREMENT_ID` | GA4 웹 데이터 스트림의 측정 ID(`G-…`) |
 
 빌드 명령은 대시보드에 꼭 넣는다 — `wrangler.jsonc` 의 `build.command` 는 로컬 `wrangler deploy` · `wrangler dev` 용이고,
 Workers Builds 는 문서상 그 설정을 따르지 않는다. 의존성은 Workers Builds 가 빌드 전에 자동으로 설치한다. 배포·프리뷰 명령은 기본값 그대로 둔다 —
