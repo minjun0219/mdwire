@@ -41,7 +41,9 @@ cp crates/mdwire-wasm/js/*.js crates/mdwire-wasm/js/*.d.ts "$OUT/js/"
 # 컴파일된 Module 로 준다. 타입은 번들러 빌드의 것을 그대로 쓴다(`types` 조건이 먼저 온다).
 mkdir -p "$OUT/workerd"
 { cat crates/mdwire-wasm/workerd/mdwire.js
-  sed -n '/^export {/,/;$/p' "$OUT/bundler/mdwire.js" | sed 's#"\./mdwire_bg\.js"#"../bundler/mdwire_bg.js"#'
+  # export 문 하나만 — 한 줄이든 여러 줄이든 `;` 로 끝나는 줄에서 멈춘다(그 뒤 문장은 `wasm` 을 써서 여기선 못 돈다).
+  awk '/^export \{/ { on = 1 } on { print } on && /;$/ { exit }' "$OUT/bundler/mdwire.js" \
+    | sed 's#"\./mdwire_bg\.js"#"../bundler/mdwire_bg.js"#'
 } > "$OUT/workerd/mdwire.js"
 grep -q '^export {' "$OUT/workerd/mdwire.js" || { echo "workerd 진입점에 export 줄이 없다 — bundler/mdwire.js 모양이 바뀌었다" >&2; exit 1; }
 
