@@ -37,6 +37,15 @@ cp README.md LICENSE "$OUT/"
 # 해서, 환경마다 `exports` 가 고른 빌드(node · bundler)를 그대로 탄다.
 mkdir -p "$OUT/js"
 cp crates/mdwire-wasm/js/*.js crates/mdwire-wasm/js/*.d.ts "$OUT/js/"
+# **Cloudflare Workers 는 번들러 빌드를 자기 진입점으로 감싸 싣는다** — wrangler 는 `.wasm` 을 인스턴스가 아니라
+# 컴파일된 Module 로 준다. 타입은 번들러 빌드의 것을 그대로 쓴다(`types` 조건이 먼저 온다).
+mkdir -p "$OUT/workerd"
+{ cat crates/mdwire-wasm/workerd/mdwire.js
+  # export 문 하나만 — 한 줄이든 여러 줄이든 `;` 로 끝나는 줄에서 멈춘다(그 뒤 문장은 `wasm` 을 써서 여기선 못 돈다).
+  awk '/^export \{/ { on = 1 } on { print } on && /;$/ { exit }' "$OUT/bundler/mdwire.js" \
+    | sed 's#"\./mdwire_bg\.js"#"../bundler/mdwire_bg.js"#'
+} > "$OUT/workerd/mdwire.js"
+grep -q '^export {' "$OUT/workerd/mdwire.js" || { echo "workerd 진입점에 export 줄이 없다 — bundler/mdwire.js 모양이 바뀌었다" >&2; exit 1; }
 
 cat > "$OUT/package.json" <<JSON
 {
@@ -54,6 +63,7 @@ cat > "$OUT/package.json" <<JSON
   "exports": {
     ".": {
       "types": "./bundler/mdwire.d.ts",
+      "workerd": "./workerd/mdwire.js",
       "node": "./node/mdwire.js",
       "default": "./bundler/mdwire.js"
     },
@@ -63,8 +73,8 @@ cat > "$OUT/package.json" <<JSON
   },
   "peerDependencies": { "react": ">=18", "@lezer/markdown": ">=1.5" },
   "peerDependenciesMeta": { "react": { "optional": true }, "@lezer/markdown": { "optional": true } },
-  "sideEffects": ["./bundler/mdwire.js"],
-  "files": ["bundler", "node", "js"],
+  "sideEffects": ["./bundler/mdwire.js", "./workerd/mdwire.js"],
+  "files": ["bundler", "node", "workerd", "js"],
   "publishConfig": { "access": "public" }
 }
 JSON

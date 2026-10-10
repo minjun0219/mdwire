@@ -67,7 +67,7 @@ s.finish_into(&mut out);       // flush, closing anything left open
 ```
 
 ```js
-import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — bundlers, Node, Bun
+import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — bundlers, Node, Bun, Workers
 
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown");
@@ -165,7 +165,7 @@ We found three gaps in existing tools:
 From the registries:
 
 ```sh
-npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun
+npm install @minjun0219/mdwire     # npm — bundlers, Node, Bun, Workers
 cargo add mdwire-core              # Rust library (`use mdwire::…`)
 cargo install mdwire-cli           # the `mdwire` CLI
 ```
@@ -223,12 +223,13 @@ tool, `mdwire_render`, so a browser agent on the site can run mdwire in the page
 
 ```sh
 ./scripts/build-npm.sh     # the npm package into pkg/ (needs `cargo install wasm-pack`)
-./scripts/smoke.sh         # install it into a scratch project; call it from Node, Bun, and TypeScript
+./scripts/smoke.sh         # install it into a scratch project; call it from Node, Bun, Workers, and TypeScript
 ```
 
 The wasm binary is 111 KB (release build, after `wasm-opt`). The package carries two builds and
 picks by `exports` condition: `node` gets a CommonJS build that loads the wasm from disk,
-everything else gets the ESM bundler build. The script writes the root `package.json`
+`workerd` (Cloudflare Workers) gets the bundler build behind a small entry that instantiates the
+compiled module wrangler hands over, and everything else gets the ESM bundler build. The script writes the root `package.json`
 itself: the crate has to stay `mdwire-wasm` because the core's library is already named
 `mdwire`, and wasm-pack takes the npm name from the crate.
 

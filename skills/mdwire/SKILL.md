@@ -2,7 +2,7 @@
 name: mdwire
 description: Send LLM- or agent-generated Markdown to a chat channel without it breaking. Repairs broken markup (unclosed ** or code fences), rewrites it into the syntax the channel accepts (Telegram HTML, Slack markdown_text, GitHub comments, Notion, plain text, or HTML safe for innerHTML) and splits it within the channel's length limit, also while tokens stream. Use when a bot or agent posts model output to Telegram, Slack, GitHub or Notion; when Telegram answers "Bad Request: can't parse entities"; when a streamed answer shows stray ** or half-drawn formatting; when a message is over Telegram's 4,096 characters; or when rendering streaming LLM Markdown in React without innerHTML.
 license: MIT
-compatibility: Node, Bun or a bundler (npm @minjun0219/mdwire, WASM); Rust (mdwire-core); Go (github.com/minjun0219/mdwire/go); any other language through the mdwire CLI.
+compatibility: Node, Bun, Cloudflare Workers or a bundler (npm @minjun0219/mdwire, WASM); Rust (mdwire-core); Go (github.com/minjun0219/mdwire/go); any other language through the mdwire CLI.
 ---
 
 # mdwire
@@ -34,7 +34,7 @@ Each returned part is one message. Send them in order.
 
 ## Pick the entry point
 
-- **Node, Bun, browser, bundler** → `npm install @minjun0219/mdwire`. Under Vite add `vite-plugin-wasm`
+- **Node, Bun, Cloudflare Workers, browser, bundler** → `npm install @minjun0219/mdwire`. Under Vite add `vite-plugin-wasm`
   and `build.target: "esnext"`.
 - **Rust** → `cargo add mdwire-core` (imported as `mdwire`).
 - **Go** → `go get github.com/minjun0219/mdwire/go@latest`.
