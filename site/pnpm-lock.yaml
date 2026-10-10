@@ -15,8 +15,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(yaml@2.9.1)
       '@minjun0219/mdwire':
-        specifier: 0.1.12
-        version: 0.1.12(react@19.3.0)
+        specifier: 0.1.13
+        version: 0.1.13(react@19.3.0)
       astro:
         specifier: ^7.3.5
         version: 7.3.5(yaml@2.9.1)
@@ -963,8 +963,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
-  '@minjun0219/mdwire@0.1.12':
-    resolution: {integrity: sha512-dEBdPqJkQkXIEgXExlRSTuyqimVyzGvDQhZxZTs6mJM99l3a4wbiVC5KJAs6JCvb6SG3qXLnx7s17V0GBKI5Jw==}
+  '@minjun0219/mdwire@0.1.13':
+    resolution: {integrity: sha512-V91j9CjXbOASWC5hpjciWCLXFqB5nzFl7ahALC9dA1dUfzuZtqo1EGQcLuILOfYBIdm7CYPiQwerChhYwn418g==}
     peerDependencies:
       '@lezer/markdown': '>=1.5'
       react: '>=18'
@@ -3235,7 +3235,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@minjun0219/mdwire@0.1.12(react@19.3.0)':
+  '@minjun0219/mdwire@0.1.13(react@19.3.0)':
     optionalDependencies:
       react: 19.3.0
 
