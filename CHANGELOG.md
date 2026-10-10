@@ -2,6 +2,12 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.14 — 2026-10-10
+
+### 고친 것
+
+- **npm** — Cloudflare Workers 에서 첫 호출에 죽던 것을 고친다 ([#118](https://github.com/minjun0219/mdwire/pull/118))
+
 ## 0.1.13 — 2026-10-06
 
 ### 고친 것
