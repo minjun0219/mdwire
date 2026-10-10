@@ -60,7 +60,7 @@ s.finish_into(&mut out);       // 남은 출력을 내보내고 열린 마크업
 ```
 
 ```js
-import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — 번들러, Node, Bun
+import { render, renderWithReport, Streamer } from "@minjun0219/mdwire";   // npm — 번들러, Node, Bun, Workers
 
 const parts = render(markdown, "telegram-html");
 const { repairs } = renderWithReport(markdown, "slack-markdown");
@@ -153,7 +153,7 @@ const { elements, push, finish } = useMarkdownStream();     // 스트리밍: pus
 레지스트리에서 설치:
 
 ```sh
-npm install @minjun0219/mdwire     # npm — 번들러, Node, Bun
+npm install @minjun0219/mdwire     # npm — 번들러, Node, Bun, Workers
 cargo add mdwire-core              # Rust 라이브러리 (`use mdwire::…`)
 cargo install mdwire-cli           # `mdwire` CLI
 ```
@@ -211,12 +211,13 @@ mdwire 에는 [에이전트 스킬](skills/mdwire/SKILL.md)이 들어 있습니�
 
 ```sh
 ./scripts/build-npm.sh     # npm 패키지를 pkg/ 에 생성 (`cargo install wasm-pack` 필요)
-./scripts/smoke.sh         # 빈 프로젝트에 설치해 Node, Bun, TypeScript 에서 불러 봄
+./scripts/smoke.sh         # 빈 프로젝트에 설치해 Node, Bun, Workers, TypeScript 에서 불러 봄
 ```
 
 wasm 바이너리는 `wasm-opt` 를 거친 release 빌드 기준 111 KB 입니다. 패키지에는 빌드가 두 개 들어
 있고 `exports` 조건으로 고릅니다. `node` 조건에서는 wasm 을 디스크에서 읽는 CommonJS 빌드를,
-그 밖의 환경에서는 번들러용 ESM 빌드를 받습니다. 루트 `package.json` 은 스크립트가 직접 생성합니다.
+`workerd` 조건(Cloudflare Workers)에서는 wrangler 가 넘기는 컴파일된 모듈을 인스턴스화하는 얇은
+진입점 뒤의 번들러 빌드를, 그 밖의 환경에서는 번들러용 ESM 빌드를 받습니다. 루트 `package.json` 은 스크립트가 직접 생성합니다.
 코어 라이브러리 이름이 이미 `mdwire` 라서 크레이트 이름은 `mdwire-wasm` 이어야 합니다.
 그런데 wasm-pack 은 npm 패키지 이름을 크레이트 이름에서 가져갑니다.
 

@@ -50,6 +50,32 @@ fi
 npm install --no-audit --no-fund @lezer/markdown@latest >/dev/null
 node smoke-lezer.mjs | sed 's/^/latest: /'
 
+# 4. Cloudflare Workers — wrangler 가 `workerd` 조건으로 번들하고 workerd 에서 실제로 부른다. 번들만으로는 안 잡힌다:
+#    wasm 을 싣는 방법이 틀려도 번들은 통과하고 첫 호출에서 죽는다(`smoke-workerd.js`).
+npm install --no-audit --no-fund wrangler@4 >/dev/null
+mkdir -p workerd-smoke
+cp "$ROOT/scripts/smoke-workerd.js" workerd-smoke/index.js
+cat > wrangler.jsonc <<'JSON'
+{ "name": "mdwire-smoke", "main": "workerd-smoke/index.js", "compatibility_date": "2026-09-01" }
+JSON
+PORT=8787
+WRANGLER_SEND_METRICS=false npx wrangler dev --ip 127.0.0.1 --port "$PORT" --log-level warn >wrangler.log 2>&1 &
+WRANGLER_PID=$!
+CODE=000
+for _ in $(seq 1 60); do
+  CODE=$(curl -sS -m 5 -o workerd.out -w '%{http_code}' "http://127.0.0.1:$PORT/" 2>/dev/null) && break
+  kill -0 "$WRANGLER_PID" 2>/dev/null || break
+  sleep 1
+done
+kill "$WRANGLER_PID" 2>/dev/null || true
+wait "$WRANGLER_PID" 2>/dev/null || true
+if [ "$CODE" != 200 ]; then
+  echo "Workers 스모크 실패 (HTTP $CODE)" >&2
+  cat workerd.out wrangler.log >&2 2>/dev/null || true
+  exit 1
+fi
+echo "workerd: $(cat workerd.out)"
+
 # 3. TypeScript — 첫 소비자의 설정(nodenext · verbatimModuleSyntax)으로 타입이 서는지.
 #    `types` 를 비워 둔다. 빈 프로젝트라 @types/node 가 없고, 여기서 보는 것은 우리
 #    `.d.ts` 가 그 설정에서 서느냐 하나뿐이다.

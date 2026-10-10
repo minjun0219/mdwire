@@ -36,7 +36,7 @@ cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings
 cargo build -p mdwire-wasm --target wasm32-unknown-unknown
 cargo build -p mdwire-cli && (cd go && test -z "$(gofmt -l .)" && go vet ./... \
   && MDWIRE_RUST=../target/debug/mdwire go test ./...)   # 없으면 러스트 대조가 조용히 빠진다
-./scripts/build-npm.sh && CI=1 ./scripts/smoke.sh          # Node · Bun · TypeScript
+./scripts/build-npm.sh && CI=1 ./scripts/smoke.sh          # Node · Bun · Workers · TypeScript
 (cd examples/react-streaming && npm install && npm run build)  # 예제는 pkg/ 를 쓴다
 (cd site && pnpm install --frozen-lockfile && pnpm run check && pnpm run build)  # site/ 를 바꿨을 때
 ```
