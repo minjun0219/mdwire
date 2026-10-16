@@ -47,6 +47,11 @@ pub enum Channel {
     /// angle brackets would remain as text). Emphasis before a Korean particle is rendered by
     /// Notion as is, so it is not turned into `<strong>` — doing so would make the tag show as text.
     NotionMarkdown,
+    /// An Obsidian note (a Markdown file in a vault). Emits the same Markdown as GitHub, so a `~`
+    /// written as a character is escaped — Obsidian was reported to break on it the way GitHub
+    /// does (not measured in Obsidian yet). It has no limit: a note is a file, not a message, so
+    /// it is not split unless [`Options::limit`] is set.
+    ObsidianMarkdown,
     /// Strips all markup. The fallback path.
     Plain,
     /// An HTML fragment for the browser. Renders headings, lists, tables, and code blocks as tags.
@@ -68,18 +73,20 @@ impl Channel {
             Channel::SlackMarkdown => "slack-markdown",
             Channel::GithubMarkdown => "github-markdown",
             Channel::NotionMarkdown => "notion-markdown",
+            Channel::ObsidianMarkdown => "obsidian-markdown",
             Channel::Plain => "plain",
             Channel::Html => "html",
         }
     }
 
     /// Every supported channel. The corpus and the harness iterate over this list.
-    pub fn all() -> [Channel; 6] {
+    pub fn all() -> [Channel; 7] {
         [
             Channel::TelegramHtml,
             Channel::SlackMarkdown,
             Channel::GithubMarkdown,
             Channel::NotionMarkdown,
+            Channel::ObsidianMarkdown,
             Channel::Plain,
             Channel::Html,
         ]
@@ -100,6 +107,9 @@ impl Channel {
             // **재지 않았다.** 페이지 하나에 들어갈 본문이라 GitHub 과 같은 값을 둔다. 보내는 쪽
             // 한도가 따로 있으면 [`Options::limit`] 으로 준다.
             Channel::NotionMarkdown => 65_536,
+            // 노트는 메시지가 아니라 파일이다 — 한도가 없어 나누지 않는다. 브라우저와 달리 마크다운이라
+            // 분할기가 마크업을 닫고 다시 열 수 있으니, 호출자가 한도를 주면 따른다.
+            Channel::ObsidianMarkdown => usize::MAX,
             // 브라우저에는 메시지 한도가 없다. 나누지 않는다.
             Channel::Html => usize::MAX,
         }
@@ -193,8 +203,8 @@ pub struct Repairs {
     /// pair — so what remains is the rare shape that is bold or math only by context. A non-zero
     /// count marks an answer worth a look.
     pub guessed_pair: usize,
-    /// Characters escaped because the channel would read them as syntax (GitHub's `\~`, `\<`,
-    /// `\*`; Slack's and Notion's `\*`).
+    /// Characters escaped because the channel would read them as syntax (GitHub's and Obsidian's
+    /// `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
     pub escaped_char: usize,
     /// Emphasis emitted differently because the channel cannot read the markers in that position
     /// (`**「설정」**가`) — `<strong>` on GitHub, U+2060 inserted inside the markers on Slack.
@@ -509,6 +519,7 @@ mod tests {
         assert_eq!(Channel::TelegramHtml.limit(), 4096);
         assert_eq!(Channel::SlackMarkdown.limit(), 12_000);
         assert_eq!(Channel::GithubMarkdown.limit(), 65_536);
+        assert_eq!(Channel::ObsidianMarkdown.limit(), usize::MAX);
     }
 
     /// **조각 하나가 곧 메시지 하나다.** 태그 한가운데서 끊으면 조각이 `… <a ` 로

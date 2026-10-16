@@ -26,6 +26,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 | `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire repairs, escapes a `*` meant as a character (`\*`) and splits. | 12,000 |
 | `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold that GFM would not close (before a Korean particle) is written as `<strong>`. | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
+| `obsidian-markdown` | An Obsidian note (a Markdown file in a vault). The same text as `github-markdown`, since a literal `~` was reported to break Obsidian notes too (not measured yet), but not split: a note is a file, not a message. <Next /> | none |
 | `plain` | Plain text — every marker removed. The fallback. | 12,000 |
 | `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
 

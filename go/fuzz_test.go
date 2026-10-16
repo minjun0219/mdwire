@@ -243,6 +243,41 @@ func TestGithubKeptTagsSurviveSplitsAndMatchByName(t *testing.T) {
 	}
 }
 
+// 옵시디언에서도 물결이 깨진다(제보 2026-10-16) — 러스트 쪽
+// obsidian_escapes_tilde_like_github_and_does_not_split 와 같은 기대값. GitHub 의 규칙으로 내고, 노트는
+// 나누지 않으며 호출자가 한도를 주면 그때만 나눈다.
+func TestObsidianEscapesTildeLikeGithubAndDoesNotSplit(t *testing.T) {
+	cases := [][2]string{
+		{"**1~3단계**는 필수이고 반품은 5~7일 걸린다", `**1\~3단계**는 필수이고 반품은 5\~7일 걸린다`},
+		{"약 ~40km, 5~6월 이동", `약 \~40km, 5\~6월 이동`},
+		{"~~취소~~가 `a~b <T>`", "~~취소~~가 `a~b <T>`"},
+	}
+	for _, c := range cases {
+		if got := strings.Join(Render(c[0], ObsidianMarkdown), ""); got != c[1] {
+			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+	}
+	for _, input := range []string{"Vec<T> 와 1 < 2", "**설정(config)**을 바꾼다", "<sub>모델 · 토큰</sub> 꼬리말", "| a~b |\n|---|\n| <T> |"} {
+		got, want := strings.Join(Render(input, ObsidianMarkdown), ""), strings.Join(Render(input, GithubMarkdown), "")
+		if got != want {
+			t.Errorf("%q: 옵시디언이 GitHub 과 다르다\n  got  %q\n  want %q", input, got, want)
+		}
+	}
+	long := strings.Repeat("가나다 ", 30_000)
+	if n := len(Render(long, ObsidianMarkdown)); n != 1 {
+		t.Errorf("노트는 나누지 않는다: %d 조각", n)
+	}
+	parts := RenderWith(long, ObsidianMarkdown, Options{Limit: 4096}).Parts
+	if len(parts) < 2 {
+		t.Fatal("한도를 주면 나눠야 한다")
+	}
+	for _, p := range parts {
+		if n := utf8.RuneCountInString(p); n > 4096 {
+			t.Errorf("%d자 조각 — 한도 4096", n)
+		}
+	}
+}
+
 // 노션 채널 — 러스트 쪽 notion_escapes_what_it_eats_and_strips_tags 와 같은 기대값.
 func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 	cases := [][2]string{
@@ -360,6 +395,10 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 	}
 	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r.Changed() {
 		t.Errorf("바꿀 것이 없는데 셌다: %+v", r)
+	}
+	// 옵시디언도 GitHub 과 같이 센다.
+	if r := RenderWith("약 ~40km, 5~6월", ObsidianMarkdown, Options{}).Repairs; r.EscapedChar != 2 {
+		t.Errorf("obsidian: %+v", r)
 	}
 	if r := RenderWith("약 ~40km", GithubMarkdown, Options{}).Repairs; !r.Changed() || r.Repaired() {
 		t.Errorf("이스케이프 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)

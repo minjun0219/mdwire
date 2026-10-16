@@ -707,6 +707,25 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
 }
 
+/// **옵시디언에서도 물결이 깨진다**(제보 2026-10-16). GitHub 에서 잰 고장(홑 `~` 둘 사이가 그어진다)과
+/// 같은 것으로 보고 GitHub 의 규칙으로 낸다. 노트는 메시지가 아니라 파일이라 나누지 않고, 호출자가 한도를
+/// 주면 그때만 나눈다.
+#[test]
+fn obsidian_escapes_tilde_like_github_and_does_not_split() {
+    let o = |s| one(s, Channel::ObsidianMarkdown);
+    assert_eq!(o("**1~3단계**는 필수이고 반품은 5~7일 걸린다"), r"**1\~3단계**는 필수이고 반품은 5\~7일 걸린다");
+    assert_eq!(o("약 ~40km, 5~6월 이동"), r"약 \~40km, 5\~6월 이동");
+    assert_eq!(o("~~취소~~가 `a~b <T>`"), "~~취소~~가 `a~b <T>`");
+    for input in ["Vec<T> 와 1 < 2", "**설정(config)**을 바꾼다", "<sub>모델 · 토큰</sub> 꼬리말", "| a~b |\n|---|\n| <T> |"] {
+        assert_eq!(o(input), one(input, Channel::GithubMarkdown), "{input}");
+    }
+    let long = "가나다 ".repeat(30_000);
+    assert_eq!(render(&long, Channel::ObsidianMarkdown).len(), 1);
+    let opts = mdwire::Options { limit: Some(4096), ..Default::default() };
+    let parts = mdwire::render_with(&long, Channel::ObsidianMarkdown, opts).parts;
+    assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= 4096));
+}
+
 /// **노션은 GitHub 과 같은 마크다운에서 출발하되 반대로 가는 곳이 있다**(실측 2026-10-01, 커넥터로
 /// 페이지를 만들고 되읽었다). 조사 앞 강조는 노션이 그대로 그려 `<strong>` 으로 바꾸지 않고, 인라인
 /// HTML 은 글자로 보여서 벗긴다. 마스킹 번호의 `*` 와 홀로 쓴 `\` 는 노션이 먹어서 이스케이프하고,
@@ -841,6 +860,8 @@ fn report_counts_what_the_channel_rewrote() {
     // `any()` 는 고친 것만 본다 — 이스케이프 하나로 "모델이 서식을 깼다"가 되지 않는다.
     let tilde = r("약 ~40km", Channel::GithubMarkdown);
     assert!(tilde.changed() && !tilde.any(), "{tilde:?}");
+    // 옵시디언도 GitHub 과 같이 센다.
+    assert_eq!(r("약 ~40km, 5~6월", Channel::ObsidianMarkdown).escaped_char, 2);
     // 줄 첫머리에서 벗긴 태그는 한 번씩 센다(두 번 세던 것).
     assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown).stripped_html, 1);
     // `<url|텍스트>` 라벨의 이스케이프도 센다.

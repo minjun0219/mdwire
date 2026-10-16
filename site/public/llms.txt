@@ -10,6 +10,7 @@ Channels (the name each API takes):
 - `slack-markdown` — Slack `markdown_text` (standard Markdown, 12,000)
 - `github-markdown` — GitHub comments, GFM (65,536); a `~` or `<` meant as a character is escaped
 - `notion-markdown` — Notion page body, Notion-flavored Markdown (65,536); inline HTML Notion cannot draw is stripped
+- `obsidian-markdown` — Obsidian note, the same Markdown as `github-markdown` but not split (no limit)
 - `plain` — plain text
 - `html` — HTML for the browser, safe to set as `innerHTML`: text is escaped and, by default, only `http(s)`/`mailto` links become `<a>` (line breaks, images and allowed schemes are options)
 

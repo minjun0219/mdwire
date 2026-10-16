@@ -256,12 +256,12 @@ fn strip_list_numbers(input: &str) -> String {
         .collect()
 }
 
-/// GitHub 출력의 강조 태그를 마커로 읽는다.
+/// GitHub(과 옵시디언) 출력의 강조 태그를 마커로 읽는다.
 ///
 /// 코어는 GFM 이 마커를 못 읽는 자리(`**설정(config)**을`)에서 `<strong>` 따위로 낸다.
 /// 범위와 짝을 재는 쪽은 마크다운 마커로 읽으므로, 같은 뜻의 마커로 바꿔 놓고 잰다.
 fn tags_as_markers(output: &str, channel: Channel) -> std::borrow::Cow<'_, str> {
-    if channel != Channel::GithubMarkdown || !output.contains('<') {
+    if !matches!(channel, Channel::GithubMarkdown | Channel::ObsidianMarkdown) || !output.contains('<') {
         return std::borrow::Cow::Borrowed(output);
     }
     let mut s = output.to_string();
@@ -817,7 +817,7 @@ fn output_mode(channel: Channel) -> Mode {
 /// 그래서 이 불변식을 테스트에 박아 둔다.
 fn stray_markers(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     match channel {
-        Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => {
+        Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown | Channel::ObsidianMarkdown => {
             // 마크다운을 그대로 내보내는 채널이라 마커가 남는 것이 정상이다.
             // 대신 **짝이 맞아야** 한다 — **조각마다.** 조각은 각각 메시지 하나라, 이어
             // 붙여 놓고 보면 경계에서 갈린 스팬이 멀쩡해 보인다.
@@ -1164,7 +1164,11 @@ fn tables(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
     // 본다 — 고정폭으로 내려갔거나 산문으로 풀렸으면 화면에서 표가 사라진 것이다.
     if matches!(
         channel,
-        Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown | Channel::Html
+        Channel::SlackMarkdown
+            | Channel::GithubMarkdown
+            | Channel::NotionMarkdown
+            | Channel::ObsidianMarkdown
+            | Channel::Html
     ) {
         let want = gfm_table_count(input);
         let got = if channel == Channel::Html {

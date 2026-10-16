@@ -102,6 +102,30 @@ func TestStreamingAgreesWithBatch(t *testing.T) {
 	}
 }
 
+// 옵시디언은 GitHub 과 같은 글을 낸다(SPEC.md 4절) — 다른 것은 한도뿐이라 노트는 나누지 않는다.
+// 러스트 쪽 obsidian_writes_what_github_writes 와 같다. 제 기대 출력을 둔 케이스는 TestCorpus 가 맡는다.
+func TestObsidianWritesWhatGithubWrites(t *testing.T) {
+	compared := 0
+	for _, c := range loadCases(t) {
+		if _, ok := c.expected[ObsidianMarkdown.Name()]; ok {
+			continue
+		}
+		github := RenderWith(c.input, GithubMarkdown, c.opts).Parts
+		// GitHub 이 한도로 나눈 케이스는 견줄 수 없다 — 옵시디언은 나누지 않는다.
+		if len(github) != 1 {
+			continue
+		}
+		compared++
+		got := RenderWith(c.input, ObsidianMarkdown, c.opts).Parts
+		if len(got) != 1 || got[0] != github[0] {
+			t.Errorf("%s: 옵시디언이 GitHub 과 다르다\n  got  %q\n  want %q", c.name, got, github)
+		}
+	}
+	if compared <= 20 {
+		t.Fatalf("견준 케이스가 너무 적다: %d", compared)
+	}
+}
+
 // Push 와 PushTo 는 같은 코드를 부른다. 서명만 다르다.
 func TestOwnedAndBorrowedSignaturesAgree(t *testing.T) {
 	for _, c := range loadCases(t) {

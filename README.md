@@ -10,9 +10,9 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: v0.1.14.** Normalizing, rendering, splitting and streaming work for six
-targets — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, plain text,
-and HTML for the browser — from a Rust core, a CLI,
+**Status: v0.1.14.** Normalizing, rendering, splitting and streaming work for seven
+targets — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, Obsidian notes,
+plain text, and HTML for the browser — from a Rust core, a CLI,
 an npm package (WASM), and a Go port. See `SPEC.md` for what is in v0.1 and what was
 deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
 
@@ -32,7 +32,9 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    character goes out escaped (`\~`, `\<`), and emphasis that GFM would not close (`**(a)**`
    followed directly by a Korean particle) goes out as `<strong>`. Notion renders that bold as is
    but shows inline HTML as text, so `notion-markdown` strips the tags and escapes a literal `*`
-   or `\` instead. For the browser, `html` renders
+   or `\` instead. A literal `~` was reported to break Obsidian notes too (not measured yet), so
+   `obsidian-markdown` writes what GitHub gets, without splitting: a note is a file, not a message.
+   For the browser, `html` renders
    blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
    source keep no attributes, and only `http(s)`/`mailto` links become `<a>` — line breaks,
    images and allowed schemes are options. While streaming,
