@@ -42,6 +42,10 @@ snake_case 와 plain_text_name 은 그대로다
 ----
 <i>진료</i>가 먼저고 <i>처방</i>은 나중이다.
 ----
+<i>기울임 my_var 끝</i> 과 <b>굵게 my__var</b> 와 <i>a_b_c</i>
+----
+2<i>3 = 6, snake_case</i>
+----
 ** 배포 ** 는 금지다.
 ----
 <b>굵게 </b> 끝

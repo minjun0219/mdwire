@@ -266,9 +266,10 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		same := in.lastOpen(e)
 
 		// 글자 뒤의 `_` 는 열지 못한다(CommonMark 의 단어 안 `_`). `snake_case` 도
-		// `2026-04-29_제목` 도 글자로 남는다. 대신 닫는 것은 된다 — `_진료_가`.
+		// `2026-04-29_제목` 도 글자로 남는다. 대신 닫는 것은 된다 — `_진료_가`. 닫는 것은 `_` 로
+		// 연 것뿐이다 — `2*3 = 6, snake_case` 의 밑줄이 `*` 로 연 기울임을 닫으면 `snake*case` 가 된다.
 		intraword := c == '_' && prev != noChar && isAlphanumeric(prev)
-		if intraword && same < 0 {
+		if intraword && (same < 0 || in.open[same].ch != '_') {
 			for k := 0; k < take; k++ {
 				in.textChar(c, out, v)
 			}
