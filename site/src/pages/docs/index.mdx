@@ -26,7 +26,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 | `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire repairs, escapes a `*` meant as a character (`\*`) and splits. | 12,000 |
 | `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold that GFM would not close (before a Korean particle) is written as `<strong>`. | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
-| `obsidian-markdown` | An Obsidian note (a Markdown file in a vault). The same text as `github-markdown`, since a literal `~` was reported to break Obsidian notes too (not measured yet), but not split: a note is a file, not a message. <Next /> | none |
+| `obsidian-markdown` | An Obsidian note (a Markdown file in a vault). The same text as `github-markdown`, since a literal `~` was reported to break Obsidian notes too (not measured yet), except that wikilinks (`[[note]]`) are left as written. Not split unless you set a limit: a note is a file, not a message. <Next /> | none |
 | `plain` | Plain text — every marker removed. The fallback. | 12,000 |
 | `html` | An HTML fragment for the browser, safe to set as `innerHTML`: text is escaped, inline tags from the source keep no attributes, and only allowed schemes become links. | none |
 
@@ -61,8 +61,8 @@ The other six are **channel rewrites** — what the channel needed changed befor
 
 | Field | Counts |
 |---|---|
-| escaped char | Characters the channel would read as syntax, escaped (GitHub's `\~` `\<` `\*`; Slack's and Notion's `\*`). |
-| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's `<strong>`, or an invisible U+2060 inside Slack's markers. |
+| escaped char | Characters the channel would read as syntax, escaped (GitHub's and Obsidian's `\~` `\<` `\*`; Slack's and Notion's `\*`). |
+| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's and Obsidian's `<strong>`, or an invisible U+2060 inside Slack's markers. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
 | rewritten table | Tables rewritten (separator and cell spacing, or turned into a monospace block). |

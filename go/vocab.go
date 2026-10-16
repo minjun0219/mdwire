@@ -141,6 +141,10 @@ func (v vocab) githubRules() bool {
 	return v.channel == GithubMarkdown || v.channel == ObsidianMarkdown
 }
 
+// wikilinks 는 옵시디언의 위키링크(`[[노트]]`, `![[첨부]]`)를 손대지 않고 내보내는 채널인가다. 안은
+// 노트·첨부의 이름이라 이스케이프하면 이름이 달라진다 — 러스트 쪽 wikilinks.
+func (v vocab) wikilinks() bool { return v.channel == ObsidianMarkdown }
+
 // isPlain 은 마크업 문법 자체가 없는 채널인가다. 강조도 표도 글자로 내려앉는다.
 func (v vocab) isPlain() bool { return v.channel == Plain }
 
@@ -180,8 +184,9 @@ func (v vocab) open(e emph) string {
 	}
 }
 
-// htmlEmphasis 는 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가다. GitHub(과 그
-// 규칙을 따르는 옵시디언)만 그렇다 — 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
+// htmlEmphasis 는 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가다. GitHub 만 그렇다 —
+// 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다. 옵시디언은 GitHub 의 규칙을 따른다
+// (옵시디언이 그리는지는 재지 않았다).
 func (v vocab) htmlEmphasis() bool { return v.githubRules() }
 
 // joinerEmphasis 는 마커가 못 읽히는 자리에서 마커 안쪽에 워드 조이너를 끼우는가다. 슬랙만 —
@@ -454,8 +459,9 @@ func (v vocab) literal(c rune, out *[]byte) {
 	}
 	// 그 채널의 마크다운이 읽는 글자면 이스케이프를 지킨다. 강조 마커만 지키면 `\# 제목` 이 제목이
 	// 되고 `\[x\](url)` 이 링크가 된다.
-	// 노션은 $…$ 를 수식으로 읽어서 \$ 도 지킨다.
-	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) || (c == '$' && v.channel == NotionMarkdown) {
+	// 노션은 $…$ 를 수식으로 읽어서 \$ 도 지킨다. GitHub 과 옵시디언도 $…$ 를 수식으로 적는다(두 곳의
+	// 문서 — 재지는 않았다). 남겨 둔 \$ 는 어느 렌더러에서나 $ 로 그려지니 지켜서 잃는 것이 없다.
+	if strings.ContainsRune("*_~`\\[]()#>|-+.!", c) || (c == '$' && (v.channel == NotionMarkdown || v.githubRules())) {
 		*out = append(*out, '\\')
 		*out = appendRune(*out, c)
 		return

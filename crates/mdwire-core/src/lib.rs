@@ -48,8 +48,9 @@ pub enum Channel {
     /// Notion as is, so it is not turned into `<strong>` — doing so would make the tag show as text.
     NotionMarkdown,
     /// An Obsidian note (a Markdown file in a vault). Emits the same Markdown as GitHub, so a `~`
-    /// written as a character is escaped — Obsidian was reported to break on it the way GitHub
-    /// does (not measured in Obsidian yet). It has no limit: a note is a file, not a message, so
+    /// written as a character is escaped — Obsidian notes were reported to break on it too (not
+    /// measured in Obsidian yet). Wikilinks (`[[note]]`, `![[file]]`) are left as written, since
+    /// what is inside is a note or file name. It has no limit: a note is a file, not a message, so
     /// it is not split unless [`Options::limit`] is set.
     ObsidianMarkdown,
     /// Strips all markup. The fallback path.
@@ -207,7 +208,8 @@ pub struct Repairs {
     /// `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
     pub escaped_char: usize,
     /// Emphasis emitted differently because the channel cannot read the markers in that position
-    /// (`**「설정」**가`) — `<strong>` on GitHub, U+2060 inserted inside the markers on Slack.
+    /// (`**「설정」**가`) — `<strong>` on GitHub and Obsidian, U+2060 inserted inside the markers on
+    /// Slack.
     pub tag_emphasis: usize,
     /// Source HTML stripped — tags the channel cannot render, comments, and `<br>` turned into
     /// line breaks.

@@ -251,10 +251,28 @@ func TestObsidianEscapesTildeLikeGithubAndDoesNotSplit(t *testing.T) {
 		{"**1~3단계**는 필수이고 반품은 5~7일 걸린다", `**1\~3단계**는 필수이고 반품은 5\~7일 걸린다`},
 		{"약 ~40km, 5~6월 이동", `약 \~40km, 5\~6월 이동`},
 		{"~~취소~~가 `a~b <T>`", "~~취소~~가 `a~b <T>`"},
+		// 위키링크 안은 노트·첨부의 이름이라 손대지 않는다. 비었거나 안 닫힌 `[[` 는 위키링크가 아니다.
+		{"[[5~6월 계획]] 은 7~8월로", `[[5~6월 계획]] 은 7\~8월로`},
+		{"![[도식 1~2.png]] [[노트#5~6월|일정]]", "![[도식 1~2.png]] [[노트#5~6월|일정]]"},
+		{"[[]] 와 [[5~6", `[[]] 와 [[5\~6`},
+		// `$…$` 를 수식으로 적는 채널이라 저자의 `\$` 를 지킨다.
+		{`가격은 \$5-\$10`, `가격은 \$5-\$10`},
 	}
 	for _, c := range cases {
 		if got := strings.Join(Render(c[0], ObsidianMarkdown), ""); got != c[1] {
 			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+		// 스트리밍도 같다 — `[` 는 짝이 정해질 때까지 블록 층이 붙든다.
+		for size := 1; size <= utf8.RuneCountInString(c[0]); size++ {
+			s := NewStreamer(ObsidianMarkdown)
+			var got []byte
+			for _, piece := range chunksOf(c[0], size) {
+				s.PushTo(piece, &got)
+			}
+			s.FinishTo(&got)
+			if string(got) != c[1] {
+				t.Errorf("%q 조각 %d: 스트리밍이 다르다\n  got  %q\n  want %q", c[0], size, got, c[1])
+			}
 		}
 	}
 	for _, input := range []string{"Vec<T> 와 1 < 2", "**설정(config)**을 바꾼다", "<sub>모델 · 토큰</sub> 꼬리말", "| a~b |\n|---|\n| <T> |"} {

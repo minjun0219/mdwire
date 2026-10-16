@@ -42,10 +42,11 @@ const (
 	NotionMarkdown
 	// ObsidianMarkdown is an Obsidian note (a Markdown file in a vault). It
 	// emits the same markdown as GitHub, so a `~` written as a character is
-	// escaped — Obsidian was reported to break on it the way GitHub does (not
-	// measured in Obsidian yet). It has no limit: a note is a file, not a
-	// message, so it is not split unless Options.Limit is set. Placed last so
-	// existing values do not shift.
+	// escaped — Obsidian notes were reported to break on it too (not measured
+	// in Obsidian yet). Wikilinks ([[note]], ![[file]]) are left as written,
+	// since what is inside is a note or file name. It has no limit: a note is
+	// a file, not a message, so it is not split unless Options.Limit is set.
+	// Placed last so existing values do not shift.
 	ObsidianMarkdown
 )
 

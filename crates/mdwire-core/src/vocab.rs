@@ -109,6 +109,15 @@ impl Vocab {
         matches!(self.channel, Channel::GithubMarkdown | Channel::ObsidianMarkdown)
     }
 
+    /// 옵시디언의 위키링크(`[[노트]]`, `![[첨부]]`)를 손대지 않고 내보내는가.
+    ///
+    /// 안은 노트·첨부의 이름이다. GitHub 의 이스케이프를 걸면 `[[5~6월 계획]]` 이 `[[5\~6월 계획]]` 로
+    /// 바뀌어 이름이 달라진다. 옵시디언이 링크 안의 `\~` 를 푸는지는 재지 않았지만, 손대지 않으면 어느
+    /// 쪽이든 저자가 쓴 이름이 남는다(`SPEC.md` 4절).
+    pub fn wikilinks(&self) -> bool {
+        self.channel == Channel::ObsidianMarkdown
+    }
+
     /// 표를 노션 `<table>` 로 내는가. 파이프 표로 내면 칸 안의 `|` 가 칸을 가른다(실측).
     pub fn xml_tables(&self) -> bool {
         self.channel == Channel::NotionMarkdown
@@ -165,8 +174,9 @@ impl Vocab {
         self.channel == Channel::NotionMarkdown
     }
 
-    /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub(과 그 규칙을 따르는
-    /// 옵시디언)만 그렇다 — 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
+    /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 — 인라인 HTML 을
+    /// 그리고, 마커와 달리 flanking 을 안 따진다. 옵시디언은 GitHub 의 규칙을 따른다(옵시디언이 그리는지는
+    /// 재지 않았다).
     pub fn html_emphasis(&self) -> bool {
         self.github_rules()
     }
@@ -423,11 +433,13 @@ impl Vocab {
             // 쓴 것을 채널이 구문으로 읽어 버린다.
             //
             // 노션은 `$…$` 를 수식으로 읽어서 `\$` 도 지킨다(실측 — 벗기면 `\$x\$` 가 수식이 된다).
+            // GitHub 과 옵시디언도 `$…$` 를 수식으로 적는다(두 곳의 문서 — 재지는 않았다). 남겨 둔
+            // `\$` 는 어느 렌더러에서나 `$` 로 그려지니 지켜서 잃는 것이 없다.
             _ if matches!(
                 c,
                 '*' | '_' | '~' | '`' | '\\' | '[' | ']' | '(' | ')' | '#' | '>' | '|' | '-'
                     | '+' | '.' | '!'
-            ) || (c == '$' && self.channel == Channel::NotionMarkdown) =>
+            ) || (c == '$' && (self.channel == Channel::NotionMarkdown || self.github_rules())) =>
             {
                 out.push('\\');
                 out.push(c);

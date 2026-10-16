@@ -6,7 +6,7 @@
     {
       "name": "mdwire",
       "source": "./",
-      "description": "Skill: convert agent Markdown for Telegram HTML, Slack markdown_text, GitHub, Notion, plain text or safe HTML, with streaming and length-safe splitting."
+      "description": "Skill: convert agent Markdown for Telegram HTML, Slack markdown_text, GitHub, Notion, Obsidian notes, plain text or safe HTML, with streaming and length-safe splitting."
     }
   ]
 }

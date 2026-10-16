@@ -27,7 +27,7 @@ not run it through another Markdown converter first.
 | `slack-markdown` | Slack `chat.postMessage` `markdown_text` (not `text`/mrkdwn) | 12,000 |
 | `github-markdown` | GitHub issue/PR comment or body | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown) | 65,536 |
-| `obsidian-markdown` | Obsidian note (a Markdown file in a vault); same text as `github-markdown`, not split unless you pass a limit | none |
+| `obsidian-markdown` | Obsidian note (a Markdown file in a vault); same text as `github-markdown` with wikilinks (`[[note]]`) left as written, not split unless you pass a limit | none |
 | `plain` | Anywhere without formatting; fallback | 12,000 |
 | `html` | Browser `innerHTML` (escaped; only http/https/mailto links) | none |
 

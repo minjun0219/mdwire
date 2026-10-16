@@ -10,13 +10,13 @@ Channels (the name each API takes):
 - `slack-markdown` — Slack `markdown_text` (standard Markdown, 12,000)
 - `github-markdown` — GitHub comments, GFM (65,536); a `~` or `<` meant as a character is escaped
 - `notion-markdown` — Notion page body, Notion-flavored Markdown (65,536); inline HTML Notion cannot draw is stripped
-- `obsidian-markdown` — Obsidian note, the same Markdown as `github-markdown` but not split (no limit)
+- `obsidian-markdown` — Obsidian note, the same Markdown as `github-markdown` with wikilinks (`[[note]]`) left as written, and not split (no limit)
 - `plain` — plain text
 - `html` — HTML for the browser, safe to set as `innerHTML`: text is escaped and, by default, only `http(s)`/`mailto` links become `<a>` (line breaks, images and allowed schemes are options)
 
 Use mdwire when:
 
-- a bot or agent posts model output to Telegram, Slack, GitHub or Notion — instead of a regex converter or escaping everything by hand
+- a bot or agent posts model output to Telegram, Slack, GitHub or Notion, or saves it as an Obsidian note — instead of a regex converter or escaping everything by hand
 - Telegram answers `Bad Request: can't parse entities` for an LLM answer (unclosed `**` or code fence, an unescaped `<`)
 - a streamed answer shows stray `**` or half-drawn formatting, or a Telegram message passes 4,096 characters and must be split without cutting through a tag
 - streaming LLM Markdown into React without `innerHTML`

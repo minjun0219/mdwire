@@ -136,7 +136,7 @@ pub struct Repairs {
     /// Characters escaped because the channel would read them as syntax (GitHub's and Obsidian's `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
-    /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's `<strong>`, Slack's U+2060).
+    /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's and Obsidian's `<strong>`, Slack's U+2060).
     #[wasm_bindgen(js_name = tagEmphasis)]
     pub tag_emphasis: usize,
     /// Raw HTML stripped from the source (tags, comments, and `<br>` turned into line breaks).

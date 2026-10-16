@@ -33,7 +33,8 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    followed directly by a Korean particle) goes out as `<strong>`. Notion renders that bold as is
    but shows inline HTML as text, so `notion-markdown` strips the tags and escapes a literal `*`
    or `\` instead. A literal `~` was reported to break Obsidian notes too (not measured yet), so
-   `obsidian-markdown` writes what GitHub gets, without splitting: a note is a file, not a message.
+   `obsidian-markdown` writes what GitHub gets, except that wikilinks (`[[note]]`) are left as
+   written, and does not split: a note is a file, not a message.
    For the browser, `html` renders
    blocks as tags too and is safe to set as `innerHTML`: text is escaped, inline tags from the
    source keep no attributes, and only `http(s)`/`mailto` links become `<a>` — line breaks,
