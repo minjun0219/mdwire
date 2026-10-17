@@ -40,12 +40,20 @@ const (
 	// Notion renders emphasis directly before a Korean particle as is, so it
 	// is not turned into <strong>. Placed last so existing values do not shift.
 	NotionMarkdown
+	// ObsidianMarkdown is an Obsidian note (a Markdown file in a vault). It
+	// emits the same markdown as GitHub, so a `~` written as a character is
+	// escaped — Obsidian notes were reported to break on it too (not measured
+	// in Obsidian yet). Wikilinks ([[note]], ![[file]]) are left as written,
+	// since what is inside is a note or file name. It has no limit: a note is
+	// a file, not a message, so it is not split unless Options.Limit is set.
+	// Placed last so existing values do not shift.
+	ObsidianMarkdown
 )
 
 // Channels returns every output channel. The corpus and the harness iterate
 // over this list.
 func Channels() []Channel {
-	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, NotionMarkdown, Plain, HTML}
+	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, HTML}
 }
 
 // Name returns the name used for corpus directories and CLI arguments. It is
@@ -60,6 +68,8 @@ func (c Channel) Name() string {
 		return "github-markdown"
 	case NotionMarkdown:
 		return "notion-markdown"
+	case ObsidianMarkdown:
+		return "obsidian-markdown"
 	case HTML:
 		return "html"
 	default:
@@ -90,6 +100,9 @@ func (c Channel) Limit() int {
 	case NotionMarkdown:
 		// 재지 않았다. 페이지 하나의 본문이라 GitHub 과 같은 값을 둔다 — 러스트 쪽과 같다.
 		return 65_536
+	case ObsidianMarkdown:
+		// 노트는 메시지가 아니라 파일이다 — 한도가 없어 나누지 않는다. 호출자가 한도를 주면 따른다.
+		return math.MaxInt
 	case HTML:
 		// 브라우저에는 메시지 한도가 없다. 나누지 않는다.
 		return math.MaxInt

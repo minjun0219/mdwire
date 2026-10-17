@@ -172,6 +172,7 @@ fn smallest_caller_limit_splits_cleanly() {
             Channel::SlackMarkdown,
             Channel::GithubMarkdown,
             Channel::NotionMarkdown,
+            Channel::ObsidianMarkdown,
             Channel::Plain,
         ] {
             let options = Options { limit: Some(mdwire::MIN_LIMIT), ..Default::default() };

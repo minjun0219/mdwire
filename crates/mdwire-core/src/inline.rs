@@ -218,6 +218,17 @@ impl Inline {
                 }
             }
 
+            // **옵시디언의 위키링크는 통째로 글자 그대로 낸다**(`Vocab::wikilinks`). 첨부를 붙이는
+            // `![[…]]` 는 위의 이미지 자리에서 `!` 가 글자로 나가고 여기로 온다. 스트리밍에서도 `[` 는
+            // 짝이 정해질 때까지 블록 층이 붙들어서(`safe_cut`) `]]` 까지 한 번에 들어온다.
+            if c == '[' && v.wikilinks() && line.get(i + 1) == Some(&'[') {
+                if let Some(len) = wikilink_len(&line[i..]) {
+                    out.extend(&line[i..i + len]);
+                    i += len;
+                    continue;
+                }
+            }
+
             if c == '[' {
                 if !indexed {
                     index_links(line, &mut links);
@@ -1044,6 +1055,20 @@ fn index_links(line: &[char], links: &mut Vec<(usize, usize)>) {
 fn find_link(line: &[char], at: usize, links: &[(usize, usize)]) -> Option<((usize, usize), usize, usize)> {
     let (j, k) = links[at];
     (j < line.len()).then_some(((at + 1, j), j + 2, k))
+}
+
+/// `[[` 로 시작하는 `s` 에서 위키링크의 길이(`]]` 까지). 같은 줄 안에서 닫혀야 하고, 비어 있으면
+/// 위키링크가 아니다.
+fn wikilink_len(s: &[char]) -> Option<usize> {
+    let mut j = 2;
+    while j + 1 < s.len() {
+        match s[j] {
+            '\n' => return None,
+            ']' if s[j + 1] == ']' => return (j > 2).then_some(j + 2),
+            _ => j += 1,
+        }
+    }
+    None
 }
 
 fn starts_with(chars: &[char], s: &str) -> bool {

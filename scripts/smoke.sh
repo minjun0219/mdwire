@@ -59,15 +59,25 @@ cat > wrangler.jsonc <<'JSON'
 { "name": "mdwire-smoke", "main": "workerd-smoke/index.js", "compatibility_date": "2026-09-01" }
 JSON
 PORT=8787
+# **새 프로세스 그룹으로 띄우고 그룹째 내린다.** wrangler 는 npx → node → esbuild · workerd 로 자식을 띄우는데,
+# npx 만 내리면 자식이 남아 8787 을 붙잡고 `$TMP` 안에 계속 쓴다. 그러면 EXIT 의 `rm -rf` 가 "Directory not
+# empty" 로 실패하고, `set -e` 라 스모크도 실패한다(CI 에서 겪었다).
+set -m
 WRANGLER_SEND_METRICS=false npx wrangler dev --ip 127.0.0.1 --port "$PORT" --log-level warn >wrangler.log 2>&1 &
 WRANGLER_PID=$!
+set +m
 CODE=000
 for _ in $(seq 1 60); do
   CODE=$(curl -sS -m 5 -o workerd.out -w '%{http_code}' "http://127.0.0.1:$PORT/" 2>/dev/null) && break
   kill -0 "$WRANGLER_PID" 2>/dev/null || break
   sleep 1
 done
-kill "$WRANGLER_PID" 2>/dev/null || true
+kill -- "-$WRANGLER_PID" 2>/dev/null || true
+# `wait` 는 npx 하나만 기다린다 — 그룹이 다 끝날 때까지 본다.
+for _ in $(seq 1 100); do
+  kill -0 -- "-$WRANGLER_PID" 2>/dev/null || break
+  sleep 0.1
+done
 wait "$WRANGLER_PID" 2>/dev/null || true
 if [ "$CODE" != 200 ]; then
   echo "Workers 스모크 실패 (HTTP $CODE)" >&2
