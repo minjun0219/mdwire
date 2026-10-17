@@ -144,6 +144,35 @@ func TestHTMLProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
 	}
 }
 
+// 옵시디언만 도는 경로도 할당하지 않는다 — 손대지 않고 내는 위키링크(`[[…]]`·`![[…]]`)와 글자로 두는
+// 안 닫힌 `[[`. 러스트 쪽 같은 이름의 테스트.
+func TestObsidianProseStreamingIsAllocationFreeOnceWarm(t *testing.T) {
+	unit := "회의록은 [[5~6월 계획]] 에 두고 ![[도식 1~2.png]] 를 붙인다. 약 ~40km 남았다.\n" +
+		"[[노트#일정|일정 보기]] 를 보고, 안 닫힌 [[메모 는 글자로 둔다.\n\n"
+	pieces := splitChunks(strings.Repeat(unit, 12), 64)
+	s := NewStreamer(ObsidianMarkdown)
+	var out []byte
+	for _, p := range pieces {
+		s.PushTo(p, &out)
+	}
+	s.FinishTo(&out)
+	got := string(out)
+	if !strings.Contains(got, "[[5~6월 계획]]") || !strings.Contains(got, `\~40km`) || !strings.Contains(got, "[[메모 는") {
+		t.Fatalf("재는 경로를 타지 않았다: %s", out)
+	}
+
+	allocs := testing.AllocsPerRun(3, func() {
+		out = out[:0]
+		for _, p := range pieces {
+			s.PushTo(p, &out)
+		}
+		s.FinishTo(&out)
+	})
+	if allocs != 0 {
+		t.Fatalf("옵시디언 산문 스트리밍이 할당한다 — 회귀다: 회당 %.1f 회", allocs)
+	}
+}
+
 // 회귀 감시용 벤치. 절대값보다 이전 회차와의 비교에 뜻이 있다 — 러스트와 나란한 순위표는
 // 만들지 않는다(SPEC 9절).
 func BenchmarkProseStreaming(b *testing.B) {

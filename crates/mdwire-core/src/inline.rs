@@ -176,6 +176,8 @@ impl Inline {
         // 돌려준다 — 미리보기 복제가 색인을 복사하지 않게.
         let mut links = std::mem::take(&mut self.links);
         let mut indexed = false;
+        // 위키링크가 닫히지 않는다고 이미 본 자리. 그 앞에서 시작하는 `[[` 는 같은 꼬리를 다시 훑지 않는다.
+        let mut unclosed_until = 0;
         while i < line.len() {
             // 코드 스팬 안에서는 강조 마커가 글자다.
             if let Some(top) = self.open.last() {
@@ -221,11 +223,14 @@ impl Inline {
             // **옵시디언의 위키링크는 통째로 글자 그대로 낸다**(`Vocab::wikilinks`). 첨부를 붙이는
             // `![[…]]` 는 위의 이미지 자리에서 `!` 가 글자로 나가고 여기로 온다. 스트리밍에서도 `[` 는
             // 짝이 정해질 때까지 블록 층이 붙들어서(`safe_cut`) `]]` 까지 한 번에 들어온다.
-            if c == '[' && v.wikilinks() && line.get(i + 1) == Some(&'[') {
-                if let Some(len) = wikilink_len(&line[i..]) {
-                    out.extend(&line[i..i + len]);
-                    i += len;
-                    continue;
+            if c == '[' && v.wikilinks() && i >= unclosed_until && line.get(i + 1) == Some(&'[') {
+                match wikilink_len(&line[i..]) {
+                    Ok(len) => {
+                        out.extend(&line[i..i + len]);
+                        i += len;
+                        continue;
+                    }
+                    Err(stop) => unclosed_until = i + stop,
                 }
             }
 
@@ -1058,17 +1063,18 @@ fn find_link(line: &[char], at: usize, links: &[(usize, usize)]) -> Option<((usi
 }
 
 /// `[[` 로 시작하는 `s` 에서 위키링크의 길이(`]]` 까지). 같은 줄 안에서 닫혀야 하고, 비어 있으면
-/// 위키링크가 아니다.
-fn wikilink_len(s: &[char]) -> Option<usize> {
+/// 위키링크가 아니다. 아니면 훑다 멈춘 자리를 `Err` 로 돌려준다 — 그 앞에서 시작하는 `[[` 도 같은 꼬리를
+/// 보니 닫히지 않는다. 그 자리를 잊고 `[[` 마다 다시 훑으면 `[[[[…`에서 O(n²)이 된다.
+fn wikilink_len(s: &[char]) -> Result<usize, usize> {
     let mut j = 2;
     while j + 1 < s.len() {
         match s[j] {
-            '\n' => return None,
-            ']' if s[j + 1] == ']' => return (j > 2).then_some(j + 2),
+            '\n' => return Err(j),
+            ']' if s[j + 1] == ']' => return if j > 2 { Ok(j + 2) } else { Err(j) },
             _ => j += 1,
         }
     }
-    None
+    Err(s.len())
 }
 
 fn starts_with(chars: &[char], s: &str) -> bool {

@@ -514,4 +514,33 @@ mod gate {
         });
         assert_eq!(counts.allocs, 0, "html 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
+
+    /// **옵시디언만 도는 경로도 할당하지 않는다** — 손대지 않고 내는 위키링크(`[[…]]`·`![[…]]`)와
+    /// 글자로 두는 안 닫힌 `[[`. 밖의 이스케이프는 GitHub 게이트와 같은 경로다.
+    #[test]
+    fn obsidian_prose_streaming_is_allocation_free_once_warm() {
+        let unit = "회의록은 [[5~6월 계획]] 에 두고 ![[도식 1~2.png]] 를 붙인다. 약 ~40km 남았다.\n\
+                    [[노트#일정|일정 보기]] 를 보고, 안 닫힌 [[메모 는 글자로 둔다.\n\n";
+        let doc = unit.repeat(12);
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::ObsidianMarkdown);
+        let mut out = String::new();
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        assert!(
+            out.contains("[[5~6월 계획]]") && out.contains("\\~40km") && out.contains("[[메모 는"),
+            "재는 경로를 실제로 탔다: {out}"
+        );
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "옵시디언 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
 }

@@ -1414,6 +1414,26 @@ fn long_unclosed_brackets_preserve_text() {
     assert_eq!(one("[[broken [**ok**](https://e.test)", Channel::Html), "<p>[[broken <a href=\"https://e.test\"><strong>ok</strong></a></p>");
 }
 
+/// 닫히지 않은 `[[` 마다 위키링크의 `]]` 를 줄 끝까지 다시 찾던 입력(옵시디언). 위와 같은 큰 줄과 안 닫힌
+/// 위키링크가 이어진 줄을 완성본과 스트리밍 끝에서 본다.
+#[test]
+fn long_unclosed_wikilinks_preserve_text() {
+    for input in ["[".repeat(100_000), "[[a ".repeat(25_000)] {
+        let want = input.trim_end();
+        assert_eq!(one(&input, Channel::ObsidianMarkdown), want);
+        let mut s = Streamer::new(Channel::ObsidianMarkdown);
+        let mut acc = String::new();
+        for chunk in input.as_bytes().chunks(4096) { s.push_into(std::str::from_utf8(chunk).unwrap(), &mut acc); }
+        s.finish_into(&mut acc);
+        assert_eq!(acc, want);
+    }
+    // 안 닫힌다고 본 것은 그 줄까지다. 되돌린 코드 스팬은 줄바꿈째 다시 읽는데, 줄바꿈 뒤의 `[[` 는 다시
+    // 찾는다. 빈 `[[]]` 바로 뒤도 다시 찾는다.
+    let o = |s| one(s, Channel::ObsidianMarkdown);
+    assert_eq!(o("`[[5~6 [[7~8\n[[9~0]] [[1~"), "`[[5\\~6 [[7\\~8\n[[9~0]] [[1\\~");
+    assert_eq!(o("[[]][[5~6]]"), "[[]][[5~6]]");
+}
+
 /// 라벨 재귀가 프로세스를 죽이던 입력. 한도 뒤의 원문도 HTML 본문으로 escape해야 한다.
 #[test]
 fn deeply_nested_targets_do_not_exhaust_the_stack() {
