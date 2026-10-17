@@ -131,6 +131,8 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 	links := in.links[:0]
 	in.links = nil
 	indexed := false
+	// 위키링크가 닫히지 않는다고 이미 본 자리. 그 앞에서 시작하는 `[[` 는 같은 꼬리를 다시 훑지 않는다.
+	unclosedUntil := 0
 	i := 0
 	for i < len(line) {
 		// 코드 스팬 안에서는 강조 마커가 글자다.
@@ -180,14 +182,16 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 
 		// 옵시디언의 위키링크는 통째로 글자 그대로 낸다(vocab.wikilinks). 첨부를 붙이는 `![[…]]` 는 위의
 		// 이미지 자리에서 `!` 가 글자로 나가고 여기로 온다 — 러스트 쪽과 같다.
-		if c == '[' && v.wikilinks() && i+1 < len(line) && line[i+1] == '[' {
-			if n := wikilinkLen(line[i:]); n > 0 {
+		if c == '[' && v.wikilinks() && i >= unclosedUntil && i+1 < len(line) && line[i+1] == '[' {
+			n, stop := wikilinkLen(line[i:])
+			if n > 0 {
 				for _, r := range line[i : i+n] {
 					*out = appendRune(*out, r)
 				}
 				i += n
 				continue
 			}
+			unclosedUntil = i + stop
 		}
 
 		if c == '[' {
@@ -964,20 +968,22 @@ func findLink(line []rune, at int, links []linkBounds) (t0, t1, u0, u1 int, ok b
 }
 
 // wikilinkLen 은 `[[` 로 시작하는 s 에서 위키링크의 길이(`]]` 까지)다. 같은 줄 안에서 닫혀야 하고,
-// 비어 있으면 위키링크가 아니다(0) — 러스트 쪽 wikilink_len.
-func wikilinkLen(s []rune) int {
+// 비어 있으면 위키링크가 아니다(0) — 러스트 쪽 wikilink_len. 아니면 stop 은 훑다 멈춘 자리다. 그 앞에서
+// 시작하는 `[[` 도 같은 꼬리를 보니 닫히지 않는다 — 그 자리를 잊고 `[[` 마다 다시 훑으면 `[[[[…`에서
+// O(n²)이 된다.
+func wikilinkLen(s []rune) (n, stop int) {
 	for j := 2; j+1 < len(s); j++ {
 		if s[j] == '\n' {
-			return 0
+			return 0, j
 		}
 		if s[j] == ']' && s[j+1] == ']' {
 			if j > 2 {
-				return j + 2
+				return j + 2, 0
 			}
-			return 0
+			return 0, j
 		}
 	}
-	return 0
+	return 0, len(s)
 }
 
 // isKnownTag 는 벗겨도 되는 HTML 태그다. 마크다운이 못 적는 표현을 LLM 이 HTML 로 메울 때

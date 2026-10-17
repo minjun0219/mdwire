@@ -86,6 +86,36 @@ func TestLongUnclosedBracketsPreserveText(t *testing.T) {
 	}
 }
 
+// 닫히지 않은 `[[` 마다 위키링크의 `]]` 를 줄 끝까지 다시 찾던 입력(옵시디언) — 러스트 쪽
+// long_unclosed_wikilinks_preserve_text.
+func TestLongUnclosedWikilinksPreserveText(t *testing.T) {
+	for _, input := range []string{strings.Repeat("[", 100_000), strings.Repeat("[[a ", 25_000)} {
+		want := strings.TrimRight(input, " ")
+		if got := strings.Join(Render(input, ObsidianMarkdown), ""); got != want {
+			t.Fatal("대괄호 내용이 달라졌다")
+		}
+		s := NewStreamer(ObsidianMarkdown)
+		var acc []byte
+		for i := 0; i < len(input); i += 4096 {
+			s.PushTo(input[i:min(i+4096, len(input))], &acc)
+		}
+		s.FinishTo(&acc)
+		if string(acc) != want {
+			t.Fatal("스트리밍이 완성본과 달라졌다")
+		}
+	}
+	// 안 닫힌다고 본 것은 그 줄까지다. 되돌린 코드 스팬은 줄바꿈째 다시 읽는데, 줄바꿈 뒤의 `[[` 는 다시
+	// 찾는다. 빈 `[[]]` 바로 뒤도 다시 찾는다.
+	for _, c := range [][2]string{
+		{"`[[5~6 [[7~8\n[[9~0]] [[1~", "`[[5\\~6 [[7\\~8\n[[9~0]] [[1\\~"},
+		{"[[]][[5~6]]", "[[]][[5~6]]"},
+	} {
+		if got := strings.Join(Render(c[0], ObsidianMarkdown), ""); got != c[1] {
+			t.Fatalf("%q: got %q, want %q", c[0], got, c[1])
+		}
+	}
+}
+
 // 라벨 재귀는 제한하지만 한도 뒤의 내용과 HTML escape는 보존한다.
 func TestDeeplyNestedTargetsDoNotExhaustTheStack(t *testing.T) {
 	input := strings.Repeat("[", 10_000) + "x <script> &" + strings.Repeat("](https://e.test)", 10_000)
@@ -112,6 +142,19 @@ func BenchmarkUnclosedBrackets(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				Render(input, HTML)
+			}
+		})
+	}
+}
+
+// 옵시디언은 `[[` 마다 위키링크의 `]]` 를 따로 찾는다. 그 탐색이 줄을 다시 훑으면 여기서 보인다.
+func BenchmarkUnclosedWikilinks(b *testing.B) {
+	for _, n := range []int{10_000, 20_000, 40_000} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			input := strings.Repeat("[", n)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				Render(input, ObsidianMarkdown)
 			}
 		})
 	}
