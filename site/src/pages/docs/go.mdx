@@ -4,6 +4,7 @@ title: Go
 description: The Go implementation — Render, RenderWith, Options, Streamer, Channel and Repairs. Standard library only.
 ---
 import Badges from "../../components/Badges.astro";
+import Next from "../../components/Next.astro";
 
 
 # Go — `github.com/minjun0219/mdwire/go`
@@ -79,7 +80,7 @@ The contract is on [Concepts](/mdwire/docs/#the-streaming-contract).
 ## `Channel`
 
 ```go
-const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown )
+const ( TelegramHTML Channel = iota; SlackMarkdown; Plain; GithubMarkdown; HTML; NotionMarkdown; ObsidianMarkdown )
 ```
 
 The constants' numeric values do not follow the order of `Channels()`; use the names to
@@ -89,7 +90,7 @@ store or send a channel.
 |---|---|
 | `Channels() []Channel` | Every channel. |
 | `(Channel) Name() string` · `ParseChannel(string) (Channel, bool)` | The string names. |
-| `(Channel) Limit() int` | The part limit. |
+| `(Channel) Limit() int` | The part limit; `math.MaxInt` for `HTML` and `ObsidianMarkdown` <Next />. |
 
 ## `Repairs`
 

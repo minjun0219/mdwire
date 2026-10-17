@@ -95,10 +95,11 @@ type Repairs struct {
 	// (`x**(y)**z`, ASCII on both ends) is left out. A non-zero count marks an answer worth a look.
 	GuessedPair int
 	// EscapedChar counts characters escaped because the channel would read them
-	// as syntax (GitHub's \~, \< and \*).
+	// as syntax (GitHub's and Obsidian's \~, \< and \*; Slack's and Notion's \*).
 	EscapedChar int
 	// TagEmphasis counts emphasis emitted another way because the channel cannot
-	// read a marker in that position: <strong> on GitHub, a word joiner on Slack.
+	// read a marker in that position: <strong> on GitHub and Obsidian, a word
+	// joiner on Slack.
 	TagEmphasis int
 	// StrippedHTML counts raw HTML removed from the source: tags, comments, and
 	// <br> turned into line breaks.

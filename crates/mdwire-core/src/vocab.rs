@@ -92,8 +92,30 @@ impl Vocab {
     pub fn tables_native(&self) -> bool {
         matches!(
             self.channel,
-            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown | Channel::Html
+            Channel::SlackMarkdown
+                | Channel::GithubMarkdown
+                | Channel::NotionMarkdown
+                | Channel::ObsidianMarkdown
+                | Channel::Html
         )
+    }
+
+    /// GitHub 의 규칙으로 적는 채널인가 — GitHub 과 옵시디언.
+    ///
+    /// **옵시디언에서도 물결이 깨진다**(제보 2026-10-16) — GitHub 에서 잰 고장(홑 `~` 둘 사이가
+    /// 그어진다)과 같은 것으로 본다. 나머지(`<` · `*` 이스케이프, GFM 이 못 닫는 강조를 태그로, 인라인
+    /// 태그 살리기)도 GitHub 을 따른다. 옵시디언에서는 아직 아무것도 재지 않았다(`SPEC.md` 4절).
+    fn github_rules(&self) -> bool {
+        matches!(self.channel, Channel::GithubMarkdown | Channel::ObsidianMarkdown)
+    }
+
+    /// 옵시디언의 위키링크(`[[노트]]`, `![[첨부]]`)를 손대지 않고 내보내는가.
+    ///
+    /// 안은 노트·첨부의 이름이다. GitHub 의 이스케이프를 걸면 `[[5~6월 계획]]` 이 `[[5\~6월 계획]]` 로
+    /// 바뀌어 이름이 달라진다. 옵시디언이 링크 안의 `\~` 를 푸는지는 재지 않았지만, 손대지 않으면 어느
+    /// 쪽이든 저자가 쓴 이름이 남는다(`SPEC.md` 4절).
+    pub fn wikilinks(&self) -> bool {
+        self.channel == Channel::ObsidianMarkdown
     }
 
     /// 표를 노션 `<table>` 로 내는가. 파이프 표로 내면 칸 안의 `|` 가 칸을 가른다(실측).
@@ -152,10 +174,11 @@ impl Vocab {
         self.channel == Channel::NotionMarkdown
     }
 
-    /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 —
-    /// 인라인 HTML 을 그리고, 마커와 달리 flanking 을 안 따진다.
+    /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 — 인라인 HTML 을
+    /// 그리고, 마커와 달리 flanking 을 안 따진다. 옵시디언은 GitHub 의 규칙을 따른다(옵시디언이 그리는지는
+    /// 재지 않았다).
     pub fn html_emphasis(&self) -> bool {
-        self.channel == Channel::GithubMarkdown
+        self.github_rules()
     }
 
     /// 마커가 못 읽히는 자리에서 마커 안쪽에 워드 조이너를 끼우는가. 슬랙만 그렇다 — 태그를
@@ -202,7 +225,8 @@ impl Vocab {
     /// GFM 은 홑 `~` 도 취소선으로 읽어서 `약 ~40km, 5~6월` 의 `40km, 5` 가 그어지고,
     /// `Vec<T>` 의 `<T>` 는 HTML 태그로 읽혀 새니타이저가 지운다. 둘 다 저자가 글자로
     /// 쓴 것이고, `\~` · `\<` 는 화면에 `~` · `<` 로 보인다. 슬랙 `markdown_text` 는
-    /// 둘 다 글자로 그려서 손대지 않는다.
+    /// 둘 다 글자로 그려서 손대지 않는다. 옵시디언에서도 물결이 깨진다는 제보(2026-10-16)가 있어
+    /// GitHub 과 같이 이스케이프한다.
     pub fn escape_char(&self, c: char, out: &mut String) {
         match c {
             '&' if self.html_out() => out.push_str("&amp;"),
@@ -230,9 +254,11 @@ impl Vocab {
     /// 별표를 슬랙이 CommonMark 로 다시 읽어 `x**(y)**z 와 2**(n-1)**2` 의 `**z 와 2**` 를, 마스킹 번호
     /// `4***-****-****-003*` 의 `-****-` 를 굵게로 그렸다. `\*` 는 글자로 그린다(`\~` `\<` `\_` 도).
     /// `~` 는 홑으로는 긋지 않아 두고, `<` 는 슬랙이 태그로 읽지 않는다.
+    ///
+    /// 옵시디언은 GitHub 과 같은 셋이다(`github_rules`).
     pub fn escapes(&self, c: char) -> bool {
         match self.channel {
-            Channel::GithubMarkdown => matches!(c, '~' | '<' | '*'),
+            _ if self.github_rules() => matches!(c, '~' | '<' | '*'),
             Channel::NotionMarkdown => matches!(c, '*' | '\\'),
             Channel::SlackMarkdown => c == '*',
             _ => false,
@@ -384,7 +410,10 @@ impl Vocab {
                 out.push_str("\">");
             }
             Channel::Html | Channel::TelegramHtml | Channel::Plain => self.link(alt, url, out),
-            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => {
+            Channel::SlackMarkdown
+            | Channel::GithubMarkdown
+            | Channel::NotionMarkdown
+            | Channel::ObsidianMarkdown => {
                 out.push('!');
                 self.link(alt, url, out);
             }
@@ -404,11 +433,13 @@ impl Vocab {
             // 쓴 것을 채널이 구문으로 읽어 버린다.
             //
             // 노션은 `$…$` 를 수식으로 읽어서 `\$` 도 지킨다(실측 — 벗기면 `\$x\$` 가 수식이 된다).
+            // GitHub 과 옵시디언도 `$…$` 를 수식으로 적는다(두 곳의 문서 — 재지는 않았다). 남겨 둔
+            // `\$` 는 어느 렌더러에서나 `$` 로 그려지니 지켜서 잃는 것이 없다.
             _ if matches!(
                 c,
                 '*' | '_' | '~' | '`' | '\\' | '[' | ']' | '(' | ')' | '#' | '>' | '|' | '-'
                     | '+' | '.' | '!'
-            ) || (c == '$' && self.channel == Channel::NotionMarkdown) =>
+            ) || (c == '$' && (self.channel == Channel::NotionMarkdown || self.github_rules())) =>
             {
                 out.push('\\');
                 out.push(c);
@@ -420,7 +451,10 @@ impl Vocab {
     /// 불릿 마커. `SPEC.md` 8절의 표.
     pub fn bullet(&self) -> &'static str {
         match self.channel {
-            Channel::SlackMarkdown | Channel::GithubMarkdown | Channel::NotionMarkdown => "- ",
+            Channel::SlackMarkdown
+            | Channel::GithubMarkdown
+            | Channel::NotionMarkdown
+            | Channel::ObsidianMarkdown => "- ",
             _ => "• ",
         }
     }
@@ -452,8 +486,8 @@ impl Vocab {
             // 슬랙 문서가 "모든 헤딩 레벨을 같은 크기로 그린다"고 적고 있다.
             // 그러니 더 깊이 적을 값이 없다 — 셋에서 끊는다.
             Channel::SlackMarkdown => 3,
-            // GitHub 은 여섯 단계를 크기를 달리해 그린다.
-            Channel::GithubMarkdown | Channel::Html => 6,
+            // GitHub 은 여섯 단계를 크기를 달리해 그린다. 옵시디언도 GitHub 을 따른다.
+            Channel::GithubMarkdown | Channel::ObsidianMarkdown | Channel::Html => 6,
             // 노션 헤딩은 네 단계다 — 다섯·여섯은 노션이 넷으로 바꾼다(명세, 실측도 같다).
             Channel::NotionMarkdown => 4,
             Channel::TelegramHtml | Channel::Plain => 0,

@@ -56,7 +56,7 @@ cat > "$OUT/package.json" <<JSON
   "author": "Minjun Kim (https://minjun.kim/)",
   "repository": { "type": "git", "url": "https://github.com/minjun0219/mdwire" },
   "homepage": "https://minjun.kim/mdwire/",
-  "keywords": ["markdown", "llm", "ai", "agent", "chatbot", "telegram", "telegram-bot", "slack", "slack-bot", "github", "notion", "react", "lezer", "codemirror", "streaming", "wasm"],
+  "keywords": ["markdown", "llm", "ai", "agent", "chatbot", "telegram", "telegram-bot", "slack", "slack-bot", "github", "notion", "obsidian", "react", "lezer", "codemirror", "streaming", "wasm"],
   "type": "module",
   "main": "./node/mdwire.js",
   "types": "./bundler/mdwire.d.ts",

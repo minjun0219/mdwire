@@ -3,6 +3,7 @@ layout: ../../../layouts/Doc.astro
 title: CLI
 description: mdwire 명령의 플래그, 출력 형식, 정규화 보고, 배치 모드를 설명합니다.
 ---
+import Next from "../../../components/Next.astro";
 
 
 # CLI — `mdwire`
@@ -30,7 +31,7 @@ cat agent-output.md | mdwire --channel slack-markdown --report
 
 | 플래그 | |
 |---|---|
-| `--channel <이름>` | 필수입니다. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `plain` · `html` 중 하나를 줍니다. |
+| `--channel <이름>` | 필수입니다. `telegram-html` · `slack-markdown` · `github-markdown` · `notion-markdown` · `obsidian-markdown` <Next /> · `plain` · `html` 중 하나를 줍니다. |
 | `--limit <글자 수>` | 조각 길이 제한입니다. 기본값은 채널의 길이 제한입니다. |
 | `--html-line-breaks <br\|space>` | `html` 채널 전용입니다. 기본값은 `br` 입니다. |
 | `--html-images <link\|load>` | `html` 채널 전용입니다. 기본값은 `link` 입니다. |

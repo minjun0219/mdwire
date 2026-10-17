@@ -699,12 +699,53 @@ fn github_escapes_tilde_and_angle_outside_code() {
     assert_eq!(g("```\nx ~ <y>\n```"), "```\nx ~ <y>\n```");
     // 저자가 이스케이프해 둔 것은 한 번만 이스케이프한다.
     assert_eq!(g(r"5\~6월 \<T>"), r"5\~6월 \<T>");
+    // `$…$` 를 수식으로 적는 채널이라 저자의 `\$` 도 지킨다(노션과 같다).
+    assert_eq!(g(r"가격은 \$5-\$10"), r"가격은 \$5-\$10");
     // 표 칸도 본문이다.
     assert_eq!(g("| a~b |\n|---|\n| <T> |"), "| a\\~b |\n| --- |\n| \\<T> |");
     // 오토링크·링크 주소는 건드리지 않는다.
     assert_eq!(g("<https://a.com/~me>"), "<https://a.com/~me>");
     // 헤딩은 여섯 단계를 다 그린다.
     assert_eq!(g("# 하나\n\n## 둘\n\n### 셋\n\n#### 넷"), "# 하나\n\n## 둘\n\n### 셋\n\n#### 넷");
+}
+
+/// **옵시디언에서도 물결이 깨진다**(제보 2026-10-16). GitHub 에서 잰 고장(홑 `~` 둘 사이가 그어진다)과
+/// 같은 것으로 보고 GitHub 의 규칙으로 낸다. 노트는 메시지가 아니라 파일이라 나누지 않고, 호출자가 한도를
+/// 주면 그때만 나눈다.
+#[test]
+fn obsidian_escapes_tilde_like_github_and_does_not_split() {
+    let o = |s| one(s, Channel::ObsidianMarkdown);
+    assert_eq!(o("**1~3단계**는 필수이고 반품은 5~7일 걸린다"), r"**1\~3단계**는 필수이고 반품은 5\~7일 걸린다");
+    assert_eq!(o("약 ~40km, 5~6월 이동"), r"약 \~40km, 5\~6월 이동");
+    assert_eq!(o("~~취소~~가 `a~b <T>`"), "~~취소~~가 `a~b <T>`");
+    for input in ["Vec<T> 와 1 < 2", "**설정(config)**을 바꾼다", "<sub>모델 · 토큰</sub> 꼬리말", "| a~b |\n|---|\n| <T> |"] {
+        assert_eq!(o(input), one(input, Channel::GithubMarkdown), "{input}");
+    }
+    // 위키링크 안은 노트·첨부의 이름이라 손대지 않는다 — 밖의 `~` 만 이스케이프한다. GitHub 은 위키링크를
+    // 모르니 전처럼 안까지 이스케이프한다.
+    assert_eq!(o("[[5~6월 계획]] 은 7~8월로"), r"[[5~6월 계획]] 은 7\~8월로");
+    assert_eq!(o("![[도식 1~2.png]] [[노트#5~6월|일정]]"), "![[도식 1~2.png]] [[노트#5~6월|일정]]");
+    assert_eq!(one("[[5~6월 계획]]", Channel::GithubMarkdown), r"[[5\~6월 계획]]");
+    // 비었거나 안 닫힌 `[[` 는 위키링크가 아니다.
+    assert_eq!(o("[[]] 와 [[5~6"), r"[[]] 와 [[5\~6");
+    // 스트리밍도 같다 — `[` 는 짝이 정해질 때까지 블록 층이 붙들어서 위키링크가 한 번에 들어온다.
+    for input in ["[[5~6월 계획]] 은 7~8월로", "![[도식 1~2.png]] [[노트#5~6월|일정]]", "[[]] 와 [[5~6"] {
+        let chars: Vec<char> = input.chars().collect();
+        for size in 1..=chars.len() {
+            let mut s = Streamer::new(Channel::ObsidianMarkdown);
+            let mut got = String::new();
+            for chunk in chars.chunks(size) {
+                s.push_into(&chunk.iter().collect::<String>(), &mut got);
+            }
+            s.finish_into(&mut got);
+            assert_eq!(got, o(input), "{input:?} · 조각 {size}");
+        }
+    }
+    let long = "가나다 ".repeat(30_000);
+    assert_eq!(render(&long, Channel::ObsidianMarkdown).len(), 1);
+    let opts = mdwire::Options { limit: Some(4096), ..Default::default() };
+    let parts = mdwire::render_with(&long, Channel::ObsidianMarkdown, opts).parts;
+    assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= 4096));
 }
 
 /// **노션은 GitHub 과 같은 마크다운에서 출발하되 반대로 가는 곳이 있다**(실측 2026-10-01, 커넥터로
@@ -841,6 +882,9 @@ fn report_counts_what_the_channel_rewrote() {
     // `any()` 는 고친 것만 본다 — 이스케이프 하나로 "모델이 서식을 깼다"가 되지 않는다.
     let tilde = r("약 ~40km", Channel::GithubMarkdown);
     assert!(tilde.changed() && !tilde.any(), "{tilde:?}");
+    // 옵시디언도 GitHub 과 같이 센다. 손대지 않은 위키링크 안은 세지 않는다.
+    assert_eq!(r("약 ~40km, 5~6월", Channel::ObsidianMarkdown).escaped_char, 2);
+    assert_eq!(r("[[5~6월]] 7~8월", Channel::ObsidianMarkdown).escaped_char, 1);
     // 줄 첫머리에서 벗긴 태그는 한 번씩 센다(두 번 세던 것).
     assert_eq!(r("<br>\n**x**", Channel::GithubMarkdown).stripped_html, 1);
     // `<url|텍스트>` 라벨의 이스케이프도 센다.

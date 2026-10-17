@@ -243,6 +243,59 @@ func TestGithubKeptTagsSurviveSplitsAndMatchByName(t *testing.T) {
 	}
 }
 
+// 옵시디언에서도 물결이 깨진다(제보 2026-10-16) — 러스트 쪽
+// obsidian_escapes_tilde_like_github_and_does_not_split 와 같은 기대값. GitHub 의 규칙으로 내고, 노트는
+// 나누지 않으며 호출자가 한도를 주면 그때만 나눈다.
+func TestObsidianEscapesTildeLikeGithubAndDoesNotSplit(t *testing.T) {
+	cases := [][2]string{
+		{"**1~3단계**는 필수이고 반품은 5~7일 걸린다", `**1\~3단계**는 필수이고 반품은 5\~7일 걸린다`},
+		{"약 ~40km, 5~6월 이동", `약 \~40km, 5\~6월 이동`},
+		{"~~취소~~가 `a~b <T>`", "~~취소~~가 `a~b <T>`"},
+		// 위키링크 안은 노트·첨부의 이름이라 손대지 않는다. 비었거나 안 닫힌 `[[` 는 위키링크가 아니다.
+		{"[[5~6월 계획]] 은 7~8월로", `[[5~6월 계획]] 은 7\~8월로`},
+		{"![[도식 1~2.png]] [[노트#5~6월|일정]]", "![[도식 1~2.png]] [[노트#5~6월|일정]]"},
+		{"[[]] 와 [[5~6", `[[]] 와 [[5\~6`},
+		// `$…$` 를 수식으로 적는 채널이라 저자의 `\$` 를 지킨다.
+		{`가격은 \$5-\$10`, `가격은 \$5-\$10`},
+	}
+	for _, c := range cases {
+		if got := strings.Join(Render(c[0], ObsidianMarkdown), ""); got != c[1] {
+			t.Errorf("%q\n  got  %q\n  want %q", c[0], got, c[1])
+		}
+		// 스트리밍도 같다 — `[` 는 짝이 정해질 때까지 블록 층이 붙든다.
+		for size := 1; size <= utf8.RuneCountInString(c[0]); size++ {
+			s := NewStreamer(ObsidianMarkdown)
+			var got []byte
+			for _, piece := range chunksOf(c[0], size) {
+				s.PushTo(piece, &got)
+			}
+			s.FinishTo(&got)
+			if string(got) != c[1] {
+				t.Errorf("%q 조각 %d: 스트리밍이 다르다\n  got  %q\n  want %q", c[0], size, got, c[1])
+			}
+		}
+	}
+	for _, input := range []string{"Vec<T> 와 1 < 2", "**설정(config)**을 바꾼다", "<sub>모델 · 토큰</sub> 꼬리말", "| a~b |\n|---|\n| <T> |"} {
+		got, want := strings.Join(Render(input, ObsidianMarkdown), ""), strings.Join(Render(input, GithubMarkdown), "")
+		if got != want {
+			t.Errorf("%q: 옵시디언이 GitHub 과 다르다\n  got  %q\n  want %q", input, got, want)
+		}
+	}
+	long := strings.Repeat("가나다 ", 30_000)
+	if n := len(Render(long, ObsidianMarkdown)); n != 1 {
+		t.Errorf("노트는 나누지 않는다: %d 조각", n)
+	}
+	parts := RenderWith(long, ObsidianMarkdown, Options{Limit: 4096}).Parts
+	if len(parts) < 2 {
+		t.Fatal("한도를 주면 나눠야 한다")
+	}
+	for _, p := range parts {
+		if n := utf8.RuneCountInString(p); n > 4096 {
+			t.Errorf("%d자 조각 — 한도 4096", n)
+		}
+	}
+}
+
 // 노션 채널 — 러스트 쪽 notion_escapes_what_it_eats_and_strips_tags 와 같은 기대값.
 func TestNotionEscapesWhatItEatsAndStripsTags(t *testing.T) {
 	cases := [][2]string{
@@ -360,6 +413,10 @@ func TestReportCountsWhatTheChannelRewrote(t *testing.T) {
 	}
 	if r := RenderWith("**굵게** 와 `코드`\n\n- 하나", SlackMarkdown, Options{}).Repairs; r.Changed() {
 		t.Errorf("바꿀 것이 없는데 셌다: %+v", r)
+	}
+	// 옵시디언도 GitHub 과 같이 센다.
+	if r := RenderWith("약 ~40km, 5~6월", ObsidianMarkdown, Options{}).Repairs; r.EscapedChar != 2 {
+		t.Errorf("obsidian: %+v", r)
 	}
 	if r := RenderWith("약 ~40km", GithubMarkdown, Options{}).Repairs; !r.Changed() || r.Repaired() {
 		t.Errorf("이스케이프 하나는 바꾼 것이지 고친 것이 아니다: %+v", r)

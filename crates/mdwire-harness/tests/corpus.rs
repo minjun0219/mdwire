@@ -128,6 +128,29 @@ fn preview_snapshots_are_sendable() {
     assert!(compared > 1000, "일괄 렌더와 대조한 스냅숏이 너무 적다: {compared}");
 }
 
+/// **옵시디언은 GitHub 과 같은 글을 낸다**(`SPEC.md` 4절) — 다른 것은 한도뿐이라 노트는 나누지 않는다.
+/// 그래서 옵시디언 기대 출력을 케이스마다 베껴 두지 않고 GitHub 의 출력과 견준다. 옵시디언에서 겪은 고장이라
+/// 제 기대 출력(`obsidian-markdown.txt`)을 둔 케이스는 코퍼스 대조가 맡는다 — 옵시디언에서 따로 잰 규칙이
+/// 생겨 GitHub 과 갈리면 그 케이스에 파일을 두면 된다.
+#[test]
+fn obsidian_writes_what_github_writes() {
+    let cases = corpus::load_cases(&corpus_dir()).expect("코퍼스");
+    let mut compared = 0;
+    for case in &cases {
+        if case.expected.contains_key(Channel::ObsidianMarkdown.name()) {
+            continue;
+        }
+        let github = mdwire::render(&case.input, Channel::GithubMarkdown);
+        // GitHub 이 한도로 나눈 케이스는 견줄 수 없다 — 옵시디언은 나누지 않는다.
+        if github.len() > 1 {
+            continue;
+        }
+        compared += 1;
+        assert_eq!(mdwire::render(&case.input, Channel::ObsidianMarkdown), github, "{}", case.name);
+    }
+    assert!(compared > 20, "견준 케이스가 너무 적다: {compared}");
+}
+
 /// `push` 와 `push_into` 는 같은 코드를 부른다. 서명만 다르다(`SPEC.md` 5절).
 #[test]
 fn borrowed_and_owned_signatures_agree() {
