@@ -402,9 +402,9 @@ fn scan_block(block: &str, mode: Mode, scan: &mut Scan) {
         let open_same = stack.iter().rposition(|o| o.kind == kind);
 
         // 글자 뒤의 `_` 는 열지 못한다 — `snake_case` 도 `2026-04-29_제목` 도 글자다.
-        // 열린 기울임이 있으면 닫는다(`_진료_가`). 규칙은 코어와 같다.
+        // `_` 로 연 기울임이 있으면 닫는다(`_진료_가`). `*` 로 연 것은 닫지 않는다. 규칙은 코어와 같다.
         let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
-        if intraword && open_same.is_none() {
+        if intraword && open_same.is_none_or(|at| !stack[at].marker.starts_with('_')) {
             push_text(&mut stack, &mut root, &marker);
             i += take;
             continue;
@@ -899,6 +899,20 @@ mod tests {
     fn underscore_inside_identifier_is_not_emphasis() {
         let scan = scan_markdown("`snake_case` 와 plain_text_name 은 그대로다", Mode::Repair);
         assert!(scan.spans.iter().all(|s| s.kind != Kind::Italic), "{:?}", scan.spans);
+    }
+
+    /// 단어 안 `_` 는 `_` 로 연 강조만 닫는다. `*` 로 연 것까지 닫으면 `my_var` 에서 범위가 끊겨,
+    /// 코어가 내는 온전한 범위를 "원문보다 넓다" 로 잘못 신고한다. 규칙은 코어와 같다.
+    #[test]
+    fn intraword_underscore_closes_only_underscore_emphasis() {
+        let italics = |src: &str| -> Vec<String> {
+            let scan = scan_markdown(src, Mode::Repair);
+            scan.spans.iter().filter(|s| s.kind == Kind::Italic).map(|s| s.text.clone()).collect()
+        };
+        assert_eq!(italics("*기울임 my_var 끝* 과 *a_b_c*"), vec!["기울임 my_var 끝", "a_b_c"]);
+        assert_eq!(bolds(&scan_markdown("**굵게 my__var** 끝", Mode::Repair)), vec!["굵게 my__var"]);
+        assert_eq!(italics("2*3 = 6, snake_case"), vec!["3 = 6, snake_case"]);
+        assert_eq!(italics("_진료_가 있다"), vec!["진료"]);
     }
 
     #[test]
