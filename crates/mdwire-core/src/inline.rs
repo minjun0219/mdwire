@@ -347,8 +347,10 @@ impl Inline {
             // `_` 를 열어 주면 날짜 붙은 파일 이름이 기울임을 열고 블록 끝까지 삼킨다.
             // 대신 **닫는 것은 된다.** `_진료_가` 의 둘째 `_` 는 열린 기울임을 닫는다 —
             // CommonMark 는 못 닫지만, 조사가 붙는 한국어에서는 그게 저자의 뜻이다.
+            // **닫는 것은 `_` 로 연 것뿐이다.** `*` 로 연 것까지 닫으면 `2*3 = 6, snake_case` 의
+            // 밑줄이 `2*3` 의 별표와 짝을 맺어 `snake*case` 가 되고, 그 사이가 기울어진다.
             let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
-            if intraword && same.is_none() {
+            if intraword && same.is_none_or(|at| self.open[at].ch != '_') {
                 for _ in 0..take {
                     self.text_char(c, out, v);
                 }

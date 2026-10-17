@@ -378,6 +378,22 @@ fn slack_markdown_text_italic_uses_asterisk() {
     assert_eq!(one("_진료_가 있다", Channel::TelegramHtml), "<i>진료</i>가 있다");
 }
 
+/// **단어 안 `_` 는 `_` 로 연 강조만 닫는다**(검토 중 찾았다, 2026-10-16). `*` 로 연 것까지 닫아서 강조 안의
+/// 식별자가 갈렸다 — `*기울임 my_var 끝*` 이 `<i>기울임 my</i>var 끝*` 로, `**굵게 my__var**` 는 밑줄 둘을
+/// 잃고 `<b>굵게 my</b>var` 로 나갔다. 보고에는 아무것도 남지 않았다.
+#[test]
+fn intraword_underscore_closes_only_what_underscore_opened() {
+    assert_eq!(one("*기울임 my_var 끝*", Channel::TelegramHtml), "<i>기울임 my_var 끝</i>");
+    assert_eq!(one("**굵게 my__var**", Channel::TelegramHtml), "<b>굵게 my__var</b>");
+    assert_eq!(one("*a_b_c*", Channel::GithubMarkdown), "*a_b_c*");
+    assert_eq!(one("_진료_가 *기울임 snake_case* 끝", Channel::SlackMarkdown), "*진료*가 *기울임 snake_case* 끝");
+    // 짝 없는 `*` 뒤에서도 이름이 바뀌지 않는다. 별표는 전처럼 블록 끝에서 닫는다.
+    for channel in Channel::all() {
+        let out = one("2*3 = 6, snake_case", channel);
+        assert!(out.contains("snake_case"), "{}: {out:?}", channel.name());
+    }
+}
+
 // ── 분할 ────────────────────────────────────────────────────────────────
 
 #[test]

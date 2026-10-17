@@ -42,6 +42,10 @@
 ----
 <p><em>진료</em>가 먼저고 <em>처방</em>은 나중이다.</p>
 ----
+<p><em>기울임 my_var 끝</em> 과 <strong>굵게 my__var</strong> 와 <em>a_b_c</em></p>
+----
+<p>2<em>3 = 6, snake_case</em></p>
+----
 <p>** 배포 ** 는 금지다.</p>
 ----
 <p><strong>굵게 </strong> 끝</p>

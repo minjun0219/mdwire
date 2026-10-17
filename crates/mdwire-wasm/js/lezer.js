@@ -132,10 +132,14 @@ function marker(cx, kind, from, to, prev, next, intraword) {
 
   const same = open(cx, kind.type);
   const hemmed = open(cx, kind.hemmed);
-  // 글자·숫자 뒤의 `_` 는 열지 못한다(`snake_case`). 같은 종류가 열려 있으면 닫는 것은 된다(`_진료_가`).
-  if (intraword && !same && !hemmed) return to;
   // 둘 다 열려 있으면 더 가까운 쪽이 코어의 "같은 종류 중 마지막"이다.
   const nearest = same && hemmed ? (same[0] > hemmed[0] ? "same" : "hemmed") : same ? "same" : hemmed ? "hemmed" : null;
+  // 글자·숫자 뒤의 `_` 는 열지 못한다(`snake_case`). 같은 종류가 `_` 로 열려 있으면 닫는 것은 된다(`_진료_가`).
+  // `*` 로 연 것은 닫지 않는다 — 닫으면 `2*3 = 6, snake_case` 의 밑줄이 별표와 짝을 맺는다. 코어와 같다.
+  if (intraword) {
+    const opener = nearest === "same" ? same : nearest === "hemmed" ? hemmed : null;
+    if (!opener || cx.char(opener[1].from) !== 95) return to;
+  }
 
   if (nearest === "hemmed") {
     const [i, d] = hemmed;
