@@ -15,12 +15,17 @@ interface Env {
 // 사이트가 사는 하위 경로 — `astro.config.mjs` 의 `base`.
 const BASE = "/mdwire";
 
-// `text/html` 에 적용되는 범위의 구체성. 더 구체적인 범위의 q 가 이긴다.
-const HTML_RANGES: Record<string, number> = { "text/html": 2, "text/*": 1, "*/*": 0 };
+// `text/html` 에 적용되는 범위와 그 구체성. 더 구체적인 범위의 q 가 이긴다.
+const HTML_RANGES = new Map([
+  ["text/html", 2],
+  ["text/*", 1],
+  ["*/*", 0],
+]);
 
 function prefersMarkdown(accept: string | null): boolean {
   if (!accept) return false;
   let markdown = 0;
+  // `text/html` 에 적용되는 범위가 없으면 HTML 의 q 는 0 이다.
   let html = { rank: -1, q: 0 };
   for (const item of accept.split(",")) {
     const [range, ...params] = item.split(";").map((s) => s.trim().toLowerCase());
@@ -28,7 +33,8 @@ function prefersMarkdown(accept: string | null): boolean {
     const q = qParam === undefined ? 1 : Number(qParam.slice(2));
     if (Number.isNaN(q)) continue;
     if (range === "text/markdown") markdown = Math.max(markdown, q);
-    const rank = HTML_RANGES[range] ?? -1;
+    const rank = HTML_RANGES.get(range);
+    if (rank === undefined) continue;
     if (rank > html.rank || (rank === html.rank && q > html.q)) html = { rank, q };
   }
   return markdown > 0 && markdown >= html.q;
