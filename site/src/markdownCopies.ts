@@ -1,5 +1,6 @@
-// 마크다운 사본(`/docs/npm.md` …)이 있는 페이지의 규칙. 사본을 만드는 쪽(`integrations/agents.mjs`)과
-// `rel="alternate"` 를 다는 쪽(`layouts/Doc.astro`)이 같이 쓴다.
+// 마크다운 사본(`/docs/npm.md` …)이 있는 페이지의 규칙. 사본을 만드는 쪽(`integrations/agents.mjs`),
+// `rel="alternate"` 를 다는 쪽(`layouts/Doc.astro`), `Accept` 를 보고 사본을 주는 쪽(`worker.ts`)이 같이 쓴다.
+// 규칙을 넓히면 `wrangler.jsonc` 의 `run_worker_first` 패턴도 넓힌다.
 
 // 언어와 무관한 경로(`""`, `why`, `docs/npm` …) — 개요 · 배경 · 문서만. 데모는 브라우저에서 돌아야 뜻이 있다.
 export const hasMarkdown = (rest: string) =>

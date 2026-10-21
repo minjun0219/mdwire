@@ -1,9 +1,11 @@
-// Cloudflare Workers Static Assets — Worker 스크립트 없이 `dist/` 만 올린다.
+// Cloudflare Workers Static Assets — `dist/` 를 올리고, 마크다운 사본이 있는 페이지만 Worker(`worker.ts`)가 먼저 받아
+// `Accept` 로 HTML 과 사본을 고른다. 나머지 요청은 정적 자산이 바로 받는다.
 // 계정 ID 는 두지 않는다. Workers Builds 가 연결된 계정으로 올리고, 로컬에서 올릴 때는
 // `wrangler login` 한 계정을 쓴다.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "mdwire-site",
+  "main": "worker.ts",
   "compatibility_date": "2026-09-30",
   // 배포 전에 빌드한다 — `wrangler deploy` · `wrangler dev` 가 이걸 먼저 돌린다. Workers Builds 는 대시보드의
   // 빌드 명령을 쓰고, 문서상 이 설정은 따르지 않는다(둘 다 같은 명령이라 겹쳐도 결과는 같다).
@@ -25,9 +27,22 @@
   // `_headers` 는 루트에서만 읽혀 빌드 끝에 `dist/` 로 올린다(`astro.config.mjs`).
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "html_handling": "auto-trailing-slash"
+    "html_handling": "auto-trailing-slash",
+    // Worker 를 먼저 거치는 경로 — 사본이 있는 페이지(`src/markdownCopies.ts`: 개요 · 배경 · 문서와 한국어판)만.
+    // 사본 파일(`*.md`)은 뺀다. 여기 걸린 요청만 Workers 요청으로 세고, 정적 자산이 바로 받는 요청은 세지 않는다.
+    // `*` 는 `/` 까지 포함한 아무 글자다.
+    "run_worker_first": [
+      "/mdwire/",
+      "/mdwire/ko/",
+      "/mdwire/why/*",
+      "/mdwire/docs/*",
+      "/mdwire/ko/why/*",
+      "/mdwire/ko/docs/*",
+      "!/mdwire/*.md"
+    ]
   },
-  // Worker Previews(PR 브랜치 프리뷰)의 설정. 정적 자산뿐이라 프로덕션과 다를 것이 없어 비워 둔다.
+  // Worker Previews(PR 브랜치 프리뷰)의 설정. 바인딩이 정적 자산 하나뿐이라 프로덕션과 다를 것이 없어 비워 둔다.
   "previews": {}
 }
