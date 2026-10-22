@@ -2,6 +2,28 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.1.15 — 2026-10-22
+
+### 새로 할 수 있는 것
+
+- **core** — 옵시디언 노트 채널을 더하고 GitHub 은 이스케이프한 달러를 지킨다 ([#121](https://github.com/minjun0219/mdwire/pull/121))
+
+### 고친 것
+
+- **core** — 단어 안 밑줄은 밑줄로 연 강조만 닫는다 ([#122](https://github.com/minjun0219/mdwire/pull/122))
+
+### 성능
+
+- **core** — 옵시디언 위키링크를 찾을 때 같은 줄을 다시 훑지 않는다 ([#125](https://github.com/minjun0219/mdwire/pull/125))
+
+### 테스트
+
+- **npm** — 스모크가 wrangler 의 자식 프로세스까지 내린다 ([#123](https://github.com/minjun0219/mdwire/pull/123))
+
+### 유지
+
+- **deps** — 의존성을 같은 major 안에서 최신으로 올린다 ([#126](https://github.com/minjun0219/mdwire/pull/126))
+
 ## 0.1.14 — 2026-10-10
 
 ### 고친 것
