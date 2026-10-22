@@ -33,6 +33,7 @@ mdwire 문서·데모 사이트. <https://minjun.kim/mdwire/> 에 올린다 — 
 - 검색 엔진·에이전트용 파일은 빌드 끝에 `integrations/agents.mjs` 가 만든다 — `sitemap.xml`, 개요·문서의
   마크다운 사본(`/docs/npm/` → `/docs/npm.md`), 영어 문서를 한 파일로 모은 `llms-full.txt`. MDX 원본에서
   import 를 걷어 내고 `<Next />` 를 글로 바꾼 것이라, 문서에 새 컴포넌트를 쓰면 거기서 마크다운으로 바꾸는 줄도 더한다.
+  사본은 페이지 주소에 `Accept: text/markdown` 으로 요청해도 받는다(`worker.ts`, 아래 배포 절).
 - 홈은 MDX 본문을 화면용 컴포넌트로 감싼다. `Hero` · `Steps` · `LinkCards` 는 안의 글(slot)을 꾸밀 뿐이라 글은 MDX 에
   그대로 있고, `Showcase`(전후 비교) · `Channels`(채널 카드)는 같은 내용이 본문에 있는 화면용 블록이다. 마크다운 사본은
   컴포넌트만 있는 줄을 걷어 낸다 — 그래서 컴포넌트는 늘 제 줄에 따로 쓴다.
@@ -67,7 +68,13 @@ pnpm exec wrangler dev # dist/ 를 Workers 와 같은 방식으로 서빙해 본
 ## 배포
 
 Cloudflare Workers Static Assets 에 Workers Builds(Git 연결)로 올린다. 설정은 `wrangler.jsonc` —
-Worker 스크립트 없이 `dist/` 만 올린다. 계정 ID 와 토큰은 저장소에 두지 않는다.
+`dist/` 와 Worker 스크립트 `worker.ts` 를 올린다. 계정 ID 와 토큰은 저장소에 두지 않는다.
+
+Worker 는 마크다운 사본이 있는 페이지(개요 · 배경 · 문서와 한국어판)만 먼저 받는다(`run_worker_first`). `Accept` 에
+`text/markdown` 이 직접 적혀 있고 그 q 가 `text/html` 에 적용되는 q 이상이면 같은 주소에서 사본을, 아니면 HTML 을 주고, 둘 다
+`Vary: Accept` 를 단다. 브라우저와 `*/*` 만 보내는 curl 은 지금처럼 HTML 을 받는다. 나머지 요청(데모 · 자산 · 사본 파일 ·
+`llms.txt`)은 Worker 를 거치지 않고 정적 자산이 바로 받는다 — Workers 요청으로 세는 것은 Worker 를 거친 요청뿐이다. 패턴은
+`src/markdownCopies.ts` 의 규칙을 따라가므로, 사본이 있는 묶음을 늘리면 `run_worker_first` 에도 더한다.
 
 주소는 `minjun.kim/mdwire/` 다. `minjun.kim` 존의 Workers Routes(`minjun.kim/mdwire` · `minjun.kim/mdwire/*`)가 이 워커로
 보낸다 — 개인 사이트 워커의 Custom Domain 앞에서 라우트가 먼저 받는다. 정적 자산은 요청 경로 그대로 찾으므로 산출물은
@@ -86,6 +93,7 @@ Worker 스크립트 없이 `dist/` 만 올린다. 계정 ID 와 토큰은 저장
 
 ```sh
 curl -s https://minjun.kim/mdwire/_version.txt   # 머지한 커밋과 같아야 한다
+curl -sI -H 'Accept: text/markdown' https://minjun.kim/mdwire/docs/npm/   # content-type: text/markdown, vary: Accept
 ```
 
 Workers Builds 설정(대시보드):
