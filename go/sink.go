@@ -301,11 +301,14 @@ type tag struct{ name, full string }
 type span struct {
 	run    int
 	marker string
-	start  int // 여는 마커의 첫 글자 위치
-	end    int // 닫는 마커 다음 위치
+	// link 은 mrkdwn 링크 <주소|글> 이다. marker 가 여는 쪽(`<주소|`)이고 닫는 쪽은 `>` 다. 글 안에서 끊으면
+	// 닫고 다음 조각에서 다시 연다 — 러스트 쪽 SpanKind::Link.
+	link  bool
+	start int // 여는 마커의 첫 글자 위치
+	end   int // 닫는 마커 다음 위치
 }
 
-func (sp span) isTag() bool { return strings.HasPrefix(sp.marker, "<") }
+func (sp span) isTag() bool { return !sp.link && strings.HasPrefix(sp.marker, "<") }
 
 func (sp span) writeOpen(out *[]byte) {
 	if sp.marker != "" {
@@ -318,6 +321,10 @@ func (sp span) writeOpen(out *[]byte) {
 }
 
 func (sp span) writeClose(out *[]byte) {
+	if sp.link {
+		*out = append(*out, '>')
+		return
+	}
 	if sp.isTag() {
 		*out = append(*out, "</"...)
 		*out = append(*out, sp.marker[1:]...)
@@ -329,6 +336,8 @@ func (sp span) writeClose(out *[]byte) {
 // reopenLen 은 닫고 다시 여는 데 드는 글자 수다.
 func (sp span) reopenLen() int {
 	switch {
+	case sp.link:
+		return utf8.RuneCountInString(sp.marker) + 1
 	case sp.isTag():
 		return len(sp.marker)*2 + 1
 	case sp.marker != "":
@@ -650,6 +659,30 @@ func scanSpans(text string, mrkdwn bool) []span {
 			} else {
 				i += run
 			}
+			continue
+		}
+		// mrkdwn 의 < 는 링크뿐이다 — 글자 < 는 &lt; 로 나간다. 주소는 건너뛰고 글 안의 강조는 계속 본다.
+		if c == '<' && mrkdwn {
+			end := -1
+			for k := i + 1; k < len(ch) && ch[k] != '\n'; k++ {
+				if ch[k] == '>' {
+					end = k
+					break
+				}
+			}
+			if end < 0 {
+				i++
+				continue
+			}
+			bar := end
+			for k := i + 1; k < end; k++ {
+				if ch[k] == '|' {
+					bar = k
+					break
+				}
+			}
+			spans = append(spans, span{marker: string(ch[i:bar]) + "|", link: true, start: i, end: end + 1})
+			i = bar + 1
 			continue
 		}
 		if c == '<' {

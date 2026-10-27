@@ -31,6 +31,10 @@ func TestMrkdwnMatchesRustShapes(t *testing.T) {
 		{"값**굵게**다", "값\u200b*굵게*\u200b다"},
 		{"(**괄호**) 와 **공백** 옆", "(*괄호*) 와 *공백* 옆"},
 		{"**첫 줄에서 열고\n둘째 줄에서 닫힘**입니다.", "*첫 줄에서 열고*\n*둘째 줄에서 닫힘*\u200b입니다."},
+		{"**굵게**<span>뒤</span>", "*굵게*\u200b뒤"},
+		{"앞<span>**굵게**</span>", "앞\u200b*굵게*\u200b"},
+		{"**a**__b__ 와 *a*_b_", "*a*\u200b*b* 와 _a_\u200b_b_"},
+		{"_**둘 다**_", "_*둘 다*_"},
 	} {
 		if got := strings.Join(Render(c[0], SlackMrkdwn), ""); got != c[1] {
 			t.Errorf("%q:\n  got  %q\n  want %q", c[0], got, c[1])
@@ -118,6 +122,21 @@ func TestLongUnclosedBracketsPreserveTextInMrkdwn(t *testing.T) {
 		s.FinishTo(&acc)
 		if string(acc) != want {
 			t.Fatalf("%q…: 스트리밍이 완성본과 달라졌다", input[:8])
+		}
+	}
+}
+
+// 한도를 넘는 링크 글은 조각마다 > 로 닫고 <주소| 로 다시 연다 — 러스트 쪽 mrkdwn_links_survive_splits.
+func TestMrkdwnLinksSurviveSplits(t *testing.T) {
+	for _, label := range []string{strings.Repeat("x", 3100), strings.Repeat("가나 ", 1100)} {
+		parts := Render("**["+label+"](https://a.test/a_b)** 끝", SlackMrkdwn)
+		if len(parts) < 2 {
+			t.Fatal("나뉘지 않았다")
+		}
+		for i, p := range parts {
+			if utf8.RuneCountInString(p) > 3000 || !strings.HasPrefix(p, "*<https://a.test/a_b|") || strings.Count(p, "<") != strings.Count(p, ">") {
+				t.Fatalf("조각 %d: %q … %q", i, p[:40], p[len(p)-20:])
+			}
 		}
 	}
 }

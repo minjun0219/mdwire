@@ -77,10 +77,12 @@ type inline struct {
 	wrap []byte
 	// boldLine 은 블록 층이 줄 전체를 굵게 감쌌는가다(헤딩 구문이 없는 채널의 헤딩). 블록이 끝나면 내린다.
 	boldLine bool
+	// lastClose 는 mrkdwn 에서 마지막으로 닫은 강조의 닫는 마커 글자다(mrkdwnBounds).
+	lastClose rune
 }
 
 func newInline() *inline {
-	return &inline{prev: noChar, afterClose: noChar}
+	return &inline{prev: noChar, afterClose: noChar, lastClose: noChar}
 }
 
 // reset 은 블록 경계다. 인라인 상태는 블록을 넘지 않는다.
@@ -89,6 +91,7 @@ func (in *inline) reset() {
 	in.prev = noChar
 	in.strippedTags = in.strippedTags[:0]
 	in.boldLine = false
+	in.lastClose = noChar
 }
 
 // safeLen 은 지금 out 에서 내보내도 안전한 길이다. 열린 마커가 있으면 그 앞까지다.
@@ -622,7 +625,17 @@ func (in *inline) mrkdwnBounds(out *[]byte, at int, before, after rune, v vocab)
 	if !v.isMrkdwn() {
 		return
 	}
-	left, right := glued(before), glued(after)
+	// 원문의 이웃이 태그 꺾쇠면 그 태그는 벗겨져서 너머의 글자가 붙을 수 있다 — 늘 뗀다. 앞이 마커 글자이고
+	// 바로 앞 강조가 같은 마커로 닫혔으면 둘이 붙어 런이 된다(`**a**__b__`). out 은 스트리밍 중에 비어 있을 수
+	// 있어서 닫은 마커를 따로 기억해 둔다(lastClose) — 러스트 쪽과 같다.
+	openC, _ := utf8.DecodeRune((*out)[at:])
+	markerBefore := (before == '*' || before == '_' || before == '~') && in.lastClose == openC
+	left := glued(before) || before == '>' || markerBefore
+	right := glued(after) || after == '<'
+	in.lastClose = noChar
+	if r, n := utf8.DecodeLastRune(*out); n > 0 {
+		in.lastClose = r
+	}
 	if left || right {
 		in.repairs.TagEmphasis++
 	}

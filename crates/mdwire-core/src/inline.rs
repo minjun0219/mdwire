@@ -91,6 +91,8 @@ pub(crate) struct Inline {
     wrap: String,
     /// 블록 층이 줄 전체를 굵게 감쌌다(헤딩 구문이 없는 채널의 헤딩). 블록이 끝나면 내린다.
     pub bold_line: bool,
+    /// `mrkdwn` 에서 마지막으로 닫은 강조의 닫는 마커 글자([`Inline::mrkdwn_bounds`]).
+    last_close: Option<char>,
 }
 
 impl Inline {
@@ -111,6 +113,7 @@ impl Inline {
             wrap: String::new(),
             preview: false,
             bold_line: false,
+            last_close: None,
         }
     }
 
@@ -120,6 +123,7 @@ impl Inline {
         self.prev = None;
         self.stripped_tags.clear();
         self.bold_line = false;
+        self.last_close = None;
     }
 
     /// 본문 글자 하나를 적는다. 채널이 이스케이프하는 글자면 센다([`Repairs::escaped_char`]).
@@ -782,7 +786,15 @@ impl Inline {
             return;
         }
         let glued = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
-        let (left, right) = (glued(before), glued(after));
+        // 원문의 이웃이 태그 꺾쇠면 그 태그는 벗겨져서 너머의 글자가 붙을 수 있다(`**굵게**<span>뒤</span>`).
+        // 그 글자까지 보지 않고 늘 뗀다 — 공백·구두점 옆이면 U+200B 가 없어도 같아서 잃는 것이 없다.
+        // 앞이 마커 글자이고 바로 앞 강조가 같은 마커로 닫혔으면 둘이 붙어 런이 된다(`**a**__b__` 는 둘 다
+        // `*`). `out` 은 스트리밍 중에 비어 있을 수 있어서 닫은 마커를 따로 기억해 둔다(`last_close`).
+        let open_c = out[at..].chars().next();
+        let marker_before = matches!(before, Some('*' | '_' | '~')) && self.last_close == open_c;
+        let left = glued(before) || before == Some('>') || marker_before;
+        let right = glued(after) || after == Some('<');
+        self.last_close = out.chars().next_back();
         if left || right {
             self.repairs.tag_emphasis += 1;
         }

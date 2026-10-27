@@ -811,6 +811,26 @@ fn mrkdwn_separates_markers_from_glued_letters() {
     assert_eq!(m("값**굵게**다"), "값\u{200b}*굵게*\u{200b}다");
     assert_eq!(m("(**괄호**) 와 **공백** 옆"), "(*괄호*) 와 *공백* 옆");
     assert_eq!(mdwire::render_with("**마통**이", Channel::SlackMrkdwn, Default::default()).repairs.tag_emphasis, 1);
+    // 출력에서 붙는 이웃도 뗀다 — 벗긴 태그 너머의 글자와, 같은 마커로 바뀐 앞 강조의 닫는 마커(리뷰에서 재현).
+    assert_eq!(m("**굵게**<span>뒤</span>"), "*굵게*\u{200b}뒤");
+    assert_eq!(m("앞<span>**굵게**</span>"), "앞\u{200b}*굵게*\u{200b}");
+    assert_eq!(m("**a**__b__ 와 *a*_b_"), "*a*\u{200b}*b* 와 _a_\u{200b}_b_");
+    assert_eq!(m("_**둘 다**_"), "_*둘 다*_");
+}
+
+/// **한도를 넘는 링크 글은 조각마다 `>` 로 닫고 `<주소|` 로 다시 연다**(리뷰에서 재현). 분할기가 링크를 모르면
+/// 앞 조각이 `<주소|글` 로 끝나고 `>` 가 다음 조각에 간다.
+#[test]
+fn mrkdwn_links_survive_splits() {
+    for label in ["x".repeat(3100), "가나 ".repeat(1100)] {
+        let parts = render(&format!("**[{label}](https://a.test/a_b)** 끝"), Channel::SlackMrkdwn);
+        assert!(parts.len() > 1);
+        for p in &parts {
+            assert!(p.chars().count() <= 3000);
+            assert!(p.starts_with("*<https://a.test/a_b|"), "{:?}", &p[..40]);
+            assert_eq!(p.matches('<').count(), p.matches('>').count(), "{p:?}");
+        }
+    }
 }
 
 /// **강조는 줄마다 닫는다.** 줄을 넘는 짝을 `mrkdwn` 이 그리는지 재지 않았는데, 줄마다 닫은 모양은 어느

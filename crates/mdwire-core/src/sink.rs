@@ -114,6 +114,10 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
     let mut markup = Markup::default();
     if v.channel != Channel::TelegramHtml && !v.is_plain() {
         markup.spans = std::rc::Rc::from(scan_spans(text, v.is_mrkdwn()));
+        if v.is_mrkdwn() {
+            // 링크를 다시 열 때 주소를 이 글에서 옮겨 적는다(`SpanKind::Link`).
+            markup.chars = text.chars().collect();
+        }
     }
 
     for line in text.split_inclusive('\n') {
@@ -294,6 +298,8 @@ struct Markup {
     pos: usize,
     /// 다시 열 수 없어 버린 뒤다. 그 뒤로는 스팬을 닫지도 열지도 않는다.
     dropped: bool,
+    /// 블록의 글자. `mrkdwn` 링크를 다시 열 때만 쓴다 — 여는 쪽이 `<주소|` 라 주소를 옮겨 적어야 한다.
+    chars: std::rc::Rc<[char]>,
     /// 방금 마크다운 마커를 다시 열었고 아직 내용이 안 붙었다. 여는 마커 뒤가 공백이면
     /// 열기가 아니라서, 다음에 붙는 글의 앞 공백을 턴다.
     fresh: bool,
@@ -317,6 +323,9 @@ enum SpanKind {
     /// GitHub 에서 마커 대신 낸 `<strong>` `<em>` `<del>`. 마커가 flanking 에 걸리는
     /// 자리에만 나온다(`inline::gfm_pairs`).
     Tag(&'static str),
+    /// `mrkdwn` 링크 `<주소|글>`. 주소의 글자 범위다. 글 안에서 끊으면 `>` 로 닫고 다음 조각에서
+    /// `<주소|` 로 다시 연다 — 안 그러면 앞 조각은 `<주소|글` 로 끝나고 `>` 가 다음 조각에 간다.
+    Link(usize, usize),
 }
 
 /// 렌더러가 내는 짝 있는 태그 이름 — 마커 대신 내는 `strong`·`em`·`del` 과 살려 둔 원문 인라인
@@ -326,8 +335,13 @@ fn emph_tags() -> impl Iterator<Item = &'static str> {
 }
 
 impl SpanKind {
-    fn write_open(self, out: &mut String) {
+    fn write_open(self, out: &mut String, chars: &[char]) {
         match self {
+            SpanKind::Link(from, to) => {
+                out.push('<');
+                out.extend(&chars[from..to]);
+                out.push('|');
+            }
             SpanKind::Code(run) => {
                 for _ in 0..run {
                     out.push('`');
@@ -349,7 +363,13 @@ impl SpanKind {
                 out.push_str(name);
                 out.push('>');
             }
-            _ => self.write_open(out),
+            SpanKind::Link(..) => out.push('>'),
+            SpanKind::Code(run) => {
+                for _ in 0..run {
+                    out.push('`');
+                }
+            }
+            SpanKind::Emph(m) => out.push_str(m),
         }
     }
 
@@ -359,6 +379,7 @@ impl SpanKind {
             SpanKind::Code(run) => run * 2,
             SpanKind::Emph(m) => m.len() * 2,
             SpanKind::Tag(name) => name.len() * 2 + 5,
+            SpanKind::Link(from, to) => to - from + 3,
         }
     }
 }
@@ -484,6 +505,21 @@ fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
             }
             continue;
         }
+        // `mrkdwn` 의 `<` 는 링크뿐이다 — 글자 `<` 는 `&lt;` 로 나간다. 주소는 건너뛰고(`a_b` 의 밑줄은
+        // 마커가 아니다) 글 안의 강조는 계속 본다.
+        if c == '<' && mrkdwn {
+            let close = ch[i..].iter().position(|&x| x == '>' || x == '\n').filter(|&p| ch[i + p] == '>');
+            match close {
+                Some(p) => {
+                    let end = i + p;
+                    let bar = ch[i..end].iter().position(|&x| x == '|').map_or(end, |q| i + q);
+                    spans.push(Span { kind: SpanKind::Link(i + 1, bar), start: i, end: end + 1 });
+                    i = bar + 1;
+                }
+                None => i += 1,
+            }
+            continue;
+        }
         if c == '<' {
             match emph_tag_at(&ch, i) {
                 Some((name, false, len)) => {
@@ -556,6 +592,7 @@ impl Default for Markup {
             spans: std::rc::Rc::from(Vec::new()),
             pos: 0,
             dropped: false,
+            chars: std::rc::Rc::from(Vec::new()),
             fresh: false,
         }
     }
@@ -694,7 +731,7 @@ impl Markup {
             out.push_str(full);
         }
         for sp in self.open_spans() {
-            sp.kind.write_open(out);
+            sp.kind.write_open(out, &self.chars);
         }
     }
 }
