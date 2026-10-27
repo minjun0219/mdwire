@@ -2,6 +2,33 @@
 
 커밋에서 만든다 — `git cliff`. 손으로 고치지 않는다.
 
+## 0.2.0 — 2026-10-27
+
+### 깨지는 변경
+
+- **core** — 슬랙 레거시 mrkdwn 출력 채널을 더한다 ([#131](https://github.com/minjun0219/mdwire/pull/131))
+
+### 새로 할 수 있는 것
+
+- **core** — 옵시디언 노트 채널을 더하고 GitHub 은 이스케이프한 달러를 지킨다 ([#121](https://github.com/minjun0219/mdwire/pull/121))
+
+### 고친 것
+
+- **core** — 단어 안 밑줄은 밑줄로 연 강조만 닫는다 ([#122](https://github.com/minjun0219/mdwire/pull/122))
+
+### 성능
+
+- **core** — 옵시디언 위키링크를 찾을 때 같은 줄을 다시 훑지 않는다 ([#125](https://github.com/minjun0219/mdwire/pull/125))
+
+### 테스트
+
+- **npm** — 스모크가 wrangler 의 자식 프로세스까지 내린다 ([#123](https://github.com/minjun0219/mdwire/pull/123))
+
+### 유지
+
+- **release** — 깨지는 변경이면 minor 를 올리고 홑별표는 기울임으로 둔다 ([#130](https://github.com/minjun0219/mdwire/pull/130))
+- **deps** — 의존성을 같은 major 안에서 최신으로 올린다 ([#126](https://github.com/minjun0219/mdwire/pull/126))
+
 ## 0.1.14 — 2026-10-10
 
 ### 고친 것
@@ -55,6 +82,10 @@
 
 ## 0.1.10 — 2026-10-01
 
+### 깨지는 변경
+
+- 입력 표기 옵션을 걷어낸다 ([#84](https://github.com/minjun0219/mdwire/pull/84))
+
 ### 고친 것
 
 - **core** — 슬랙에서 조사 앞 구두점 강조에 워드 조이너를 끼운다 ([#85](https://github.com/minjun0219/mdwire/pull/85))
@@ -66,12 +97,8 @@
 ### 유지
 
 - **release** — Linux arm64 · Windows 바이너리를 더하고 PR 에서 돌려 본다 ([#87](https://github.com/minjun0219/mdwire/pull/87))
-- **release** — 그새 main 이 움직였으면 release PR 을 건드리지 않는다 ([#79](https://github.com/minjun0219/mdwire/pull/79))
-
-### refactor
-
-- 입력 표기 옵션을 걷어낸다 ([#84](https://github.com/minjun0219/mdwire/pull/84))
 - 한국어 용어를 맞추고 CLI · 바인딩 오류 메시지를 다듬는다 ([#77](https://github.com/minjun0219/mdwire/pull/77))
+- **release** — 그새 main 이 움직였으면 release PR 을 건드리지 않는다 ([#79](https://github.com/minjun0219/mdwire/pull/79))
 
 ## 0.1.9 — 2026-10-01
 
