@@ -170,6 +170,7 @@ fn smallest_caller_limit_splits_cleanly() {
         for channel in [
             Channel::TelegramHtml,
             Channel::SlackMarkdown,
+            Channel::SlackMrkdwn,
             Channel::GithubMarkdown,
             Channel::NotionMarkdown,
             Channel::ObsidianMarkdown,

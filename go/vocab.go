@@ -119,6 +119,13 @@ func (v vocab) isHTML() bool { return v.channel == HTML }
 // htmlOut 은 출력이 HTML 이라 글자를 escape 해야 하는가다. 텔레그램과 브라우저.
 func (v vocab) htmlOut() bool { return v.channel == TelegramHTML || v.channel == HTML }
 
+// isMrkdwn 은 슬랙 레거시 mrkdwn 인가다. 마커는 마크다운처럼 쓰지만 글자는 HTML 처럼 엔티티로 적는다.
+func (v vocab) isMrkdwn() bool { return v.channel == SlackMrkdwn }
+
+// entities 는 & < > 를 엔티티로 적는가다. HTML 로 가는 채널과 mrkdwn 이다 — 슬랙 문서가 mrkdwn 의 이
+// 세 글자를 제어 문자로 보고 엔티티로 쓰라고 한다(< 는 링크와 멘션을 연다). 코드 안도 같다.
+func (v vocab) entities() bool { return v.htmlOut() || v.isMrkdwn() }
+
 // lineBreak 는 블록 안의 줄바꿈이다. 브라우저는 \n 을 공백으로 접으므로 <br> 을 앞에 둔다 —
 // 다른 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
 func (v vocab) lineBreak() string {
@@ -168,6 +175,17 @@ func (v vocab) open(e emph) string {
 		return ""
 	case HTML:
 		return v.openHTML(e)
+	case SlackMrkdwn:
+		switch e {
+		case emphBold:
+			return "*"
+		case emphItalic:
+			return "_"
+		case emphStrike:
+			return "~"
+		default:
+			return "`"
+		}
 	default:
 		switch e {
 		case emphStrike:
@@ -197,8 +215,9 @@ func (v vocab) joinerEmphasis() bool { return v.channel == SlackMarkdown }
 // 그린다. \n 으로 바꾸면 인용이 둘로 갈리고 강조가 줄을 넘는다.
 func (v vocab) keepsBr() bool { return v.channel == NotionMarkdown }
 
-// lineEmphasis 는 강조를 줄마다 닫고 다시 여는가다. 노션만 — 줄을 넘는 마커의 짝을 못 맞춘다.
-func (v vocab) lineEmphasis() bool { return v.channel == NotionMarkdown }
+// lineEmphasis 는 강조를 줄마다 닫고 다시 여는가다. 노션은 줄을 넘는 마커의 짝을 못 맞춘다. mrkdwn 도
+// 줄마다 닫는다 — 줄을 넘는 짝을 그리는지 재지 않았는데, 줄마다 닫은 모양은 어느 쪽이든 같은 범위로 그려진다.
+func (v vocab) lineEmphasis() bool { return v.channel == NotionMarkdown || v.channel == SlackMrkdwn }
 
 func (v vocab) openHTML(e emph) string {
 	if e >= emphTag {
@@ -263,7 +282,7 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 	if v.escapes(c) {
 		*out = append(*out, '\\')
 	}
-	if v.htmlOut() {
+	if v.entities() {
 		switch c {
 		case '&':
 			*out = append(*out, "&amp;"...)
@@ -275,6 +294,11 @@ func (v vocab) escapeChar(c rune, out *[]byte) {
 			*out = append(*out, "&gt;"...)
 			return
 		}
+	}
+	// mrkdwn 에서는 글자 백틱이 붙어 런이 되지 않게 U+200B 로 뗀다. 이스케이프가 없어서, 되돌린 백틱
+	// 런(```)이 줄 첫머리에 오면 슬랙이 코드 블록을 연다. 앞이 백틱일 때만 끼운다.
+	if c == '`' && v.isMrkdwn() && len(*out) > 0 && (*out)[len(*out)-1] == '`' {
+		*out = appendRune(*out, zeroWidthSpace)
 	}
 	*out = appendRune(*out, c)
 }
@@ -297,8 +321,15 @@ func (v vocab) escapes(c rune) bool {
 
 // codeChar 는 코드 안의 글자 하나를 적는다. 코드 안에서는 마크다운 이스케이프가 글자로 보인다 —
 // 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
+//
+// mrkdwn 의 코드 스팬 안 백틱은 U+02CB(ˋ)로 쓴다. 코드 스팬은 첫 백틱에서 끝나고 울타리를 늘리는 문법도
+// 없다 — 늘린 울타리(```)는 줄 첫머리에서 코드 블록을 연다. 모양이 닮은 글자로 바꾼다.
 func (v vocab) codeChar(c rune, out *[]byte) {
-	if v.htmlOut() {
+	if c == '`' && v.isMrkdwn() {
+		*out = appendRune(*out, '\u02CB')
+		return
+	}
+	if v.entities() {
 		v.escapeChar(c, out)
 		return
 	}
@@ -308,7 +339,8 @@ func (v vocab) codeChar(c rune, out *[]byte) {
 // 이스케이프는 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 escapeChar 다.
 func (v vocab) escape(s string, out *[]byte) {
 	// 대부분의 줄에는 이스케이프할 글자가 없다. 있을 때만 한 글자씩 간다.
-	if !v.htmlOut() || !strings.ContainsAny(s, "&<>") {
+	// mrkdwn 은 백틱 런도 뗀다(escapeChar) — 펜스 안의 ``` 줄이 블록을 닫지 않게.
+	if !v.entities() || (!strings.ContainsAny(s, "&<>") && !(v.isMrkdwn() && strings.Contains(s, "``"))) {
 		*out = append(*out, s...)
 		return
 	}
@@ -334,6 +366,9 @@ func (v vocab) makesAnchor(url string) bool {
 		return escapedLen(url)+len(`<a href=""></a>`) < v.limit
 	case HTML:
 		return v.allowed(url)
+	case SlackMrkdwn:
+		// 스킴이 있어야 슬랙이 링크로 만든다. 텔레그램처럼 한도를 넘는 주소는 링크로 내지 않는다.
+		return (strings.Contains(url, "://") || strings.HasPrefix(url, "mailto:")) && escapedLen(url)+len("<|>") < v.limit
 	}
 	return false
 }
@@ -367,6 +402,26 @@ func (v vocab) link(text, url string, out *[]byte) {
 		*out = append(*out, `">`...)
 		*out = append(*out, text...)
 		*out = append(*out, "</a>"...)
+	case SlackMrkdwn:
+		// <주소|글> 이다. 스킴이 없는 주소(./a.md)와 한도를 넘는 주소는 글과 주소를 둔다(makesAnchor).
+		// 주소 안의 | 는 글과 주소를 가르는 자리라 퍼센트로 쓰고, & < > 는 엔티티로 쓴다.
+		if !v.makesAnchor(url) {
+			v.unlinked(text, url, out)
+			return
+		}
+		*out = append(*out, '<')
+		for _, c := range url {
+			if c == '|' {
+				*out = append(*out, "%7C"...)
+			} else {
+				v.escapeChar(c, out)
+			}
+		}
+		if !escapedEq(text, url) {
+			*out = append(*out, '|')
+			*out = append(*out, text...)
+		}
+		*out = append(*out, '>')
 	case Plain:
 		*out = append(*out, text...)
 		if url != "" && url != text {
@@ -439,7 +494,7 @@ func (v vocab) image(alt, url string, out *[]byte) {
 		*out = append(*out, `" alt="`...)
 		appendAttr(alt, out)
 		*out = append(*out, `">`...)
-	case TelegramHTML, Plain:
+	case TelegramHTML, SlackMrkdwn, Plain:
 		v.link(alt, url, out)
 	default:
 		*out = append(*out, '!')
@@ -453,7 +508,8 @@ func (v vocab) image(alt, url string, out *[]byte) {
 // 저자가 글자로 쓴 별표가 그 채널에서 강조로 읽힌다. HTML 로 가는 채널은 마커라는 개념이
 // 없으니 그냥 escape 한다.
 func (v vocab) literal(c rune, out *[]byte) {
-	if v.htmlOut() || v.channel == Plain {
+	// mrkdwn 에는 역슬래시 이스케이프가 없다 — \* 는 그대로 보인다.
+	if v.htmlOut() || v.channel == Plain || v.isMrkdwn() {
 		v.escapeChar(c, out)
 		return
 	}
@@ -538,6 +594,9 @@ func (v vocab) verbatimOpen(info string, out *[]byte) {
 			*out = append(*out, `">`...)
 		}
 	case Plain:
+	case SlackMrkdwn:
+		// mrkdwn 펜스는 언어를 모른다 — info 를 적으면 코드 첫 줄로 보인다.
+		*out = append(*out, "```"...)
 	default:
 		*out = append(*out, "```"...)
 		*out = append(*out, info...)

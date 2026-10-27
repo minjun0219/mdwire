@@ -10,8 +10,8 @@ escaping rules, and its own length limit. Existing converters assume the input i
 well-formed CommonMark and target one channel at a time. Neither assumption holds for
 agent output.
 
-**Status: v0.1.14.** Normalizing, rendering, splitting and streaming work for seven
-targets — Telegram HTML, Slack `markdown_text`, GitHub comments (GFM), Notion pages, Obsidian notes,
+**Status: v0.1.14.** Normalizing, rendering, splitting and streaming work for eight
+targets — Telegram HTML, Slack `markdown_text`, Slack's legacy `mrkdwn`, GitHub comments (GFM), Notion pages, Obsidian notes,
 plain text, and HTML for the browser — from a Rust core, a CLI,
 an npm package (WASM), and a Go port. See `SPEC.md` for what is in v0.1 and what was
 deliberately deferred. `SPEC.md` and `DESIGN.md` are written in Korean.
@@ -27,7 +27,10 @@ LLM markdown  →  normalize  →  render for channel  →  split safely  →  s
    prose, unclosed code fences. Repair before rendering.
 2. **Render.** Emit the syntax the channel actually accepts. Telegram HTML allows nine
    tags; Slack `markdown_text` takes standard Markdown directly, with a `*` meant as a character
-   escaped (`\*`) so Slack does not re-read it as emphasis. GitHub takes it too, but
+   escaped (`\*`) so Slack does not re-read it as emphasis. Where a `markdown` block cannot go
+   (`section` and `context` text, attachments), `slack-mrkdwn` writes the legacy syntax: `*bold*`,
+   `_italic_`, `<url|text>`, entities for `&` `<` `>`, and a zero-width space between a marker and a
+   letter it touches (not measured in Slack yet). GitHub takes standard Markdown too, but
    reads a lone `~` as strikethrough and `<T>` as an HTML tag — so a `~` or `<` meant as a
    character goes out escaped (`\~`, `\<`), and emphasis that GFM would not close (`**(a)**`
    followed directly by a Korean particle) goes out as `<strong>`. Notion renders that bold as is

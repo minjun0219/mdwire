@@ -29,7 +29,11 @@ use vocab::Vocab;
 
 /// Target channel. Each channel accepts a different syntax, and **the narrower output decides the
 /// parsing scope**.
+///
+/// The list can grow: match with a wildcard arm (`_ => …`), since a new channel is added in a
+/// minor release.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Channel {
     /// Telegram `parse_mode=HTML`. Nine allowed tags:
     /// `b i u s code pre a blockquote tg-spoiler`. No tables or headings. 4096 characters.
@@ -37,6 +41,14 @@ pub enum Channel {
     /// Slack `markdown_text`. Slack converts standard Markdown itself. 12,000 characters.
     /// Almost no conversion is needed; what is left is normalization and splitting.
     SlackMarkdown,
+    /// Slack's legacy `mrkdwn` — the `text` of `section` and `context` blocks, attachments, and
+    /// `chat.postMessage` `text`, where a `markdown` block cannot go. 3,000 characters (a
+    /// `section` text). Bold is `*`, italic `_`, strikethrough `~`, links `<url|text>`, and `&`
+    /// `<` `>` are written as entities. No headings or tables: a heading becomes a bold line and a
+    /// table a fixed-width block, as in Telegram. Emphasis is closed and reopened on every line,
+    /// and a zero-width space separates a marker from a letter it touches (`*마통*이`), since
+    /// `mrkdwn` reads a marker only at a word boundary. Not measured in Slack yet.
+    SlackMrkdwn,
     /// GitHub comments and PR bodies (GFM). Renders tables, headings, and strikethrough.
     /// 65,536 characters. Emits the same Markdown as Slack, but escapes the two characters GFM
     /// reads as syntax (`~` `<`).
@@ -72,6 +84,7 @@ impl Channel {
         match self {
             Channel::TelegramHtml => "telegram-html",
             Channel::SlackMarkdown => "slack-markdown",
+            Channel::SlackMrkdwn => "slack-mrkdwn",
             Channel::GithubMarkdown => "github-markdown",
             Channel::NotionMarkdown => "notion-markdown",
             Channel::ObsidianMarkdown => "obsidian-markdown",
@@ -81,10 +94,11 @@ impl Channel {
     }
 
     /// Every supported channel. The corpus and the harness iterate over this list.
-    pub fn all() -> [Channel; 7] {
+    pub fn all() -> [Channel; 8] {
         [
             Channel::TelegramHtml,
             Channel::SlackMarkdown,
+            Channel::SlackMrkdwn,
             Channel::GithubMarkdown,
             Channel::NotionMarkdown,
             Channel::ObsidianMarkdown,
@@ -103,6 +117,8 @@ impl Channel {
         match self {
             Channel::TelegramHtml => 4096,
             Channel::SlackMarkdown | Channel::Plain => 12_000,
+            // `section` 블록 `text` 의 한도다(슬랙 Block Kit 문서). `context` 원소의 한도는 확인하지 않았다.
+            Channel::SlackMrkdwn => 3000,
             // 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
             Channel::GithubMarkdown => 65_536,
             // **재지 않았다.** 페이지 하나에 들어갈 본문이라 GitHub 과 같은 값을 둔다. 보내는 쪽
@@ -205,11 +221,12 @@ pub struct Repairs {
     /// count marks an answer worth a look.
     pub guessed_pair: usize,
     /// Characters escaped because the channel would read them as syntax (GitHub's and Obsidian's
-    /// `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
+    /// `\~`, `\<`, `\*`; Slack's and Notion's `\*`). `slack-mrkdwn` has no escapes and writes a
+    /// look-alike instead (`∗` U+2217, `＿` U+FF3F, `∼` U+223C).
     pub escaped_char: usize,
     /// Emphasis emitted differently because the channel cannot read the markers in that position
     /// (`**「설정」**가`) — `<strong>` on GitHub and Obsidian, U+2060 inserted inside the markers on
-    /// Slack.
+    /// Slack, U+200B outside them on `slack-mrkdwn`.
     pub tag_emphasis: usize,
     /// Source HTML stripped — tags the channel cannot render, comments, and `<br>` turned into
     /// line breaks.

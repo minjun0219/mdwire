@@ -133,6 +133,17 @@ impl Vocab {
         matches!(self.channel, Channel::TelegramHtml | Channel::Html)
     }
 
+    /// 슬랙 레거시 `mrkdwn` 인가. 마커는 마크다운처럼 쓰지만 글자는 HTML 처럼 엔티티로 적는다.
+    pub fn is_mrkdwn(&self) -> bool {
+        self.channel == Channel::SlackMrkdwn
+    }
+
+    /// `&` `<` `>` 를 엔티티로 적는가. HTML 로 가는 채널과 `mrkdwn` 이다 — 슬랙 문서가 `mrkdwn` 의
+    /// 이 세 글자를 제어 문자로 보고 엔티티로 쓰라고 한다(`<` 는 링크와 멘션을 연다). 코드 안도 같다.
+    pub(crate) fn entities(&self) -> bool {
+        self.html_out() || self.is_mrkdwn()
+    }
+
     /// 블록 안의 줄바꿈. 브라우저는 `\n` 을 공백으로 접으므로 `<br>` 을 앞에 둔다 — 다른
     /// 채널이 다 줄바꿈을 살리니 같은 글이 같은 모양으로 보이게.
     pub fn line_break(&self) -> &'static str {
@@ -153,6 +164,9 @@ impl Vocab {
             (Channel::TelegramHtml, Emph::Code) => "<code>",
             (Channel::Plain, _) => "",
             (Channel::Html, _) => self.open_html(e),
+            (Channel::SlackMrkdwn, Emph::Bold) => "*",
+            (Channel::SlackMrkdwn, Emph::Italic) => "_",
+            (Channel::SlackMrkdwn, Emph::Strike) => "~",
             (_, Emph::Strike) => "~~",
             (_, Emph::Bold) => "**",
             // 기울임은 `_` 가 아니라 `*` 다. 슬랙 `markdown_text` 는 `_기울임_가` 를 글자
@@ -170,8 +184,10 @@ impl Vocab {
     }
 
     /// 강조를 줄마다 닫고 다시 여는가. 노션만 그렇다 — 줄을 넘는 마커의 짝을 못 맞춘다.
+    /// `mrkdwn` 도 줄마다 닫는다. 줄을 넘는 짝을 그리는지 재지 않았는데, 줄마다 닫은 모양은 어느 쪽이든
+    /// 같은 범위로 그려진다.
     pub fn line_emphasis(&self) -> bool {
-        self.channel == Channel::NotionMarkdown
+        matches!(self.channel, Channel::NotionMarkdown | Channel::SlackMrkdwn)
     }
 
     /// 마크다운 마커를 채널이 못 읽는 자리에서 태그로 낼 수 있는가. GitHub 만 그렇다 — 인라인 HTML 을
@@ -229,9 +245,15 @@ impl Vocab {
     /// GitHub 과 같이 이스케이프한다.
     pub fn escape_char(&self, c: char, out: &mut String) {
         match c {
-            '&' if self.html_out() => out.push_str("&amp;"),
-            '<' if self.html_out() => out.push_str("&lt;"),
-            '>' if self.html_out() => out.push_str("&gt;"),
+            '&' if self.entities() => out.push_str("&amp;"),
+            '<' if self.entities() => out.push_str("&lt;"),
+            '>' if self.entities() => out.push_str("&gt;"),
+            // **`mrkdwn` 에서는 글자 백틱이 붙어 런이 되지 않게 U+200B 로 뗀다.** 이스케이프가 없어서, 되돌린
+            // 백틱 런(`` ``` ``)이 줄 첫머리에 오면 슬랙이 코드 블록을 연다. 앞이 백틱일 때만 끼운다.
+            '`' if self.is_mrkdwn() && out.ends_with('`') => {
+                out.push('\u{200B}');
+                out.push('`');
+            }
             _ if self.escapes(c) => {
                 out.push('\\');
                 out.push(c);
@@ -267,8 +289,13 @@ impl Vocab {
 
     /// 코드 안의 글자 하나를 적는다. **코드 안에서는 마크다운 이스케이프가 글자로 보인다** —
     /// 본문과 달리 `~` `<` 를 그대로 둔다. HTML 로 가는 채널만 escape 한다.
+    ///
+    /// **`mrkdwn` 의 코드 스팬 안 백틱은 U+02CB(ˋ)로 쓴다.** 코드 스팬은 첫 백틱에서 끝나고 울타리를 늘리는
+    /// 문법도 없다 — 늘린 울타리(`` ``` ``)는 줄 첫머리에서 코드 블록을 연다. 모양이 닮은 글자로 바꾼다.
     pub fn code_char(&self, c: char, out: &mut String) {
-        if self.html_out() {
+        if c == '`' && self.is_mrkdwn() {
+            out.push('\u{02CB}');
+        } else if self.entities() {
             self.escape_char(c, out);
         } else {
             out.push(c);
@@ -277,12 +304,13 @@ impl Vocab {
 
     /// 코드(펜스 본문·info·고정폭 표)를 적는다. 본문 글자는 [`Vocab::escape_char`] 다.
     pub fn escape(&self, s: &str, out: &mut String) {
-        if !self.html_out() {
+        if !self.entities() {
             out.push_str(s);
             return;
         }
         // 대부분의 줄에는 이스케이프할 글자가 없다. 있을 때만 한 글자씩 간다.
-        if !s.contains(['&', '<', '>']) {
+        // `mrkdwn` 은 백틱 런도 뗀다(`escape_char`) — 펜스 안의 `` ``` `` 줄이 블록을 닫지 않게.
+        if !s.contains(['&', '<', '>']) && !(self.is_mrkdwn() && s.contains("``")) {
             out.push_str(s);
             return;
         }
@@ -306,6 +334,10 @@ impl Vocab {
         match self.channel {
             Channel::TelegramHtml => escaped_len(url) + "<a href=\"\"></a>".len() < self.limit,
             Channel::Html => self.allowed(url),
+            // 스킴이 있어야 슬랙이 링크로 만든다. 텔레그램처럼 한도를 넘는 주소는 링크로 내지 않는다.
+            Channel::SlackMrkdwn => {
+                (url.contains("://") || url.starts_with("mailto:")) && escaped_len(url) + "<|>".len() < self.limit
+            }
             _ => false,
         }
     }
@@ -340,6 +372,26 @@ impl Vocab {
                 out.push_str("\">");
                 out.push_str(text);
                 out.push_str("</a>");
+            }
+            Channel::SlackMrkdwn => {
+                // `<주소|글>` 이다. 스킴이 없는 주소(`./a.md`)와 한도를 넘는 주소는 글과 주소를 둔다(`makes_anchor`).
+                // 주소 안의 `|` 는 글과 주소를 가르는 자리라 퍼센트로 쓰고, `&` `<` `>` 는 엔티티로 쓴다.
+                if !self.makes_anchor(url) {
+                    self.unlinked(text, url, out);
+                    return;
+                }
+                out.push('<');
+                for c in url.chars() {
+                    match c {
+                        '|' => out.push_str("%7C"),
+                        _ => self.escape_char(c, out),
+                    }
+                }
+                if !escaped_eq(text, url) {
+                    out.push('|');
+                    out.push_str(text);
+                }
+                out.push('>');
             }
             Channel::Plain => {
                 out.push_str(text);
@@ -409,7 +461,9 @@ impl Vocab {
                 push_attr(alt, out);
                 out.push_str("\">");
             }
-            Channel::Html | Channel::TelegramHtml | Channel::Plain => self.link(alt, url, out),
+            Channel::Html | Channel::TelegramHtml | Channel::SlackMrkdwn | Channel::Plain => {
+                self.link(alt, url, out)
+            }
             Channel::SlackMarkdown
             | Channel::GithubMarkdown
             | Channel::NotionMarkdown
@@ -427,7 +481,10 @@ impl Vocab {
     /// 오히려 뜻을 바꾼다. HTML 로 가는 채널은 마커라는 개념이 없으니 그냥 escape 한다.
     pub fn literal(&self, c: char, out: &mut String) {
         match self.channel {
-            Channel::TelegramHtml | Channel::Plain | Channel::Html => self.escape_char(c, out),
+            // `mrkdwn` 에는 역슬래시 이스케이프가 없다 — `\*` 는 그대로 보인다.
+            Channel::TelegramHtml | Channel::SlackMrkdwn | Channel::Plain | Channel::Html => {
+                self.escape_char(c, out)
+            }
             // **그 채널의 마크다운이 읽는 글자면 이스케이프를 지킨다.** 강조 마커만 지키면
             // `\# 제목` 이 제목이 되고 `\[x\](url)` 이 링크가 된다 — 저자가 글자로
             // 쓴 것을 채널이 구문으로 읽어 버린다.
@@ -474,7 +531,7 @@ impl Vocab {
     /// 구분선. 텔레그램에도 Plain 에도 구문이 없어 글자로 그린다.
     pub fn rule(&self) -> &'static str {
         match self.channel {
-            Channel::TelegramHtml | Channel::Plain => "──────────",
+            Channel::TelegramHtml | Channel::SlackMrkdwn | Channel::Plain => "──────────",
             Channel::Html => "<hr>",
             _ => "---",
         }
@@ -490,7 +547,7 @@ impl Vocab {
             Channel::GithubMarkdown | Channel::ObsidianMarkdown | Channel::Html => 6,
             // 노션 헤딩은 네 단계다 — 다섯·여섯은 노션이 넷으로 바꾼다(명세, 실측도 같다).
             Channel::NotionMarkdown => 4,
-            Channel::TelegramHtml | Channel::Plain => 0,
+            Channel::TelegramHtml | Channel::SlackMrkdwn | Channel::Plain => 0,
         }
     }
 
@@ -509,6 +566,8 @@ impl Vocab {
                 }
             }
             Channel::Plain => {}
+            // `mrkdwn` 펜스는 언어를 모른다 — info 를 적으면 코드 첫 줄로 보인다.
+            Channel::SlackMrkdwn => out.push_str("```"),
             _ => {
                 out.push_str("```");
                 out.push_str(info);

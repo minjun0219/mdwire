@@ -96,10 +96,11 @@ type Repairs struct {
 	GuessedPair int
 	// EscapedChar counts characters escaped because the channel would read them
 	// as syntax (GitHub's and Obsidian's \~, \< and \*; Slack's and Notion's \*).
+	// SlackMrkdwn has no escapes and writes a look-alike instead (∗ ＿ ∼).
 	EscapedChar int
 	// TagEmphasis counts emphasis emitted another way because the channel cannot
 	// read a marker in that position: <strong> on GitHub and Obsidian, a word
-	// joiner on Slack.
+	// joiner on Slack, a zero-width space outside the markers on SlackMrkdwn.
 	TagEmphasis int
 	// StrippedHTML counts raw HTML removed from the source: tags, comments, and
 	// <br> turned into line breaks.

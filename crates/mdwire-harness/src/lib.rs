@@ -26,3 +26,4 @@ pub mod adapter;
 pub mod check;
 pub mod corpus;
 pub mod emphasis;
+pub mod mrkdwn;

@@ -113,7 +113,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
     let mut len = 0usize;
     let mut markup = Markup::default();
     if v.channel != Channel::TelegramHtml && !v.is_plain() {
-        markup.spans = std::rc::Rc::from(scan_spans(text));
+        markup.spans = std::rc::Rc::from(scan_spans(text, v.is_mrkdwn()));
     }
 
     for line in text.split_inclusive('\n') {
@@ -157,7 +157,7 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
                 // 닫고 다시 여는 몫이 안 들어가면 그만큼 덜 담는다.
                 let (end, probe) = loop {
                     let end = rest.char_indices().nth(take).map_or(rest.len(), |(i, _)| i);
-                    let end = if v.html_out() { entity_cut(rest, end) } else { end };
+                    let end = if v.entities() { entity_cut(rest, end) } else { end };
                     let mut probe = markup.clone();
                     probe.feed(&rest[..end], v);
                     let reserve = probe.reserve(v);
@@ -383,7 +383,10 @@ fn emph_tag_at(ch: &[char], at: usize) -> Option<(&'static str, bool, usize)> {
 /// 글자로 남은 마커(`2 ** 3`, `\*`, 되돌린 백틱)는 짝이 안 맞아 여기서 걸러진다 —
 /// 여는 쪽은 뒤가 글자, 닫는 쪽은 앞이 글자여야 하고, 코드 스팬은 같은 길이의 런이
 /// 뒤에 있어야 한다. 펜스 안은 보지 않는다.
-fn scan_spans(text: &str) -> Vec<Span> {
+///
+/// `mrkdwn` 은 마커가 홑이다 — 굵게 `*`, 기울임 `_`, 취소선 `~`. 렌더러가 줄마다 닫으므로 스팬이 줄을
+/// 넘지 않고, 안팎이 같은 글자인 겹침(`**`)도 나오지 않는다.
+fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
     let ch: Vec<char> = text.chars().collect();
     // 펜스 줄과 그 안은 스팬이 아니고, **스팬이 그 너머와 짝을 맺지도 못한다.** 백틱
     // 런의 짝을 찾을 때 펜스를 넘어가면 글자로 남은 ``` 가 코드블록의 펜스와 짝이 된다.
@@ -498,7 +501,7 @@ fn scan_spans(text: &str) -> Vec<Span> {
             }
             continue;
         }
-        if !matches!(c, '*' | '~') {
+        if !matches!(c, '*' | '~') && !(mrkdwn && c == '_') {
             i += 1;
             continue;
         }
@@ -509,6 +512,10 @@ fn scan_spans(text: &str) -> Vec<Span> {
         let closes = prev.is_some_and(|p| !p.is_whitespace());
         // `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
         let markers: &[&'static str] = match (c, run) {
+            ('*', 1) if mrkdwn => &["*"],
+            ('_', 1) if mrkdwn => &["_"],
+            ('~', 1) if mrkdwn => &["~"],
+            _ if mrkdwn => &[],
             ('~', 2) => &["~~"],
             ('*', 1) => &["*"],
             ('*', 2) => &["**"],

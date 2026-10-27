@@ -89,6 +89,8 @@ pub(crate) struct Inline {
     pub preview: bool,
     /// 노션에서 강조를 줄마다 감쌀 때 범위를 옮겨 두는 버퍼([`wrap_per_line`]). 재사용한다.
     wrap: String,
+    /// 블록 층이 줄 전체를 굵게 감쌌다(헤딩 구문이 없는 채널의 헤딩). 블록이 끝나면 내린다.
+    pub bold_line: bool,
 }
 
 impl Inline {
@@ -108,6 +110,7 @@ impl Inline {
             stripped_tags: Vec::new(),
             wrap: String::new(),
             preview: false,
+            bold_line: false,
         }
     }
 
@@ -116,10 +119,45 @@ impl Inline {
         self.open.clear();
         self.prev = None;
         self.stripped_tags.clear();
+        self.bold_line = false;
     }
 
     /// 본문 글자 하나를 적는다. 채널이 이스케이프하는 글자면 센다([`Repairs::escaped_char`]).
     fn text_char(&mut self, c: char, out: &mut String, v: &Vocab) {
+        let prev = out.chars().next_back();
+        self.text_char_after(c, prev, out, v);
+    }
+
+    /// 글자 하나를 본문으로 적는다. `prev` 는 원문에서 바로 앞 글자다 — `out` 은 스트리밍 중에 앞이
+    /// 내보내져 비어 있을 수 있어서, 앞 글자로 갈리는 판단은 원문으로 한다.
+    ///
+    /// **`mrkdwn` 에는 이스케이프가 없다.** 글자로 쓴 `*` `_` `~` 가 마커로 읽히지 않게, 여는 마커가 될 수
+    /// 있는 자리(앞이 글자·숫자가 아님)에서는 모양이 닮은 글자로 쓴다 — `∗`(U+2217) `＿`(U+FF3F)
+    /// `∼`(U+223C). 여는 마커가 하나도 남지 않으니 닫는 쪽 글자(`경로~`)는 짝을 못 맺어 그대로 둔다.
+    /// `5~6월` 의 `~` 처럼 앞이 글자면 손대지 않는다. 글자 백틱은 앞이 백틱이면 U+200B 로 뗀다 — 런이 되면
+    /// 코드 블록을 연다. 슬랙에서 재지는 않았다.
+    fn text_char_after(&mut self, c: char, prev: Option<char>, out: &mut String, v: &Vocab) {
+        if v.is_mrkdwn() {
+            let opener = !prev.is_some_and(char::is_alphanumeric);
+            let alike = match c {
+                '*' if opener => Some('\u{2217}'),
+                '_' if opener => Some('\u{FF3F}'),
+                '~' if opener => Some('\u{223C}'),
+                _ => None,
+            };
+            if let Some(a) = alike {
+                self.repairs.escaped_char += 1;
+                out.push(a);
+                return;
+            }
+            if c == '`' {
+                if prev == Some('`') || out.ends_with('`') {
+                    out.push(ZERO_WIDTH_SPACE);
+                }
+                out.push('`');
+                return;
+            }
+        }
         if v.escapes(c) {
             self.repairs.escaped_char += 1;
         }
@@ -258,6 +296,13 @@ impl Inline {
             // 실제 문서에서 그러고 있었다.
             if c == '\\' {
                 if let Some(&next) = line.get(i + 1) {
+                    if next.is_ascii_punctuation() && v.is_mrkdwn() {
+                        let prev = self.prev_char(line, i);
+                        self.text_char_after(next, prev, out, v);
+                        self.prev = Some(next);
+                        i += 2;
+                        continue;
+                    }
                     if next.is_ascii_punctuation() {
                         v.literal(next, out);
                         self.prev = Some(next);
@@ -328,7 +373,7 @@ impl Inline {
             // 취소선으로 읽는 것은 레거시 `mrkdwn` 과 MarkdownV2 의 *출력* 규칙이지
             // 입력 문법이 아니다.
             if c == '~' && take < 2 {
-                self.text_char(c, out, v);
+                self.text_char_after(c, self.prev_char(line, i), out, v);
                 i += 1;
                 continue;
             }
@@ -356,8 +401,8 @@ impl Inline {
             // 밑줄이 `2*3` 의 별표와 짝을 맺어 `snake*case` 가 되고, 그 사이가 기울어진다.
             let intraword = c == '_' && prev.is_some_and(char::is_alphanumeric);
             if intraword && same.is_none_or(|at| self.open[at].ch != '_') {
-                for _ in 0..take {
-                    self.text_char(c, out, v);
+                for k in 0..take {
+                    self.text_char_after(c, if k == 0 { prev } else { Some(c) }, out, v);
                 }
                 i += take;
                 continue;
@@ -412,8 +457,8 @@ impl Inline {
                         && (!left || !after_space)
                         && !(left && self.open[at].hemmed.is_some() && prev.is_some_and(is_opening_bracket)) =>
                 {
-                    for _ in 0..take {
-                        self.text_char(c, out, v);
+                    for k in 0..take {
+                        self.text_char_after(c, if k == 0 { prev } else { Some(c) }, out, v);
                     }
                 }
                 // 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고
@@ -500,8 +545,13 @@ impl Inline {
         let Some(open) = self.open.pop() else { return };
         self.repairs.reverted_code_span += 1;
         out.truncate(open.at);
-        for _ in 0..open.run {
-            out.push(open.ch);
+        if v.is_mrkdwn() {
+            // 글자로 되돌린 런이다 — `mrkdwn` 에서는 백틱끼리 뗀다(`insert_marker`).
+            insert_marker(out, open.at, open.ch, open.run, open.before, v, &mut Repairs::default());
+        } else {
+            for _ in 0..open.run {
+                out.push(open.ch);
+            }
         }
         // 버퍼를 통째로 빌려 와서 다시 읽고 돌려준다. 새로 만들지 않는다.
         let src = std::mem::take(&mut self.code_src);
@@ -542,7 +592,7 @@ impl Inline {
         }
         let old = self.open.pop().expect("at 은 유효한 인덱스다");
         if old.run == 1 || (old.guess && (old.after_space || old.split || old.hemmed.is_some())) {
-            insert_marker(out, old.at, old.ch, old.run, v, &mut self.repairs);
+            insert_marker(out, old.at, old.ch, old.run, old.before, v, &mut self.repairs);
         } else {
             self.repairs.dropped_marker += 1;
         }
@@ -593,7 +643,7 @@ impl Inline {
             // 남을 이유는 없다 — 짝 잃은 닫는 마커고, 되돌리면 출력에 마커가 남는다.
             // 막힌 여는 마커도 되돌린다 — 짝 없는 `2**(n-1)` 의 `**` 는 거듭제곱이지 짝 잃은 마커가 아니다.
             if open.after_space || open.run == 1 || open.split || open.hemmed.is_some() {
-                insert_marker(out, open.at, open.ch, open.run, v, &mut self.repairs);
+                insert_marker(out, open.at, open.ch, open.run, open.before, v, &mut self.repairs);
             } else {
                 self.repairs.dropped_marker += 1;
             }
@@ -630,6 +680,7 @@ impl Inline {
             let mut buf = std::mem::take(&mut self.wrap);
             wrap_per_line(out, open.at, ("`", "`"), true, &mut buf);
             self.wrap = buf;
+            self.mrkdwn_bounds(out, open.at, open.before, after_of(matched, self.after_close), v);
             return;
         }
         if open.emph == Emph::Code && v.open(Emph::Code) == "`" {
@@ -651,6 +702,7 @@ impl Inline {
                     fence.push(' ');
                 }
                 out.insert_str(open.at, &fence);
+                self.mrkdwn_bounds(out, open.at, open.before, after_of(matched, self.after_close), v);
                 return;
             }
         }
@@ -660,6 +712,11 @@ impl Inline {
         // 뒤집힌다(실측 2026-09-30). 한국어는 조사가 붙어서 이 모양이 흔하다. `<strong>` 은
         // flanking 을 안 따지고 GitHub 이 그대로 그린다.
         let after = if matched { self.after_close } else { None };
+        // **`mrkdwn` 은 굵게 안의 굵게를 못 쓴다** — 마커가 같은 `*` 라 `*배포 *목록**` 이 바깥에서 닫힌다.
+        // 이미 굵은 자리라 안쪽 마커는 버려도 모양이 같다. 헤딩을 굵은 줄로 낼 때 흔하다(`## 배포 **목록**`).
+        if v.is_mrkdwn() && open.emph == Emph::Bold && (self.bold_line || self.open.iter().any(|o| o.emph == Emph::Bold)) {
+            return;
+        }
         if v.html_emphasis() && open.emph != Emph::Code && !gfm_pairs(open.before, &out[open.at..], after) {
             self.repairs.tag_emphasis += 1;
             out.insert_str(open.at, v.open_html(open.emph));
@@ -708,10 +765,33 @@ impl Inline {
             let mut buf = std::mem::take(&mut self.wrap);
             wrap_per_line(out, open.at, (v.open(open.emph), v.close(open.emph)), false, &mut buf);
             self.wrap = buf;
+            self.mrkdwn_bounds(out, open.at, open.before, after, v);
             return;
         }
         out.insert_str(open.at, v.open(open.emph));
         out.push_str(v.close(open.emph));
+        self.mrkdwn_bounds(out, open.at, open.before, after, v);
+    }
+
+    /// **`mrkdwn` 은 단어 경계에서만 마커를 읽는다** — 마커 바깥에 붙은 글자가 있으면 U+200B 로 뗀다.
+    /// 조사가 붙는 한국어(`*마통*이`)는 이 모양이 기본이다. 레거시 `mrkdwn` 에서 이 자리를 강조로 못
+    /// 잡는다는 관측과, U+200B 를 끼우던 옛 변환기가 있었다(`DESIGN.md` 3절). 슬랙에서 재지는 않았다.
+    /// 앞은 원문에서 마커 바로 앞 글자, 뒤는 닫는 마커 다음 글자로 본다.
+    fn mrkdwn_bounds(&mut self, out: &mut String, at: usize, before: Option<char>, after: Option<char>, v: &Vocab) {
+        if !v.is_mrkdwn() {
+            return;
+        }
+        let glued = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+        let (left, right) = (glued(before), glued(after));
+        if left || right {
+            self.repairs.tag_emphasis += 1;
+        }
+        if right {
+            out.push(ZERO_WIDTH_SPACE);
+        }
+        if left {
+            out.insert(at, ZERO_WIDTH_SPACE);
+        }
     }
 
     /// `<…>` 를 읽는다 — 오토링크, 아는 HTML 태그, 주석. 셋 중 하나면 소비한 길이를
@@ -964,6 +1044,14 @@ fn gfm_sides(before: Option<char>, body: &str, after: Option<char>) -> (bool, bo
 /// 슬랙에서 마커가 못 읽히는 자리에 끼우는 글자. 보이지 않고 줄도 가르지 않는다.
 const WORD_JOINER: char = '\u{2060}';
 
+/// `mrkdwn` 에서 마커와 붙은 글자를 떼는 글자(`Inline::mrkdwn_bounds`).
+const ZERO_WIDTH_SPACE: char = '\u{200B}';
+
+/// 닫는 마커 다음 글자. 저자 대신 닫은 것이면 없다.
+fn after_of(matched: bool, after_close: Option<char>) -> Option<char> {
+    if matched { after_close } else { None }
+}
+
 /// 강조 범위를 **줄마다** 감싼다 — `at` 부터 끝까지가 범위다. 줄 끝에서 닫고, 다음 줄은 블록 층이
 /// 쓴 접두사(`> `·들여쓰기) 뒤에서 다시 연다. 줄 끝 공백은 닫는 마커 밖으로 뺀다 — 공백 뒤의
 /// 닫는 마커는 닫기가 아니다. 내용이 없는 줄은 감싸지 않는다(`****` 가 된다).
@@ -1013,10 +1101,48 @@ fn wrap_per_line(out: &mut String, at: usize, marker: (&str, &str), code: bool, 
 
 /// 짝을 못 찾은 마커를 글자로 되돌려 `at` 에 끼운다. 본문 글자라 채널의 이스케이프를 따른다 —
 /// GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
-fn insert_marker(out: &mut String, at: usize, c: char, run: usize, v: &Vocab, repairs: &mut Repairs) {
+/// `before` 는 원문에서 마커 바로 앞 글자다(`mrkdwn` 의 닮은 글자 판단, `Inline::text_char_after`).
+fn insert_marker(out: &mut String, at: usize, c: char, run: usize, before: Option<char>, v: &Vocab, repairs: &mut Repairs) {
     let escaped = v.escapes(c);
     if escaped {
         repairs.escaped_char += run;
+    }
+    // `mrkdwn` 의 글자 마커는 여는 자리에서 닮은 글자로 쓴다. 런은 첫 글자만 그 자리고, 뒤는 앞이 마커라
+    // 그 자리가 아니지만 같이 바꾼다 — `∗*` 는 별표 하나가 남아 짝을 찾는다.
+    if v.is_mrkdwn() && c != '`' {
+        if before.is_some_and(char::is_alphanumeric) {
+            for _ in 0..run {
+                out.insert(at, c);
+            }
+            return;
+        }
+        let alike = match c {
+            '*' => '\u{2217}',
+            '_' => '\u{FF3F}',
+            _ => '\u{223C}',
+        };
+        repairs.escaped_char += run;
+        for _ in 0..run {
+            out.insert(at, alike);
+        }
+        return;
+    }
+    // `mrkdwn` 은 글자 백틱끼리 U+200B 로 뗀다(`Vocab::escape_char`) — 되돌린 런도, 그 앞뒤 백틱과도.
+    if c == '`' && v.is_mrkdwn() {
+        let mut s = String::with_capacity(run * 4 + 3);
+        let mut prev = before.or_else(|| out[..at].chars().next_back());
+        for _ in 0..run {
+            if prev == Some('`') {
+                s.push(ZERO_WIDTH_SPACE);
+            }
+            s.push('`');
+            prev = Some('`');
+        }
+        if out[at..].starts_with('`') {
+            s.push(ZERO_WIDTH_SPACE);
+        }
+        out.insert_str(at, &s);
+        return;
     }
     for _ in 0..run {
         out.insert(at, c);

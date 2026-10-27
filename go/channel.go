@@ -48,12 +48,22 @@ const (
 	// a file, not a message, so it is not split unless Options.Limit is set.
 	// Placed last so existing values do not shift.
 	ObsidianMarkdown
+	// SlackMrkdwn is Slack's legacy mrkdwn — the text of section and context
+	// blocks, attachments, and chat.postMessage text, where a markdown block
+	// cannot go. 3,000 characters (a section text). Bold is *, italic _,
+	// strikethrough ~, links <url|text>, and & < > are written as entities. No
+	// headings or tables: a heading becomes a bold line and a table a
+	// fixed-width block, as in Telegram. Emphasis is closed and reopened on
+	// every line, and a zero-width space separates a marker from a letter it
+	// touches (*마통*이), since mrkdwn reads a marker only at a word boundary.
+	// Not measured in Slack yet. Placed last so existing values do not shift.
+	SlackMrkdwn
 )
 
 // Channels returns every output channel. The corpus and the harness iterate
 // over this list.
 func Channels() []Channel {
-	return []Channel{TelegramHTML, SlackMarkdown, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, HTML}
+	return []Channel{TelegramHTML, SlackMarkdown, SlackMrkdwn, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, HTML}
 }
 
 // Name returns the name used for corpus directories and CLI arguments. It is
@@ -64,6 +74,8 @@ func (c Channel) Name() string {
 		return "telegram-html"
 	case SlackMarkdown:
 		return "slack-markdown"
+	case SlackMrkdwn:
+		return "slack-mrkdwn"
 	case GithubMarkdown:
 		return "github-markdown"
 	case NotionMarkdown:
@@ -94,6 +106,9 @@ func (c Channel) Limit() int {
 	switch c {
 	case TelegramHTML:
 		return 4096
+	case SlackMrkdwn:
+		// section 블록 text 의 한도다(슬랙 Block Kit 문서). context 원소의 한도는 확인하지 않았다.
+		return 3000
 	case GithubMarkdown:
 		// 코멘트 본문의 한도다. 넘기면 API 가 422 로 거절한다("Body is too long").
 		return 65_536

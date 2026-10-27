@@ -133,10 +133,10 @@ pub struct Repairs {
     /// Emphasis paired by a guess — an opener CommonMark would not open (`값**(합계)**를`) matched with a mirror-shaped closer on the same line. Math (`x**(y)**z`) is left out.
     #[wasm_bindgen(js_name = guessedPair)]
     pub guessed_pair: usize,
-    /// Characters escaped because the channel would read them as syntax (GitHub's and Obsidian's `\~`, `\<`, `\*`; Slack's and Notion's `\*`).
+    /// Characters escaped because the channel would read them as syntax (GitHub's and Obsidian's `\~`, `\<`, `\*`; Slack's and Notion's `\*`; look-alikes such as `∗` in `slack-mrkdwn`).
     #[wasm_bindgen(js_name = escapedChar)]
     pub escaped_char: usize,
-    /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's and Obsidian's `<strong>`, Slack's U+2060).
+    /// Emphasis emitted differently because the channel would not read the marker in that position (GitHub's and Obsidian's `<strong>`, Slack's U+2060, `slack-mrkdwn`'s U+200B).
     #[wasm_bindgen(js_name = tagEmphasis)]
     pub tag_emphasis: usize,
     /// Raw HTML stripped from the source (tags, comments, and `<br>` turned into line breaks).

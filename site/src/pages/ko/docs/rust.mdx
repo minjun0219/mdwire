@@ -98,12 +98,14 @@ assert!(!s.revised());                                       // 마지막 화면
 ## `Channel`
 
 ```rust
-pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, Html }
+#[non_exhaustive]
+pub enum Channel { TelegramHtml, SlackMarkdown, SlackMrkdwn, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, Html }
 ```
 
 | | |
 |---|---|
 | `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | 문자열 이름(`"telegram-html"` …)과 채널을 서로 바꿉니다. |
+| `#[non_exhaustive]` <Next /> | 새 채널은 minor 릴리스로 들어오므로 `match` 에는 와일드카드 갈래(`_ => …`)가 필요합니다. |
 | `Channel::all()` | 모든 채널을 반환합니다. |
 | `Channel::limit(self) -> usize` | 조각 길이 제한을 반환합니다. `Html` 과 `ObsidianMarkdown` <Next /> 은 `usize::MAX` 입니다. |
 

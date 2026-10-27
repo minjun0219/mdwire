@@ -96,12 +96,14 @@ The contract — `push` output is final, pieces concatenated equal `render` — 
 ## `Channel`
 
 ```rust
-pub enum Channel { TelegramHtml, SlackMarkdown, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, Html }
+#[non_exhaustive]
+pub enum Channel { TelegramHtml, SlackMarkdown, SlackMrkdwn, GithubMarkdown, NotionMarkdown, ObsidianMarkdown, Plain, Html }
 ```
 
 | | |
 |---|---|
 | `Channel::name(self) -> &'static str` · `Channel::parse(&str) -> Option<Channel>` | The string names (`"telegram-html"`, …). |
+| `#[non_exhaustive]` <Next /> | New channels arrive in minor releases, so a `match` needs a wildcard arm (`_ => …`). |
 | `Channel::all()` | Every channel. |
 | `Channel::limit(self) -> usize` | The part limit; `usize::MAX` for `Html` and `ObsidianMarkdown` <Next />. |
 

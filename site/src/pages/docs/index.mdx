@@ -24,6 +24,7 @@ A channel is where the output goes. Its name is the same string everywhere.
 |---|---|---|
 | `telegram-html` | Telegram `parse_mode: "HTML"`. Nine tags (`b i u s code pre a blockquote tg-spoiler`), no headings or tables — a table goes out as a monospace block. | 4,096 |
 | `slack-markdown` | Slack `markdown_text`. Standard Markdown, which Slack converts itself; mdwire repairs, escapes a `*` meant as a character (`\*`) and splits. | 12,000 |
+| `slack-mrkdwn` | Slack's legacy `mrkdwn`, where a `markdown` block cannot go: `section` and `context` text, attachments, `chat.postMessage` `text`. `*bold*` `_italic_` `~strike~`, links as `<url\|text>`, `&` `<` `>` as entities; a heading becomes a bold line and a table a monospace block. Emphasis is closed on every line, and a zero-width space separates a marker from a letter it touches. Not measured in Slack yet. <Next /> | 3,000 |
 | `github-markdown` | GitHub comments and PR bodies (GFM). A `~` or `<` meant as a character is escaped, and bold that GFM would not close (before a Korean particle) is written as `<strong>`. | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown). Four heading levels; inline HTML Notion cannot draw is stripped, and an autolink becomes `[url](url)`. | 65,536 (not measured) |
 | `obsidian-markdown` | An Obsidian note (a Markdown file in a vault). The same text as `github-markdown`, since a literal `~` was reported to break Obsidian notes too (not measured yet), except that wikilinks (`[[note]]`) are left as written. Not split unless you set a limit: a note is a file, not a message. <Next /> | none |
@@ -61,8 +62,8 @@ The other six are **channel rewrites** — what the channel needed changed befor
 
 | Field | Counts |
 |---|---|
-| escaped char | Characters the channel would read as syntax, escaped (GitHub's and Obsidian's `\~` `\<` `\*`; Slack's and Notion's `\*`). |
-| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's and Obsidian's `<strong>`, or an invisible U+2060 inside Slack's markers. |
+| escaped char | Characters the channel would read as syntax, escaped (GitHub's and Obsidian's `\~` `\<` `\*`; Slack's and Notion's `\*`; look-alikes such as `∗` in `slack-mrkdwn`, which has no escapes). |
+| tag emphasis | Emphasis the channel cannot read as markers, written another way — GitHub's and Obsidian's `<strong>`, or an invisible U+2060 inside Slack's markers, or a U+200B outside them in `slack-mrkdwn`. |
 | stripped HTML | Source HTML removed: tags the channel cannot draw, comments, `<br>` turned into a line break. |
 | rewritten bullet | List markers rewritten (`* ` `• ` → `- `, Telegram's `- ` → `• `, `1)` → `1.`). |
 | rewritten table | Tables rewritten (separator and cell spacing, or turned into a monospace block). |

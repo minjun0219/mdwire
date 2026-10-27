@@ -99,7 +99,7 @@ func splitHard(text string, limit int, v vocab) []string {
 	length := 0
 	m := newMarkup()
 	if v.channel != TelegramHTML && !v.isPlain() {
-		m.spans = scanSpans(text)
+		m.spans = scanSpans(text, v.isMrkdwn())
 	}
 
 	for _, line := range splitInclusive(text, '\n') {
@@ -141,7 +141,7 @@ func splitHard(text string, limit int, v vocab) []string {
 				var cutProbe markup
 				for {
 					end = runeOffset(rest, take)
-					if v.htmlOut() {
+					if v.entities() {
 						end = entityCut(rest, end)
 					}
 					cutProbe = m.clone()
@@ -538,7 +538,10 @@ func (m *markup) reopen(out *[]byte) {
 // 마커는 짝이 맞고 겹침도 바르다. 글자로 남은 마커는 짝이 안 맞아 여기서 걸러진다 — 여는
 // 쪽은 뒤가 글자, 닫는 쪽은 앞이 글자여야 하고, 코드 스팬은 같은 길이의 런이 뒤에 있어야
 // 한다. 펜스 안은 보지 않는다.
-func scanSpans(text string) []span {
+//
+// mrkdwn 은 마커가 홑이다 — 굵게 *, 기울임 _, 취소선 ~. 렌더러가 줄마다 닫으므로 스팬이 줄을 넘지 않고,
+// 안팎이 같은 글자인 겹침(**)도 나오지 않는다.
+func scanSpans(text string, mrkdwn bool) []span {
 	ch := []rune(text)
 	// 펜스 줄과 그 안은 스팬이 아니고, 스팬이 그 너머와 짝을 맺지도 못한다.
 	fenced := make([]bool, len(ch))
@@ -667,7 +670,7 @@ func scanSpans(text string) []span {
 			}
 			continue
 		}
-		if c != '*' && c != '~' {
+		if c != '*' && c != '~' && !(mrkdwn && c == '_') {
 			i++
 			continue
 		}
@@ -684,6 +687,13 @@ func scanSpans(text string) []span {
 		// `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
 		var markers []string
 		switch {
+		case mrkdwn && run == 1 && c == '*':
+			markers = []string{"*"}
+		case mrkdwn && run == 1 && c == '_':
+			markers = []string{"_"}
+		case mrkdwn && run == 1:
+			markers = []string{"~"}
+		case mrkdwn:
 		case c == '~' && run == 2:
 			markers = []string{"~~"}
 		case c == '*' && run == 1:

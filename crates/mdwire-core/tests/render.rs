@@ -360,7 +360,8 @@ fn leading_and_trailing_blank_lines_go_away() {
 #[test]
 fn nothing_is_padded_next_to_cjk() {
     let input = "채널**이다** 그리고 **강조**ｱｲｳ 와 `코드`글";
-    for channel in Channel::all() {
+    // 레거시 `mrkdwn` 만 예외다 — 단어 경계에서만 마커를 읽어서 붙은 글자를 U+200B 로 뗀다(아래 `mrkdwn_*`).
+    for channel in Channel::all().into_iter().filter(|&c| c != Channel::SlackMrkdwn) {
         let out = render(input, channel).join("");
         assert!(!out.contains('\u{200b}'), "{}: {out:?}", channel.name());
     }
@@ -762,6 +763,89 @@ fn obsidian_escapes_tilde_like_github_and_does_not_split() {
     let opts = mdwire::Options { limit: Some(4096), ..Default::default() };
     let parts = mdwire::render_with(&long, Channel::ObsidianMarkdown, opts).parts;
     assert!(parts.len() > 1 && parts.iter().all(|p| p.chars().count() <= 4096));
+}
+
+/// **레거시 `mrkdwn` 은 마커가 다르고 글자를 엔티티로 쓴다**(슬랙 문서, 슬랙에서 재지는 않았다). 헤딩과 표
+/// 구문이 없어 텔레그램처럼 굵은 줄과 고정폭 블록으로 낸다.
+#[test]
+fn mrkdwn_writes_legacy_markers_and_entities() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("**굵게** 와 *기울임* 과 ~~취소~~ 와 `코드`"), "*굵게* 와 _기울임_ 과 ~취소~ 와 `코드`");
+    assert_eq!(m("***둘 다***"), "*_둘 다_*");
+    assert_eq!(m("a & b < c > d `x<y&z`"), "a &amp; b &lt; c &gt; d `x&lt;y&amp;z`");
+    assert_eq!(m("```rust\nlet x = a && b;\n```"), "```\nlet x = a &amp;&amp; b;\n```");
+    // 이스케이프가 없어서 백틱은 다르게 쓴다. 코드 스팬 안은 U+02CB, 글자로 남은 런은 U+200B 로 뗀다 — 둘 다
+    // 그대로 두면 `` ``` `` 가 코드 블록을 연다.
+    assert_eq!(m("`` a`b ``"), "`a\u{2cb}b`");
+    assert_eq!(m("짝 없는 ``` 런"), "짝 없는 `\u{200b}`\u{200b}` 런");
+    assert_eq!(m("````\n```\n````"), "```\n`\u{200b}`\u{200b}`\n```");
+    assert_eq!(m("## 배포 **목록**\n\n- 하나\n\n---"), "*배포 목록*\n\n• 하나\n\n──────────");
+    assert_eq!(m("> 인용 **굵게**"), "> 인용 *굵게*");
+    assert_eq!(m("| 이름 | 값 |\n|---|---|\n| 가 | 1 |"), "```\n이름 | 값\n---- | --\n가   | 1\n```");
+    // 이스케이프가 없어서 글자 `*` `_` `~` 는 여는 마커가 될 자리에서 닮은 글자로 쓴다. 앞이 글자면 둔다.
+    assert_eq!(m("~예전 경로~ 와 5~6월, \\*별\\* 와 2 * 3"), "\u{223c}예전 경로~ 와 5~6월, \u{2217}별* 와 2 \u{2217} 3");
+    assert_eq!(mdwire::render_with("~예전~ 2 * 3", Channel::SlackMrkdwn, Default::default()).repairs.escaped_char, 2);
+    // 홑 `*` 는 표준대로 기울임으로 읽는다(`SPEC.md` 5.1) — 레거시로 쓴 답을 그대로 넣으면 기울임이 된다.
+    assert_eq!(m("*굵게 의도*"), "_굵게 의도_");
+}
+
+/// `<주소|글>` 로 쓴다. 주소의 `|` 는 글과 주소를 가르는 자리라 퍼센트로, `&` 는 엔티티로 쓴다. 스킴이 없는
+/// 주소는 슬랙이 링크로 못 만들어 글과 주소를 둔다. 이미지는 구문이 없어 링크다.
+#[test]
+fn mrkdwn_links_are_angle_bracketed() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("[문서](https://a.test/x?a=1&b=2)"), "<https://a.test/x?a=1&amp;b=2|문서>");
+    assert_eq!(m("<https://a.test> 와 [https://b.test](https://b.test)"), "<https://a.test> 와 <https://b.test>");
+    assert_eq!(m("[파이프](https://a.test/a|b)"), "<https://a.test/a%7Cb|파이프>");
+    assert_eq!(m("[상대](./a.md)"), "상대 (./a.md)");
+    assert_eq!(m("![그림](https://a.test/x.png)"), "<https://a.test/x.png|그림>");
+    assert_eq!(m("<https://a.test|레거시>"), "<https://a.test|레거시>");
+}
+
+/// **마커에 붙은 글자는 U+200B 로 뗀다.** `mrkdwn` 은 단어 경계에서만 마커를 읽어서 조사가 붙은
+/// `*마통*이` 를 강조로 못 잡는다는 관측이 있었다(`DESIGN.md` 3절). 공백·구두점 옆에는 끼우지 않는다.
+#[test]
+fn mrkdwn_separates_markers_from_glued_letters() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("**마통**이 0이고 `git`로 *진료*가"), "*마통*\u{200b}이 0이고 `git`\u{200b}로 _진료_\u{200b}가");
+    assert_eq!(m("값**굵게**다"), "값\u{200b}*굵게*\u{200b}다");
+    assert_eq!(m("(**괄호**) 와 **공백** 옆"), "(*괄호*) 와 *공백* 옆");
+    assert_eq!(mdwire::render_with("**마통**이", Channel::SlackMrkdwn, Default::default()).repairs.tag_emphasis, 1);
+}
+
+/// **강조는 줄마다 닫는다.** 줄을 넘는 짝을 `mrkdwn` 이 그리는지 재지 않았는데, 줄마다 닫은 모양은 어느
+/// 쪽이든 같은 범위로 그려진다. 코퍼스 `mrkdwn-bold-across-linebreak` 가 이 채널이 막으려는 고장이다.
+#[test]
+fn mrkdwn_closes_emphasis_on_every_line() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("**첫 줄에서 열고\n둘째 줄에서 닫힘**입니다."), "*첫 줄에서 열고*\n*둘째 줄에서 닫힘*\u{200b}입니다.");
+}
+
+/// 한도는 `section` 텍스트의 3,000자다. 나눈 자리에서 열린 마커는 닫고 다음 조각에서 다시 연다 — 홑마커도
+/// 짝으로 본다. 스트리밍은 완성본과 같다.
+#[test]
+fn mrkdwn_splits_at_section_limit_and_streams_the_same() {
+    assert_eq!(Channel::SlackMrkdwn.limit(), 3000);
+    let long = format!("**{}가나다**이다", "가나다 ".repeat(1500));
+    let parts = render(&long, Channel::SlackMrkdwn);
+    assert!(parts.len() > 1);
+    for p in &parts {
+        assert!(p.chars().count() <= 3000);
+        assert!(p.starts_with('*'), "{p:?}");
+    }
+    assert!(parts[..parts.len() - 1].iter().all(|p| p.ends_with('*')));
+    for input in ["**마통**이 [문서](https://a.test?a=1&b=2) 와 `a<b`\n\n## 제목 **굵게**", "~~a~~ ***b*** _c_"] {
+        let chars: Vec<char> = input.chars().collect();
+        for size in 1..=chars.len() {
+            let mut s = Streamer::new(Channel::SlackMrkdwn);
+            let mut got = String::new();
+            for chunk in chars.chunks(size) {
+                s.push_into(&chunk.iter().collect::<String>(), &mut got);
+            }
+            s.finish_into(&mut got);
+            assert_eq!(got, one(input, Channel::SlackMrkdwn), "{input:?} · 조각 {size}");
+        }
+    }
 }
 
 /// **노션은 GitHub 과 같은 마크다운에서 출발하되 반대로 가는 곳이 있다**(실측 2026-10-01, 커넥터로
@@ -1412,6 +1496,21 @@ fn long_unclosed_brackets_preserve_text() {
     s.finish_into(&mut acc);
     assert_eq!(acc, want);
     assert_eq!(one("[[broken [**ok**](https://e.test)", Channel::Html), "<p>[[broken <a href=\"https://e.test\"><strong>ok</strong></a></p>");
+}
+
+/// 큰 줄에서 레거시 `mrkdwn` 도 글을 그대로 둔다 — 링크·엔티티 경로가 다르다.
+#[test]
+fn long_unclosed_brackets_preserve_text_in_mrkdwn() {
+    // 스트리밍은 나누지 않으니 한도 없이 낸 완성본과 견준다.
+    let whole = mdwire::Options { limit: Some(usize::MAX), ..Default::default() };
+    for input in ["[".repeat(100_000), "[a <".repeat(5_000), "*_".repeat(50_000)] {
+        let want = mdwire::render_with(&input, Channel::SlackMrkdwn, whole.clone()).parts.join("");
+        let mut s = Streamer::new(Channel::SlackMrkdwn);
+        let mut acc = String::new();
+        for chunk in input.as_bytes().chunks(4096) { s.push_into(std::str::from_utf8(chunk).unwrap(), &mut acc); }
+        s.finish_into(&mut acc);
+        assert_eq!(acc, want);
+    }
 }
 
 /// 닫히지 않은 `[[` 마다 위키링크의 `]]` 를 줄 끝까지 다시 찾던 입력(옵시디언). 위와 같은 큰 줄과 안 닫힌
