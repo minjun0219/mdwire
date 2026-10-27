@@ -782,9 +782,10 @@ fn mrkdwn_writes_legacy_markers_and_entities() {
     assert_eq!(m("## 배포 **목록**\n\n- 하나\n\n---"), "*배포 목록*\n\n• 하나\n\n──────────");
     assert_eq!(m("> 인용 **굵게**"), "> 인용 *굵게*");
     assert_eq!(m("| 이름 | 값 |\n|---|---|\n| 가 | 1 |"), "```\n이름 | 값\n---- | --\n가   | 1\n```");
-    // 이스케이프가 없어서 글자 `*` `_` `~` 는 여는 마커가 될 자리에서 닮은 글자로 쓴다. 앞이 글자면 둔다.
-    assert_eq!(m("~예전 경로~ 와 5~6월, \\*별\\* 와 2 * 3"), "\u{223c}예전 경로~ 와 5~6월, \u{2217}별* 와 2 \u{2217} 3");
-    assert_eq!(mdwire::render_with("~예전~ 2 * 3", Channel::SlackMrkdwn, Default::default()).repairs.escaped_char, 2);
+    // 이스케이프가 없어서 글자 `*` `_` `~` 는 여는 마커가 될 자리에서 닮은 글자로 쓴다. 앞이 글자이거나 뒤가
+    // 공백이면 열지 못하니 둔다.
+    assert_eq!(m("~예전 경로~ 와 5~6월, \\*별\\* 와 2 * 3"), "\u{223c}예전 경로~ 와 5~6월, \u{2217}별* 와 2 * 3");
+    assert_eq!(mdwire::render_with("~예전~ 2 * 3", Channel::SlackMrkdwn, Default::default()).repairs.escaped_char, 1);
     // 홑 `*` 는 표준대로 기울임으로 읽는다(`SPEC.md` 5.1) — 레거시로 쓴 답을 그대로 넣으면 기울임이 된다.
     assert_eq!(m("*굵게 의도*"), "_굵게 의도_");
 }
@@ -833,6 +834,52 @@ fn mrkdwn_links_survive_splits() {
     }
 }
 
+/// 글자로 쓴 마커는 마커로 읽힐 자리에서만 닮은 글자로 바꾼다 — 여는 자리(앞이 글자가 아니고 뒤가 공백이
+/// 아님)와, 같은 마커로 그린 강조 안의 닫는 자리. 런은 글자마다 본다. 되돌린 마커도 같은 규칙이다.
+#[test]
+fn mrkdwn_guards_literal_markers_where_they_would_read() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("SELECT * FROM t"), "SELECT * FROM t");
+    assert_eq!(m("**굵게 5* 끝**"), "*굵게 5\u{2217} 끝*");
+    assert_eq!(m("~~약 5~ 10분~~"), "~약 5\u{223c} 10분~");
+    assert_eq!(m("MY__VAR 값"), "MY_\u{ff3f}VAR 값");
+    assert_eq!(m("snake__case__x"), "snake_\u{ff3f}case_\u{ff3f}x");
+    assert_eq!(m("x**(y)**z"), "x*\u{2217}(y)\u{2217}\u{2217}z");
+    // 텍스트로 떨어진 링크의 주소도 본문이다.
+    assert_eq!(m("[초안](./_draft_.md)"), "초안 (./\u{ff3f}draft\u{ff3f}.md)");
+    // 줄 첫머리의 `\>` 는 인용이 아니다 — 슬랙은 인용을 `&gt;` 로 적는다.
+    assert_eq!(m("\\> 인용 아님\n\\> 둘째"), "\u{200b}&gt; 인용 아님\n\u{200b}&gt; 둘째");
+    assert_eq!(m("a \\> b"), "a &gt; b");
+}
+
+/// 굵은 자리 안의 굵게는 버린다 — 링크 라벨 안이어도. 코드 스팬도 글자에 붙으면 U+200B 로 뗀다.
+#[test]
+fn mrkdwn_drops_nested_bold_in_labels_and_separates_code_spans() {
+    let m = |s| one(s, Channel::SlackMrkdwn);
+    assert_eq!(m("## 제목 [**링크**](https://x.test)"), "*제목 <https://x.test|링크>*");
+    assert_eq!(m("**굵게 [**링크**](https://x.test) 끝**"), "*굵게 <https://x.test|링크> 끝*");
+    assert_eq!(m("[**링크**](https://x.test)"), "<https://x.test|*링크*>");
+    assert_eq!(m("`git`b"), "`git`\u{200b}b");
+    assert_eq!(m("`git`로 와 *x*"), "`git`\u{200b}로 와 _x_");
+    assert_eq!(m("**a**b `c` d"), "*a*\u{200b}b `c` d");
+}
+
+/// **나눌 때 렌더러가 글자로 둔 기호와는 짝을 맺지 않는다.** `snake_case` 의 `_` 나 `5~6월` 의 `~` 를 마커로
+/// 짝지으면 나눈 자리에 없던 `_` `~` 가 닫히고 다시 열린다. 짝은 줄을 넘지 않는다.
+#[test]
+fn mrkdwn_splits_do_not_pair_literal_markers() {
+    let filler = "가나다라마바사아 ".repeat(400);
+    for (input, c) in [
+        (format!("변수 snake_case 를 본다 {filler}그리고 other_var 끝"), '_'),
+        (format!("약 5~6월 경로 {filler}그 경로~ 끝"), '~'),
+        (format!("_줄 하나_\n{filler}끝_"), '_'),
+    ] {
+        let parts = render(&input, Channel::SlackMrkdwn);
+        assert!(parts.len() > 1);
+        assert_eq!(parts.iter().map(|p| p.matches(c).count()).sum::<usize>(), input.matches(c).count(), "{input:.40}");
+    }
+}
+
 /// **강조는 줄마다 닫는다.** 줄을 넘는 짝을 `mrkdwn` 이 그리는지 재지 않았는데, 줄마다 닫은 모양은 어느
 /// 쪽이든 같은 범위로 그려진다. 코퍼스 `mrkdwn-bold-across-linebreak` 가 이 채널이 막으려는 고장이다.
 #[test]
@@ -854,7 +901,12 @@ fn mrkdwn_splits_at_section_limit_and_streams_the_same() {
         assert!(p.starts_with('*'), "{p:?}");
     }
     assert!(parts[..parts.len() - 1].iter().all(|p| p.ends_with('*')));
-    for input in ["**마통**이 [문서](https://a.test?a=1&b=2) 와 `a<b`\n\n## 제목 **굵게**", "~~a~~ ***b*** _c_"] {
+    for input in [
+        "**마통**이 [문서](https://a.test?a=1&b=2) 와 `a<b`\n\n## 제목 **굵게**",
+        "~~a~~ ***b*** _c_",
+        "**굵게 5* 끝** 와 SELECT * FROM t 와 MY__VAR",
+        "`git`b 와 \\> x\n\\> y 와 ## [**링크**](https://x.test) [초안](./_d_.md)",
+    ] {
         let chars: Vec<char> = input.chars().collect();
         for size in 1..=chars.len() {
             let mut s = Streamer::new(Channel::SlackMrkdwn);

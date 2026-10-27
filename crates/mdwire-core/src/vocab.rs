@@ -324,7 +324,22 @@ impl Vocab {
         out.push_str(text);
         if !url.is_empty() && !escaped_eq(text, url) {
             out.push_str(" (");
-            self.escape(url, out);
+            if self.is_mrkdwn() {
+                // 주소도 본문이다 — `./_draft_.md` 의 `_` 가 기울임을 열지 않게 본문 글자와 같이 막는다.
+                // 바깥 강조 안일 수 있어서 닫는 자리도 막는다.
+                let mut prev = '(';
+                let mut chars = url.chars().peekable();
+                while let Some(c) = chars.next() {
+                    let next = chars.peek().copied().unwrap_or(')');
+                    match crate::inline::mrkdwn_alike(c, Some(prev), Some(next), true) {
+                        Some(a) => out.push(a),
+                        None => self.escape_char(c, out),
+                    }
+                    prev = c;
+                }
+            } else {
+                self.escape(url, out);
+            }
             out.push(')');
         }
     }

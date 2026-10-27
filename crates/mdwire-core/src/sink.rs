@@ -113,10 +113,12 @@ fn split_hard(text: &str, limit: usize, v: &Vocab) -> Vec<String> {
     let mut len = 0usize;
     let mut markup = Markup::default();
     if v.channel != Channel::TelegramHtml && !v.is_plain() {
-        markup.spans = std::rc::Rc::from(scan_spans(text, v.is_mrkdwn()));
+        // 글자 벡터는 한 번만 만든다. `mrkdwn` 은 링크를 다시 열 때 주소를 이 글에서 옮겨 적어서
+        // (`SpanKind::Link`) 그대로 들고 간다.
+        let ch: std::rc::Rc<[char]> = text.chars().collect();
+        markup.spans = std::rc::Rc::from(scan_spans(&ch, v.is_mrkdwn()));
         if v.is_mrkdwn() {
-            // 링크를 다시 열 때 주소를 이 글에서 옮겨 적는다(`SpanKind::Link`).
-            markup.chars = text.chars().collect();
+            markup.chars = ch;
         }
     }
 
@@ -406,9 +408,10 @@ fn emph_tag_at(ch: &[char], at: usize) -> Option<(&'static str, bool, usize)> {
 /// 뒤에 있어야 한다. 펜스 안은 보지 않는다.
 ///
 /// `mrkdwn` 은 마커가 홑이다 — 굵게 `*`, 기울임 `_`, 취소선 `~`. 렌더러가 줄마다 닫으므로 스팬이 줄을
-/// 넘지 않고, 안팎이 같은 글자인 겹침(`**`)도 나오지 않는다.
-fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
-    let ch: Vec<char> = text.chars().collect();
+/// 넘지 않고, 안팎이 같은 글자인 겹침(`**`)도 나오지 않는다. **짝은 렌더러가 낸 마커 모양으로만 맺는다** —
+/// 여는 쪽은 앞이 글자·숫자가 아니고, 닫는 쪽은 뒤가 글자·숫자가 아니다(붙으면 렌더러가 U+200B 로 뗐다).
+/// 렌더러가 글자로 둔 `snake_case` `5~6월` 의 기호는 이 모양이 아니라서 짝이 되지 않는다.
+fn scan_spans(ch: &[char], mrkdwn: bool) -> Vec<Span> {
     // 펜스 줄과 그 안은 스팬이 아니고, **스팬이 그 너머와 짝을 맺지도 못한다.** 백틱
     // 런의 짝을 찾을 때 펜스를 넘어가면 글자로 남은 ``` 가 코드블록의 펜스와 짝이 된다.
     let mut fenced = vec![false; ch.len()];
@@ -445,6 +448,11 @@ fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
         // **줄이 바뀌면서 새 항목이 시작되면 열린 강조는 없던 일이다.** 조각 하나에 목록
         // 항목 여럿이 담기는데, 렌더러는 항목마다 인라인을 확정한다. 여기서 항목을 넘어
         // 짝을 맺으면 A 항목의 글자 `*` 가 B 항목의 `*` 와 스팬이 된다.
+        if c == '\n' && mrkdwn {
+            open.clear();
+            i += 1;
+            continue;
+        }
         if c == '\n' {
             let mut j = i + 1;
             while j < ch.len() && (ch[j] == ' ' || ch[j] == '\t') {
@@ -521,7 +529,7 @@ fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
             continue;
         }
         if c == '<' {
-            match emph_tag_at(&ch, i) {
+            match emph_tag_at(ch, i) {
                 Some((name, false, len)) => {
                     open.push((SpanKind::Tag(name), i));
                     i += len;
@@ -544,8 +552,12 @@ fn scan_spans(text: &str, mrkdwn: bool) -> Vec<Span> {
         let run = ch[i..].iter().take_while(|&&x| x == c).count();
         let prev = if i > 0 { Some(ch[i - 1]) } else { None };
         let next = ch.get(i + run).copied();
-        let opens = next.is_some_and(|n| !n.is_whitespace());
-        let closes = prev.is_some_and(|p| !p.is_whitespace());
+        let mut opens = next.is_some_and(|n| !n.is_whitespace());
+        let mut closes = prev.is_some_and(|p| !p.is_whitespace());
+        if mrkdwn {
+            opens &= !prev.is_some_and(char::is_alphanumeric);
+            closes &= !next.is_some_and(char::is_alphanumeric);
+        }
         // `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
         let markers: &[&'static str] = match (c, run) {
             ('*', 1) if mrkdwn => &["*"],

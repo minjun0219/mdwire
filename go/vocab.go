@@ -354,7 +354,25 @@ func (v vocab) unlinked(text, url string, out *[]byte) {
 	*out = append(*out, text...)
 	if url != "" && !escapedEq(text, url) {
 		*out = append(*out, " ("...)
-		v.escape(url, out)
+		if v.isMrkdwn() {
+			// 주소도 본문이다 — `./_draft_.md` 의 `_` 가 기울임을 열지 않게 본문 글자와 같이 막는다. 바깥 강조
+			// 안일 수 있어서 닫는 자리도 막는다. 러스트 쪽과 같다.
+			prev := '('
+			for k, c := range url {
+				next := ')'
+				if r, size := utf8.DecodeRuneInString(url[k+utf8.RuneLen(c):]); size > 0 {
+					next = r
+				}
+				if a := mrkdwnAlike(c, prev, next, true); a != noChar {
+					*out = appendRune(*out, a)
+				} else {
+					v.escapeChar(c, out)
+				}
+				prev = c
+			}
+		} else {
+			v.escape(url, out)
+		}
 		*out = append(*out, ')')
 	}
 }

@@ -79,6 +79,9 @@ type inline struct {
 	boldLine bool
 	// lastClose 는 mrkdwn 에서 마지막으로 닫은 강조의 닫는 마커 글자다(mrkdwnBounds).
 	lastClose rune
+	// enclosing 은 링크 라벨을 그리는 복제본에게 바깥에서 열려 있던 mrkdwn 마커다(* _ ~ 비트, markerBit).
+	// 라벨은 자기 인라인 상태로 그려서, 이게 없으면 바깥 굵게를 모른다. 러스트 쪽과 같다.
+	enclosing uint8
 }
 
 func newInline() *inline {
@@ -149,6 +152,11 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 				run = runLen(line, i, '`')
 			}
 			if run == top.run {
+				// 닫는 백틱 뒤 글자다 — mrkdwn 은 코드 스팬도 글자에 붙으면 뗀다(mrkdwnBounds).
+				in.afterClose = noChar
+				if i+run < len(line) {
+					in.afterClose = line[i+run]
+				}
 				in.closeAt(n-1, out, v)
 				i += run
 			} else {
@@ -222,7 +230,17 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 역슬래시 이스케이프. `\_` 는 밑줄 한 글자지 강조 마커가 아니다.
 		if c == '\\' && i+1 < len(line) && isASCIIPunct(line[i+1]) {
 			if v.isMrkdwn() {
-				in.textCharAfter(line[i+1], in.prevChar(line, i), out, v)
+				prev := in.prevChar(line, i)
+				// 줄 첫머리의 `\>` 는 인용이 아니다. 슬랙은 인용을 `&gt;` 로 시작하는 줄로 적어서, 그대로 내면
+				// 저자가 막은 인용이 다시 열린다. U+200B 를 앞에 두어 줄 첫머리에서 뗀다. 러스트 쪽과 같다.
+				if line[i+1] == '>' && (prev == noChar || prev == '\n') {
+					*out = appendRune(*out, zeroWidthSpace)
+				}
+				next := noChar
+				if i+2 < len(line) {
+					next = line[i+2]
+				}
+				in.textCharAfter(line[i+1], prev, next, out, v)
 				in.prev = line[i+1]
 				i += 2
 				continue
@@ -243,7 +261,8 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 
 		if c != '*' && c != '_' && c != '~' {
-			in.textChar(c, out, v)
+			// 앞뒤 글자는 mrkdwn 만 본다 — 글자마다 부르는 길이라 다른 채널은 안 꺼낸다.
+			in.textCharAfter(c, noChar, noChar, out, v)
 			i++
 			continue
 		}
@@ -273,7 +292,11 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		}
 		// 취소선은 `~~` 다. 홀로 선 `~` 는 글자다 — `~40km`, `5~6월`.
 		if c == '~' && take < 2 {
-			in.textCharAfter(c, in.prevChar(line, i), out, v)
+			next := noChar
+			if i+1 < len(line) {
+				next = line[i+1]
+			}
+			in.textCharAfter(c, in.prevChar(line, i), next, out, v)
 			i++
 			continue
 		}
@@ -298,9 +321,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 		// 연 것뿐이다 — `2*3 = 6, snake_case` 의 밑줄이 `*` 로 연 기울임을 닫으면 `snake*case` 가 된다.
 		intraword := c == '_' && prev != noChar && isAlphanumeric(prev)
 		if intraword && (same < 0 || in.open[same].ch != '_') {
-			for k := 0; k < take; k++ {
-				in.textCharAfter(c, runPrev(k, prev, c), out, v)
-			}
+			in.textRun(c, take, prev, next, out, v)
 			i += take
 			continue
 		}
@@ -333,9 +354,7 @@ func (in *inline) render(line []rune, out *[]byte, v vocab) {
 			top.hemmed = in.line + 1
 		case same >= 0 && in.open[same].guess && (!left || !afterSpace) &&
 			!(left && in.open[same].hemmed != 0 && isOpeningBracket(prev)):
-			for k := 0; k < take; k++ {
-				in.textCharAfter(c, runPrev(k, prev, c), out, v)
-			}
+			in.textRun(c, take, prev, next, out, v)
 		// 여는 자리의 마커가 왔는데 추측이 열려 있다 — 추측이 틀렸다. 되돌리고 이쪽을 연다.
 		// 막힌 추측 뒤의 `(**주의` 도 여기다 — 막힌 마커는 글자로 돌아간다.
 		case same >= 0 && in.open[same].guess:
@@ -399,7 +418,7 @@ func (in *inline) revertCodeSpan(out *[]byte, v vocab) {
 	if v.isMrkdwn() {
 		// 글자로 되돌린 런이다 — mrkdwn 에서는 백틱끼리 뗀다(insertMarker).
 		var discard Repairs
-		insertMarker(out, o.at, o.ch, o.run, o.before, v, &discard)
+		insertMarker(out, o.at, o.ch, o.run, o.before, false, v, &discard)
 	} else {
 		for k := 0; k < o.run; k++ {
 			*out = appendRune(*out, o.ch)
@@ -432,7 +451,7 @@ func (in *inline) reopenAt(at int, out *[]byte, v vocab, fresh openMark) {
 	old := in.open[len(in.open)-1]
 	in.open = in.open[:len(in.open)-1]
 	if old.run == 1 || (old.guess && (old.afterSpace || old.split || old.hemmed != 0)) {
-		insertMarker(out, old.at, old.ch, old.run, old.before, v, &in.repairs)
+		insertMarker(out, old.at, old.ch, old.run, old.before, in.inside(old.ch, v), v, &in.repairs)
 	} else {
 		in.repairs.DroppedMarker++
 	}
@@ -503,7 +522,7 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		// 때만 되돌린다(`2 ** 3`). 앞이 글자인 `**` 가 홀로 남을 이유는 없다.
 		// 막힌 여는 마커도 되돌린다 — 짝 없는 `2**(n-1)` 의 `**` 는 거듭제곱이다.
 		if o.afterSpace || o.run == 1 || o.split || o.hemmed != 0 {
-			insertMarker(out, o.at, o.ch, o.run, o.before, v, &in.repairs)
+			insertMarker(out, o.at, o.ch, o.run, o.before, in.inside(o.ch, v), v, &in.repairs)
 		} else {
 			in.repairs.DroppedMarker++
 		}
@@ -555,8 +574,9 @@ func (in *inline) finalize(out *[]byte, v vocab, matched bool) {
 		after = in.afterClose
 	}
 	// mrkdwn 은 굵게 안의 굵게를 못 쓴다 — 마커가 같은 * 라 `*배포 *목록**` 이 바깥에서 닫힌다. 이미 굵은
-	// 자리라 안쪽 마커는 버려도 모양이 같다. 헤딩을 굵은 줄로 낼 때 흔하다(`## 배포 **목록**`).
-	if v.isMrkdwn() && o.emph == emphBold && (in.boldLine || in.hasOpen(emphBold)) {
+	// 자리라 안쪽 마커는 버려도 모양이 같다. 헤딩을 굵은 줄로 낼 때 흔하다(`## 배포 **목록**`). 링크 라벨
+	// 안의 굵게도 바깥이 굵으면 버린다(enclosing) — `*제목 <주소|*링크*>*` 가 된다.
+	if v.isMrkdwn() && o.emph == emphBold && in.inside('*', v) {
 		return
 	}
 	if v.htmlEmphasis() && o.emph != emphCode && !gfmPairs(o.before, (*out)[o.at:], after) {
@@ -806,29 +826,63 @@ func rendersEmpty(rest []rune, v vocab) bool {
 	return true
 }
 
-// textChar 는 본문 글자 하나를 적는다. 채널이 이스케이프하는 글자면 센다(Repairs.EscapedChar).
-func (in *inline) textChar(c rune, out *[]byte, v vocab) {
-	prev := noChar
-	if r, n := utf8.DecodeLastRune(*out); n > 0 {
-		prev = r
+// textChars 는 본문 글자 여럿을 적는다. 앞뒤 글자는 이 글 안에서 본다 — 오토링크 라벨처럼 따로 쓰는 글이다.
+func (in *inline) textChars(s []rune, out *[]byte, v vocab) {
+	for k, c := range s {
+		prev, next := noChar, noChar
+		if v.isMrkdwn() {
+			if k > 0 {
+				prev = s[k-1]
+			} else if r, n := utf8.DecodeLastRune(*out); n > 0 {
+				prev = r
+			}
+			if k+1 < len(s) {
+				next = s[k+1]
+			}
+		}
+		in.textCharAfter(c, prev, next, out, v)
 	}
-	in.textCharAfter(c, prev, out, v)
 }
 
-// textCharAfter 는 글자 하나를 본문으로 적는다. prev 는 원문에서 바로 앞 글자다 — out 은 스트리밍 중에
-// 앞이 내보내져 비어 있을 수 있어서, 앞 글자로 갈리는 판단은 원문으로 한다.
+// textRun 은 마커 글자 런을 본문 글자로 적는다. 글자마다 앞뒤를 따로 본다 — 런 안의 둘째 글자는 앞이
+// 마커라 여는 자리일 수 있다(`MY__VAR` 의 둘째 `_`).
+func (in *inline) textRun(c rune, n int, prev, next rune, out *[]byte, v vocab) {
+	for k := 0; k < n; k++ {
+		nx := next
+		if k+1 < n {
+			nx = c
+		}
+		in.textCharAfter(c, runPrev(k, prev, c), nx, out, v)
+	}
+}
+
+// inside 는 지금 mrkdwn 마커 c 로 그리는 강조 안인가다 — 바깥 라벨, 굵은 줄, 열린 마커 어디서든. 그
+// 안에서는 글자로 쓴 같은 마커가 닫는 쪽으로 읽힐 수 있다(mrkdwnAlike).
+func (in *inline) inside(c rune, v vocab) bool {
+	if in.enclosing&markerBit(c) != 0 || (c == '*' && in.boldLine) {
+		return true
+	}
+	for _, o := range in.open {
+		if m := v.open(o.emph); m != "" && rune(m[0]) == c {
+			return true
+		}
+	}
+	return false
+}
+
+// textCharAfter 는 글자 하나를 본문으로 적는다. prev·next 는 원문에서 바로 앞뒤 글자다 — out 은 스트리밍
+// 중에 앞이 내보내져 비어 있을 수 있어서, 앞뒤 글자로 갈리는 판단은 원문으로 한다. mrkdwn 만 본다.
 //
-// mrkdwn 에는 이스케이프가 없다. 글자로 쓴 * _ ~ 가 마커로 읽히지 않게, 여는 마커가 될 수 있는 자리(앞이
-// 글자·숫자가 아님)에서는 모양이 닮은 글자로 쓴다 — ∗(U+2217) ＿(U+FF3F) ∼(U+223C). 글자 백틱은 앞이
-// 백틱이면 U+200B 로 뗀다 — 런이 되면 코드 블록을 연다. 슬랙에서 재지는 않았다. 러스트 쪽과 같다.
-func (in *inline) textCharAfter(c, prev rune, out *[]byte, v vocab) {
+// mrkdwn 에는 이스케이프가 없다. 글자로 쓴 * _ ~ 가 마커로 읽힐 수 있는 자리에서는 모양이 닮은 글자로
+// 쓴다(mrkdwnAlike). 글자 백틱은 앞이 백틱이면 U+200B 로 뗀다 — 런이 되면 코드 블록을 연다. 슬랙에서
+// 재지는 않았다. 러스트 쪽과 같다.
+func (in *inline) textCharAfter(c, prev, next rune, out *[]byte, v vocab) {
 	if v.isMrkdwn() {
-		if !glued(prev) {
-			if a := lookAlike(c); a != noChar {
-				in.repairs.EscapedChar++
-				*out = appendRune(*out, a)
-				return
-			}
+		inside := (c == '*' || c == '_' || c == '~') && in.inside(c, v)
+		if a := mrkdwnAlike(c, prev, next, inside); a != noChar {
+			in.repairs.EscapedChar++
+			*out = appendRune(*out, a)
+			return
 		}
 		if c == '`' {
 			if prev == '`' || (len(*out) > 0 && (*out)[len(*out)-1] == '`') {
@@ -874,12 +928,12 @@ func (in *inline) angle(line []rune, i int, out *[]byte, v vocab) int {
 		// 텍스트 없는 `<url>` 의 라벨은 주소 그대로다 — 본문 이스케이프(GitHub 의 `\~`)을 하면 주소와
 		// 달라져 오토링크 대신 `[…](…)` 로 풀린다. HTML 로 가는 채널만 escape 한다.
 		text := in.scratch[:0]
-		for _, c := range label {
-			if bare {
+		if bare {
+			for _, c := range label {
 				v.codeChar(c, &text)
-			} else {
-				in.textChar(c, &text, v)
 			}
+		} else {
+			in.textChars(label, &text, v)
 		}
 		if !bare && !v.htmlOut() && !v.isPlain() {
 			in.repairs.ConvertedMarker++
@@ -1018,14 +1072,20 @@ func (in *inline) renderTarget(text, url []rune, out *[]byte, v vocab, image boo
 		nested.inAnchor = in.inAnchor || (!loads && v.makesAnchor(href))
 		// 표 칸 안의 라벨도 줄을 바꿀 수 없다.
 		nested.inCell = in.inCell
+		// 바깥에서 열린 mrkdwn 마커를 넘긴다 — 라벨 안의 같은 마커가 바깥 강조와 엉키지 않게.
+		if v.isMrkdwn() {
+			for _, m := range []rune{'*', '_', '~'} {
+				if in.inside(m, v) {
+					nested.enclosing |= markerBit(m)
+				}
+			}
+		}
 		nested.render(text, &scratch, labelVocab)
 		nested.finishBlock(&scratch, labelVocab)
 		in.repairs.add(nested.repairs)
 	} else {
 		// 한도 아래와 같은 글자 escape를 쓰되, 다시 파싱하지 않는다.
-		for _, c := range text {
-			in.textChar(c, &scratch, labelVocab)
-		}
+		in.textChars(text, &scratch, labelVocab)
 	}
 	// <a> 안의 링크와 이미지 링크 폴백은 주소를 글자로 보존한다.
 	if in.inAnchor && !loads {
@@ -1203,17 +1263,29 @@ func repeatRune(c rune, n int) []rune {
 // insertMarker 는 짝을 못 찾은 마커를 글자로 되돌려 at 에 끼운다. 본문 글자라 채널의 이스케이프를
 // 따른다 — GitHub 에서 맨몸 `~` 로 되돌리면 뒤의 `~` 와 짝지어 취소선이 된다.
 //
-// before 는 원문에서 마커 바로 앞 글자다(mrkdwn 의 닮은 글자 판단, textCharAfter).
-func insertMarker(out *[]byte, at int, c rune, n int, before rune, v vocab, repairs *Repairs) {
-	// mrkdwn 의 글자 마커는 여는 자리에서 닮은 글자로 쓴다. 런은 첫 글자만 그 자리고, 뒤는 앞이 마커라 그
-	// 자리가 아니지만 같이 바꾼다 — 러스트 쪽과 같다.
+// before 는 원문에서 마커 바로 앞 글자, inside 는 같은 마커로 그리는 강조 안인가다(mrkdwn 의 닮은 글자
+// 판단, mrkdwnAlike). 뒤 글자는 out 의 at 뒤에서 본다 — 되돌리는 마커의 내용이 거기 있다.
+func insertMarker(out *[]byte, at int, c rune, n int, before rune, inside bool, v vocab, repairs *Repairs) {
+	// mrkdwn 의 글자 마커는 본문 글자와 같은 규칙이다 — 글자마다 앞뒤를 보고 읽힐 자리면 닮은 글자로.
 	if v.isMrkdwn() && c != '`' {
-		if glued(before) {
-			insertRun(out, at, c, n)
-			return
+		after := noChar
+		if r, size := utf8.DecodeRune((*out)[at:]); size > 0 {
+			after = r
 		}
-		repairs.EscapedChar += n
-		insertAt(out, at, strings.Repeat(string(lookAlike(c)), n))
+		s := make([]byte, 0, n*3)
+		for k := 0; k < n; k++ {
+			nx := after
+			if k+1 < n {
+				nx = c
+			}
+			if a := mrkdwnAlike(c, runPrev(k, before, c), nx, inside); a != noChar {
+				repairs.EscapedChar++
+				s = appendRune(s, a)
+			} else {
+				s = appendRune(s, c)
+			}
+		}
+		insertAt(out, at, string(s))
 		return
 	}
 	// mrkdwn 은 글자 백틱끼리 U+200B 로 뗀다(vocab.escapeChar) — 되돌린 런도, 그 앞뒤 백틱과도.
@@ -1250,15 +1322,41 @@ func insertMarker(out *[]byte, at int, c rune, n int, before rune, v vocab, repa
 	}
 }
 
-// lookAlike 는 mrkdwn 에서 글자로 쓴 마커 대신 쓰는 닮은 글자다. 마커가 아니면 noChar.
-func lookAlike(c rune) rune {
+// markerBit 는 mrkdwn 마커 글자의 비트다(inline.enclosing).
+func markerBit(c rune) uint8 {
 	switch c {
 	case '*':
-		return '\u2217'
+		return 1
 	case '_':
-		return '\uFF3F'
+		return 2
 	case '~':
-		return '\u223C'
+		return 4
+	}
+	return 0
+}
+
+// mrkdwnAlike 는 mrkdwn 에서 글자로 쓴 c 를 닮은 글자로 바꿀 자리면 그 글자다 — ∗(U+2217) ＿(U+FF3F)
+// ∼(U+223C). 아니면 noChar.
+//
+// 여는 자리는 앞이 글자·숫자가 아니고 뒤가 공백이 아닌 곳이다 — `SELECT * FROM` 의 `*` 는 둔다. 닫는 자리는
+// 앞이 공백이 아니고 뒤가 글자·숫자가 아닌 곳인데, 같은 마커로 그리는 강조 안(inside)에서만 짝이 있다.
+// 런은 글자마다 본다. 슬랙에서 재지는 않았다. 러스트 쪽 mrkdwn_alike 와 같다.
+func mrkdwnAlike(c, prev, next rune, inside bool) rune {
+	var alike rune
+	switch c {
+	case '*':
+		alike = '\u2217'
+	case '_':
+		alike = '\uFF3F'
+	case '~':
+		alike = '\u223C'
+	default:
+		return noChar
+	}
+	opens := !glued(prev) && next != noChar && !unicode.IsSpace(next)
+	closes := inside && prev != noChar && !unicode.IsSpace(prev) && !glued(next)
+	if opens || closes {
+		return alike
 	}
 	return noChar
 }

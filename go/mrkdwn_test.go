@@ -20,7 +20,7 @@ func TestMrkdwnMatchesRustShapes(t *testing.T) {
 		{"## 배포 **목록**\n\n- 하나\n\n---", "*배포 목록*\n\n• 하나\n\n──────────"},
 		{"> 인용 **굵게**", "> 인용 *굵게*"},
 		{"| 이름 | 값 |\n|---|---|\n| 가 | 1 |", "```\n이름 | 값\n---- | --\n가   | 1\n```"},
-		{"~예전 경로~ 와 5~6월, \\*별\\* 와 2 * 3", "\u223c예전 경로~ 와 5~6월, \u2217별* 와 2 \u2217 3"},
+		{"~예전 경로~ 와 5~6월, \\*별\\* 와 2 * 3", "\u223c예전 경로~ 와 5~6월, \u2217별* 와 2 * 3"},
 		{"*굵게 의도*", "_굵게 의도_"},
 		{"[문서](https://a.test/x?a=1&b=2)", "<https://a.test/x?a=1&amp;b=2|문서>"},
 		{"<https://a.test> 와 [https://b.test](https://b.test)", "<https://a.test> 와 <https://b.test>"},
@@ -35,12 +35,26 @@ func TestMrkdwnMatchesRustShapes(t *testing.T) {
 		{"앞<span>**굵게**</span>", "앞\u200b*굵게*\u200b"},
 		{"**a**__b__ 와 *a*_b_", "*a*\u200b*b* 와 _a_\u200b_b_"},
 		{"_**둘 다**_", "_*둘 다*_"},
+		{"SELECT * FROM t", "SELECT * FROM t"},
+		{"**굵게 5* 끝**", "*굵게 5\u2217 끝*"},
+		{"~~약 5~ 10분~~", "~약 5\u223c 10분~"},
+		{"MY__VAR 값", "MY_\uff3fVAR 값"},
+		{"snake__case__x", "snake_\uff3fcase_\uff3fx"},
+		{"x**(y)**z", "x*\u2217(y)\u2217\u2217z"},
+		{"[초안](./_draft_.md)", "초안 (./\uff3fdraft\uff3f.md)"},
+		{"\\> 인용 아님\n\\> 둘째", "\u200b&gt; 인용 아님\n\u200b&gt; 둘째"},
+		{"a \\> b", "a &gt; b"},
+		{"## 제목 [**링크**](https://x.test)", "*제목 <https://x.test|링크>*"},
+		{"**굵게 [**링크**](https://x.test) 끝**", "*굵게 <https://x.test|링크> 끝*"},
+		{"[**링크**](https://x.test)", "<https://x.test|*링크*>"},
+		{"`git`b", "`git`\u200bb"},
+		{"**a**b `c` d", "*a*\u200bb `c` d"},
 	} {
 		if got := strings.Join(Render(c[0], SlackMrkdwn), ""); got != c[1] {
 			t.Errorf("%q:\n  got  %q\n  want %q", c[0], got, c[1])
 		}
 	}
-	if r := RenderWith("~예전~ 2 * 3", SlackMrkdwn, Options{}).Repairs; r.EscapedChar != 2 {
+	if r := RenderWith("~예전~ 2 * 3", SlackMrkdwn, Options{}).Repairs; r.EscapedChar != 1 {
 		t.Errorf("닮은 글자는 이스케이프로 센다: %+v", r)
 	}
 	if r := RenderWith("**마통**이", SlackMrkdwn, Options{}).Repairs; r.TagEmphasis != 1 {
@@ -63,7 +77,12 @@ func TestMrkdwnSplitsAtSectionLimitAndStreamsTheSame(t *testing.T) {
 			t.Fatalf("조각 %d: %q", i, p)
 		}
 	}
-	for _, input := range []string{"**마통**이 [문서](https://a.test?a=1&b=2) 와 `a<b`\n\n## 제목 **굵게**", "~~a~~ ***b*** _c_"} {
+	for _, input := range []string{
+		"**마통**이 [문서](https://a.test?a=1&b=2) 와 `a<b`\n\n## 제목 **굵게**",
+		"~~a~~ ***b*** _c_",
+		"**굵게 5* 끝** 와 SELECT * FROM t 와 MY__VAR",
+		"`git`b 와 \\> x\n\\> y 와 ## [**링크**](https://x.test) [초안](./_d_.md)",
+	} {
 		want := strings.Join(Render(input, SlackMrkdwn), "")
 		rs := []rune(input)
 		for size := 1; size <= len(rs); size++ {
@@ -137,6 +156,31 @@ func TestMrkdwnLinksSurviveSplits(t *testing.T) {
 			if utf8.RuneCountInString(p) > 3000 || !strings.HasPrefix(p, "*<https://a.test/a_b|") || strings.Count(p, "<") != strings.Count(p, ">") {
 				t.Fatalf("조각 %d: %q … %q", i, p[:40], p[len(p)-20:])
 			}
+		}
+	}
+}
+
+// 나눌 때 렌더러가 글자로 둔 기호와는 짝을 맺지 않는다 — 러스트 쪽 mrkdwn_splits_do_not_pair_literal_markers.
+func TestMrkdwnSplitsDoNotPairLiteralMarkers(t *testing.T) {
+	filler := strings.Repeat("가나다라마바사아 ", 400)
+	for _, c := range []struct {
+		in string
+		ch string
+	}{
+		{"변수 snake_case 를 본다 " + filler + "그리고 other_var 끝", "_"},
+		{"약 5~6월 경로 " + filler + "그 경로~ 끝", "~"},
+		{"_줄 하나_\n" + filler + "끝_", "_"},
+	} {
+		parts := Render(c.in, SlackMrkdwn)
+		if len(parts) < 2 {
+			t.Fatal("나뉘지 않았다")
+		}
+		n := 0
+		for _, p := range parts {
+			n += strings.Count(p, c.ch)
+		}
+		if n != strings.Count(c.in, c.ch) {
+			t.Errorf("%.40q: %d != %d", c.in, n, strings.Count(c.in, c.ch))
 		}
 	}
 }

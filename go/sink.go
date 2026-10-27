@@ -549,7 +549,9 @@ func (m *markup) reopen(out *[]byte) {
 // 한다. 펜스 안은 보지 않는다.
 //
 // mrkdwn 은 마커가 홑이다 — 굵게 *, 기울임 _, 취소선 ~. 렌더러가 줄마다 닫으므로 스팬이 줄을 넘지 않고,
-// 안팎이 같은 글자인 겹침(**)도 나오지 않는다.
+// 안팎이 같은 글자인 겹침(**)도 나오지 않는다. 짝은 렌더러가 낸 마커 모양으로만 맺는다 — 여는 쪽은 앞이
+// 글자·숫자가 아니고, 닫는 쪽은 뒤가 글자·숫자가 아니다(붙으면 렌더러가 U+200B 로 뗐다). 렌더러가 글자로 둔
+// `snake_case` `5~6월` 의 기호는 이 모양이 아니라서 짝이 되지 않는다. 러스트 쪽과 같다.
 func scanSpans(text string, mrkdwn bool) []span {
 	ch := []rune(text)
 	// 펜스 줄과 그 안은 스팬이 아니고, 스팬이 그 너머와 짝을 맺지도 못한다.
@@ -593,6 +595,11 @@ func scanSpans(text string, mrkdwn bool) []span {
 		}
 		// 줄이 바뀌면서 새 항목이 시작되면 열린 강조는 없던 일이다 — 조각 하나에 목록 항목
 		// 여럿이 담기는데, 렌더러는 항목마다 인라인을 확정한다.
+		if c == '\n' && mrkdwn {
+			open = open[:0]
+			i++
+			continue
+		}
 		if c == '\n' {
 			j := i + 1
 			for j < len(ch) && (ch[j] == ' ' || ch[j] == '\t') {
@@ -717,6 +724,10 @@ func scanSpans(text string, mrkdwn bool) []span {
 		}
 		opens := next != noChar && !unicode.IsSpace(next)
 		closes := prev != noChar && !unicode.IsSpace(prev)
+		if mrkdwn {
+			opens = opens && !glued(prev)
+			closes = closes && !glued(next)
+		}
 		// `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
 		var markers []string
 		switch {
