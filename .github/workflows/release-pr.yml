@@ -8,7 +8,7 @@
 # 2. 그 PR 이 squash 로 들어오면(커밋 제목이 `release: ` 로 시작) `vX.Y.Z` 와 Go 모듈용
 #    `go/vX.Y.Z` 태그를 찍고 `release.yml` 을 부른다.
 #
-# 버전 규칙은 `scripts/prepare-release.sh` 에 있다 — 패치만 자동으로 올린다.
+# 버전 규칙은 `scripts/prepare-release.sh` 에 있다 — 패치를 올리고, 깨지는 변경이 있으면 minor 를 올린다.
 #
 # **기본 토큰(`GITHUB_TOKEN`)이 민 태그·브랜치로는 다른 워크플로가 안 뜬다.** GitHub 이
 # 워크플로가 워크플로를 연쇄로 부르는 것을 막아서다. 예외는 `workflow_dispatch` 뿐이라
