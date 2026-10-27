@@ -543,4 +543,33 @@ mod gate {
         });
         assert_eq!(counts.allocs, 0, "옵시디언 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
     }
+
+    /// **`mrkdwn` 만 도는 경로도 할당하지 않는다** — 줄마다 닫는 강조, 붙은 글자를 떼는 U+200B, 엔티티, 닮은
+    /// 글자로 쓰는 글자 마커. 링크는 넣지 않았다 — 지금은 어느 채널이든 링크 하나에 한 번 할당한다.
+    #[test]
+    fn mrkdwn_prose_streaming_is_allocation_free_once_warm() {
+        let unit = "**마통**이 0이고 `git`로 본다. 약 ~40km 남았다.\n\
+                    **줄을 넘는\n굵게**는 줄마다 닫는다 & a < b.\n\n";
+        let doc = unit.repeat(12);
+        let pieces = split_chunks(&doc, CHUNK);
+        let mut s = Streamer::new(Channel::SlackMrkdwn);
+        let mut out = String::new();
+        for p in &pieces {
+            s.push_into(p, &mut out);
+        }
+        s.finish_into(&mut out);
+        assert!(
+            out.contains("*마통*\u{200b}이") && out.contains("\u{223c}40km") && out.contains("*줄을 넘는*\n*굵게*"),
+            "재는 경로를 실제로 탔다: {out}"
+        );
+
+        let (_, counts) = rig::count(|| {
+            out.clear();
+            for p in &pieces {
+                s.push_into(p, &mut out);
+            }
+            s.finish_into(&mut out);
+        });
+        assert_eq!(counts.allocs, 0, "mrkdwn 산문 스트리밍이 할당한다 — 회귀다: {counts:?}");
+    }
 }

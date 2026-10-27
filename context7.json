@@ -8,6 +8,7 @@
   "rules": [
     "Pass the model's Markdown to mdwire as is: do not pre-escape it or run it through another Markdown converter first.",
     "Pick the channel by where the text goes: telegram-html with parse_mode \"HTML\", slack-markdown as chat.postMessage markdown_text, github-markdown, notion-markdown, obsidian-markdown for a note in an Obsidian vault, plain, or html for innerHTML.",
+    "Use slack-mrkdwn (legacy mrkdwn) for Slack section and context text, attachments or chat.postMessage text, where a markdown block cannot go.",
     "render returns an array of parts; send each part as its own message, in order.",
     "When streaming, push() output is final. A channel that redraws the whole message sends accumulated output + preview(); an append-only channel (Slack appendStream) sends each push() piece and never calls preview().",
     "renderWithReport results, their repairs and Streamer live in WASM memory: call free() or use `using`.",

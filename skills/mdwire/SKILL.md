@@ -1,6 +1,6 @@
 ---
 name: mdwire
-description: Send LLM- or agent-generated Markdown to a chat channel without it breaking. Repairs broken markup (unclosed ** or code fences), rewrites it into the syntax the channel accepts (Telegram HTML, Slack markdown_text, GitHub comments, Notion, Obsidian notes, plain text, or HTML safe for innerHTML) and splits it within the channel's length limit, also while tokens stream. Use when a bot or agent posts model output to Telegram, Slack, GitHub or Notion, or saves it as an Obsidian note; when Telegram answers "Bad Request: can't parse entities"; when a streamed answer shows stray ** or half-drawn formatting; when a message is over Telegram's 4,096 characters; or when rendering streaming LLM Markdown in React without innerHTML.
+description: Send LLM- or agent-generated Markdown to a chat channel without it breaking. Repairs broken markup (unclosed ** or code fences), rewrites it into the syntax the channel accepts (Telegram HTML, Slack markdown_text or legacy mrkdwn, GitHub comments, Notion, Obsidian notes, plain text, or HTML safe for innerHTML) and splits it within the channel's length limit, also while tokens stream. Use when a bot or agent posts model output to Telegram, Slack, GitHub or Notion, or saves it as an Obsidian note; when Telegram answers "Bad Request: can't parse entities"; when a streamed answer shows stray ** or half-drawn formatting; when a message is over Telegram's 4,096 characters; or when rendering streaming LLM Markdown in React without innerHTML.
 license: MIT
 compatibility: Node, Bun, Cloudflare Workers or a bundler (npm @minjun0219/mdwire, WASM); Rust (mdwire-core); Go (github.com/minjun0219/mdwire/go); any other language through the mdwire CLI.
 ---
@@ -25,6 +25,7 @@ not run it through another Markdown converter first.
 |---|---|---|
 | `telegram-html` | Telegram `sendMessage` / `editMessageText` with `parse_mode: "HTML"` | 4,096 |
 | `slack-markdown` | Slack `chat.postMessage` `markdown_text` (not `text`/mrkdwn) | 12,000 |
+| `slack-mrkdwn` | Slack legacy mrkdwn, where a `markdown` block cannot go: `section`/`context` text, attachments, `chat.postMessage` `text`. Not measured in Slack yet | 3,000 |
 | `github-markdown` | GitHub issue/PR comment or body | 65,536 |
 | `notion-markdown` | Notion page body (Notion-flavored Markdown) | 65,536 |
 | `obsidian-markdown` | Obsidian note (a Markdown file in a vault); same text as `github-markdown` with wikilinks (`[[note]]`) left as written, not split unless you pass a limit | none |

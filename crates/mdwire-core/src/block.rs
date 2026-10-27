@@ -537,6 +537,7 @@ impl Engine {
         } else if !self.v.is_plain() {
             // 헤딩 구문이 없는 채널. 줄 전체를 굵게 내보낸다.
             self.out.push_str(self.v.open(Emph::Bold));
+            self.inline.bold_line = true;
         }
         self.inline.set_prev(None);
     }

@@ -552,6 +552,7 @@ func (e *engine) openHeading(level int) {
 	} else if !e.v.isPlain() {
 		// 헤딩 구문이 없는 채널. 줄 전체를 굵게 내보낸다.
 		e.out = append(e.out, e.v.open(emphBold)...)
+		e.inline.boldLine = true
 	}
 	e.inline.setPrev(noChar)
 }

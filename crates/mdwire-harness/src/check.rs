@@ -116,8 +116,18 @@ pub fn check(input: &str, output: &str, channel: Channel) -> Vec<Finding> {
     }
 
     over_limit(output, channel, &mut findings);
+    // **`mrkdwn` 은 텔레그램 HTML 로 바꿔 놓고 텔레그램으로 잰다**(`mrkdwn` 모듈). 구조가 같고 강조·링크를
+    // 적는 문법만 다르다. 강조는 줄마다 닫으니 원문 범위도 줄마다 잰다.
+    let per_line = matches!(channel, Channel::NotionMarkdown | Channel::SlackMrkdwn);
+    let html;
+    let (output, channel) = if channel == Channel::SlackMrkdwn {
+        html = crate::mrkdwn::as_telegram_html(output);
+        (html.as_str(), Channel::TelegramHtml)
+    } else {
+        (output, channel)
+    };
     let marked = tags_as_markers(output, channel);
-    emphasis_range(input, &marked, channel, &mut findings);
+    emphasis_range(input, &marked, channel, per_line, &mut findings);
     stray_markers(input, &marked, channel, &mut findings);
     let allowed = match channel {
         Channel::TelegramHtml => Some(TELEGRAM_TAGS),
@@ -653,7 +663,9 @@ fn over_limit(output: &str, channel: Channel, out: &mut Vec<Finding>) {
 /// 실제로 그렇게 잡히고 있었다.
 ///
 /// 이어 붙인 자리에는 아무것도 넣지 않는다. 끊긴 자리가 곧 원문에서 이어지던 자리다.
-fn rejoin_parts(output: &str) -> String {
+/// `spaced` 면 태그 이음매에도 공백을 둔다 — 텔레그램 HTML 로 바꿔 잰 `mrkdwn` 은 마커로 닫고 열어서,
+/// 마크다운 채널처럼 이음매의 공백이 털려 있다.
+fn rejoin_parts(output: &str, spaced: bool) -> String {
     let mut out = String::with_capacity(output.len());
     for (i, part) in output.split(PART_SEPARATOR).enumerate() {
         if i == 0 {
@@ -691,7 +703,7 @@ fn rejoin_parts(output: &str) -> String {
         }
         if !stitched {
             out.push('\n');
-        } else if marker_seam {
+        } else if marker_seam || spaced {
             // 마커 이음매에는 공백을 하나 둔다. 코어가 닫는 마커 앞과 여는 마커 뒤의
             // 공백을 털어 내므로(공백 옆 마커는 마커가 아니다), 그냥 붙이면 `말` 과
             // `이어서` 가 한 낱말이 된다.
@@ -718,7 +730,7 @@ fn opening_tag(s: &str) -> Option<(String, usize)> {
     Some((name, close + 1))
 }
 
-fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Finding>) {
+fn emphasis_range(input: &str, output: &str, channel: Channel, per_line: bool, out: &mut Vec<Finding>) {
     if channel == Channel::Plain {
         // 마크업을 지우는 채널이라 잴 것이 없다. 여기서 억지로 재면 규칙이 거짓말을 한다.
         return;
@@ -728,7 +740,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
     // **노션은 강조를 줄마다 닫는다** — 코어가 `**줄을\n넘는**` 을 `**줄을**\n**넘는**` 으로 낸다. 출력을
     // 이어 붙여 재면 원래 줄마다 따로 쓴 `**a**\n**b**` 까지 하나로 붙어 거짓 실패가 나고, 한 범위로
     // 보면 줄 사이가 어긋나도 통과한다. 원문 범위를 줄에서 나눠 줄마다 잰다.
-    if channel == Channel::NotionMarkdown {
+    if per_line {
         want = want
             .into_iter()
             .zip(wanted.raw)
@@ -762,7 +774,7 @@ fn emphasis_range(input: &str, output: &str, channel: Channel, out: &mut Vec<Fin
         for g in &got {
             *before.entry((g.kind, g.text.clone())).or_default() += 1;
         }
-        for g in scan(&rejoin_parts(output)) {
+        for g in scan(&rejoin_parts(output, per_line && channel == Channel::TelegramHtml)) {
             match before.get_mut(&(g.kind, g.text.clone())) {
                 Some(n) if *n > 0 => *n -= 1,
                 _ => got.push(g),

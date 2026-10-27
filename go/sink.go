@@ -99,7 +99,7 @@ func splitHard(text string, limit int, v vocab) []string {
 	length := 0
 	m := newMarkup()
 	if v.channel != TelegramHTML && !v.isPlain() {
-		m.spans = scanSpans(text)
+		m.spans = scanSpans(text, v.isMrkdwn())
 	}
 
 	for _, line := range splitInclusive(text, '\n') {
@@ -141,7 +141,7 @@ func splitHard(text string, limit int, v vocab) []string {
 				var cutProbe markup
 				for {
 					end = runeOffset(rest, take)
-					if v.htmlOut() {
+					if v.entities() {
 						end = entityCut(rest, end)
 					}
 					cutProbe = m.clone()
@@ -301,11 +301,14 @@ type tag struct{ name, full string }
 type span struct {
 	run    int
 	marker string
-	start  int // 여는 마커의 첫 글자 위치
-	end    int // 닫는 마커 다음 위치
+	// link 은 mrkdwn 링크 <주소|글> 이다. marker 가 여는 쪽(`<주소|`)이고 닫는 쪽은 `>` 다. 글 안에서 끊으면
+	// 닫고 다음 조각에서 다시 연다 — 러스트 쪽 SpanKind::Link.
+	link  bool
+	start int // 여는 마커의 첫 글자 위치
+	end   int // 닫는 마커 다음 위치
 }
 
-func (sp span) isTag() bool { return strings.HasPrefix(sp.marker, "<") }
+func (sp span) isTag() bool { return !sp.link && strings.HasPrefix(sp.marker, "<") }
 
 func (sp span) writeOpen(out *[]byte) {
 	if sp.marker != "" {
@@ -318,6 +321,10 @@ func (sp span) writeOpen(out *[]byte) {
 }
 
 func (sp span) writeClose(out *[]byte) {
+	if sp.link {
+		*out = append(*out, '>')
+		return
+	}
 	if sp.isTag() {
 		*out = append(*out, "</"...)
 		*out = append(*out, sp.marker[1:]...)
@@ -329,6 +336,8 @@ func (sp span) writeClose(out *[]byte) {
 // reopenLen 은 닫고 다시 여는 데 드는 글자 수다.
 func (sp span) reopenLen() int {
 	switch {
+	case sp.link:
+		return utf8.RuneCountInString(sp.marker) + 1
 	case sp.isTag():
 		return len(sp.marker)*2 + 1
 	case sp.marker != "":
@@ -538,7 +547,12 @@ func (m *markup) reopen(out *[]byte) {
 // 마커는 짝이 맞고 겹침도 바르다. 글자로 남은 마커는 짝이 안 맞아 여기서 걸러진다 — 여는
 // 쪽은 뒤가 글자, 닫는 쪽은 앞이 글자여야 하고, 코드 스팬은 같은 길이의 런이 뒤에 있어야
 // 한다. 펜스 안은 보지 않는다.
-func scanSpans(text string) []span {
+//
+// mrkdwn 은 마커가 홑이다 — 굵게 *, 기울임 _, 취소선 ~. 렌더러가 줄마다 닫으므로 스팬이 줄을 넘지 않고,
+// 안팎이 같은 글자인 겹침(**)도 나오지 않는다. 짝은 렌더러가 낸 마커 모양으로만 맺는다 — 여는 쪽은 앞이
+// 글자·숫자가 아니고, 닫는 쪽은 뒤가 글자·숫자가 아니다(붙으면 렌더러가 U+200B 로 뗐다). 렌더러가 글자로 둔
+// `snake_case` `5~6월` 의 기호는 이 모양이 아니라서 짝이 되지 않는다. 러스트 쪽과 같다.
+func scanSpans(text string, mrkdwn bool) []span {
 	ch := []rune(text)
 	// 펜스 줄과 그 안은 스팬이 아니고, 스팬이 그 너머와 짝을 맺지도 못한다.
 	fenced := make([]bool, len(ch))
@@ -581,6 +595,11 @@ func scanSpans(text string) []span {
 		}
 		// 줄이 바뀌면서 새 항목이 시작되면 열린 강조는 없던 일이다 — 조각 하나에 목록 항목
 		// 여럿이 담기는데, 렌더러는 항목마다 인라인을 확정한다.
+		if c == '\n' && mrkdwn {
+			open = open[:0]
+			i++
+			continue
+		}
 		if c == '\n' {
 			j := i + 1
 			for j < len(ch) && (ch[j] == ' ' || ch[j] == '\t') {
@@ -649,6 +668,30 @@ func scanSpans(text string) []span {
 			}
 			continue
 		}
+		// mrkdwn 의 < 는 링크뿐이다 — 글자 < 는 &lt; 로 나간다. 주소는 건너뛰고 글 안의 강조는 계속 본다.
+		if c == '<' && mrkdwn {
+			end := -1
+			for k := i + 1; k < len(ch) && ch[k] != '\n'; k++ {
+				if ch[k] == '>' {
+					end = k
+					break
+				}
+			}
+			if end < 0 {
+				i++
+				continue
+			}
+			bar := end
+			for k := i + 1; k < end; k++ {
+				if ch[k] == '|' {
+					bar = k
+					break
+				}
+			}
+			spans = append(spans, span{marker: string(ch[i:bar]) + "|", link: true, start: i, end: end + 1})
+			i = bar + 1
+			continue
+		}
 		if c == '<' {
 			t, closing, n := emphTagAt(ch, i)
 			switch {
@@ -667,7 +710,7 @@ func scanSpans(text string) []span {
 			}
 			continue
 		}
-		if c != '*' && c != '~' {
+		if c != '*' && c != '~' && !(mrkdwn && c == '_') {
 			i++
 			continue
 		}
@@ -681,9 +724,20 @@ func scanSpans(text string) []span {
 		}
 		opens := next != noChar && !unicode.IsSpace(next)
 		closes := prev != noChar && !unicode.IsSpace(prev)
+		if mrkdwn {
+			opens = opens && !glued(prev)
+			closes = closes && !glued(next)
+		}
 		// `***` 는 `**` 와 `*` 다. 열 때는 굵게가 바깥, 닫을 때는 기울임이 먼저.
 		var markers []string
 		switch {
+		case mrkdwn && run == 1 && c == '*':
+			markers = []string{"*"}
+		case mrkdwn && run == 1 && c == '_':
+			markers = []string{"_"}
+		case mrkdwn && run == 1:
+			markers = []string{"~"}
+		case mrkdwn:
 		case c == '~' && run == 2:
 			markers = []string{"~~"}
 		case c == '*' && run == 1:

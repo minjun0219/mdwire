@@ -8,6 +8,7 @@ Channels (the name each API takes):
 
 - `telegram-html` — Telegram `parse_mode: "HTML"` (nine tags, 4096-character limit)
 - `slack-markdown` — Slack `markdown_text` (standard Markdown, 12,000)
+- `slack-mrkdwn` — Slack's legacy `mrkdwn` for `section`/`context` text, attachments and `chat.postMessage` `text` (3,000): `*bold*`, `_italic_`, `<url|text>`, `&` `<` `>` as entities; not measured in Slack yet
 - `github-markdown` — GitHub comments, GFM (65,536); a `~` or `<` meant as a character is escaped
 - `notion-markdown` — Notion page body, Notion-flavored Markdown (65,536); inline HTML Notion cannot draw is stripped
 - `obsidian-markdown` — Obsidian note, the same Markdown as `github-markdown` with wikilinks (`[[note]]`) left as written, and not split (no limit)
