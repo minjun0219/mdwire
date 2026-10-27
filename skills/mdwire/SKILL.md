@@ -73,6 +73,12 @@ parts := mdwire.Render(answer, mdwire.TelegramHTML)
 let parts = mdwire::render(&answer, mdwire::Channel::TelegramHtml);
 ```
 
+## What to ask the model for
+
+Ask for standard Markdown. mdwire reads input as CommonMark/GFM and does not take an input-dialect option:
+legacy Slack mrkdwn `*bold*` reads as italic and a single `~x~` stays literal. Prompt for `**bold**` and
+`~~strike~~` instead.
+
 ## Streaming tokens
 
 `push` returns only what is safe to send now and never rewrites it. Choose by how the channel updates:

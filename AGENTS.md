@@ -61,8 +61,16 @@ Go 이식의 기대값은 Rust CLI에서 뽑는다(`go/testdata/regen.sh`) — �
 커밋(코어·CLI·wasm·Go 이식의 소스, 매니페스트·잠금, npm 패키징 — 시험 제외)이 들어오면
 `release-pr.yml` 이 `release: X.Y.Z` PR 을 열어 두고(사이트·예제·문서·시험·CI 만 바꾼 커밋으로는 안 연다), 그걸 squash 로 머지하는 것이
 릴리스다 — 머지된 커밋에서 바이너리 검증(`binaries.yml`, 네 플랫폼 빌드·실행·묶기)이 통과하면
-`vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치만
-자동으로 오른다. 다른 버전은 main 의 `[workspace.package] version` 으로 정한다.
+`vX.Y.Z` · `go/vX.Y.Z` 태그와 GitHub Release 가 따라 나온다. 버전은 패치가 자동으로 오르고,
+깨지는 변경이 있으면 0.x 라도 minor 가 오른다(`0.1.15` → `0.2.0`). 다른 버전은 main 의
+`[workspace.package] version` 으로 정한다.
+
+**공개 API 를 빼거나 바꾸는 변경은 깨지는 변경이다** — 폐기 예고 없이 바로 빼더라도 그렇다. 공개 API 는
+러스트 `mdwire-core` 의 공개 항목, CLI 의 플래그와 출력 형식, npm 의 내보낸 이름과 `.d.ts`, Go 의 공개
+이름, 채널 이름이다. 그런 PR 은 제목에 `!` 를 붙이고(`refactor!: …`), 본문에 하류가 고칠 것을 적는다.
+squash 커밋 제목이 곧 PR 제목이라 `!` 가 그대로 남고, 이것으로 `prepare-release.sh` 가 minor 를 올리고
+`cliff.toml` 이 변경 기록 맨 위 「깨지는 변경」에 따로 묶는다. "아직 사용자가 없다"는 판단 근거가 되지
+않는다 — 공개 패키지의 사용자는 이슈를 열기 전까지 보이지 않는다.
 crates.io(`mdwire-core` · `mdwire-cli`)와 npm(`@minjun0219/mdwire`)도 `release.yml` 이 Trusted
 Publishing 으로 올린다 — 저장소에 토큰을 두지 않는다. 레지스트리에 아직 없는 이름의 첫 판만
 사람이 토큰으로 올린다.

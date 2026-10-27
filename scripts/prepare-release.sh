@@ -6,10 +6,12 @@
 # 표준출력으로 다음 버전(`0.1.2` 꼴)을 한 줄 낸다. 마지막 태그 뒤로 낼 커밋이 없으면
 # 아무것도 고치지 않고 빈 출력으로 끝난다.
 #
-# **버전은 패치만 자동으로 올린다.** 커밋 종류(feat · 깨지는 변경)로 minor 를 올리지
-# 않는다 — 만족할 품질이 나올 때까지 0.1.x 에 머문다는 결정이 먼저다. 다른 버전을
-# 원하면 main 의 `[workspace.package] version` 을 그 값으로 바꾼다. 그 값이 마지막 태그의
-# 다음 패치보다 크면 이 스크립트는 그쪽을 따른다.
+# **버전은 패치를 올린다. 깨지는 변경이 있으면 0.x 라도 minor 를 올린다**(1.0 뒤로는 major).
+# 깨지는 변경은 커밋 제목의 `!`(`refactor!: …`)나 본문의 `BREAKING CHANGE:` 꼬리말로 적는다
+# (`AGENTS.md`). 0.x 에서 minor 를 올려야 cargo 의 `0.1` · npm 의 `^0.1.9` 같은 요구가 그 판을 받지
+# 않는다 — 패치로 내면 하류가 버전을 고정하지 않은 한 말없이 깨진다. feat 만으로는 minor 를
+# 올리지 않는다. 다른 버전을 원하면 main 의 `[workspace.package] version` 을 그 값으로 바꾼다.
+# 그 값이 자동으로 고른 다음 판보다 크면 이 스크립트는 그쪽을 따른다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -34,11 +36,20 @@ module_paths=(
 if [ "$last" != 0.0.0 ]; then
   pending=$(git log --format=%s "v$last..HEAD" -- "${module_paths[@]}" | grep -v '^release' || true)
   [ -n "$pending" ] || exit 0
+  # 깨지는 변경은 배포물 경로 밖(문서만 바꾼 커밋)에서는 나오지 않는다 — 같은 경로로 본다.
+  breaking=$(git log --format='%s%n%b' "v$last..HEAD" -- "${module_paths[@]}" \
+    | grep -E '^[a-z]+(\([^)]*\))?!:|^BREAKING[ -]CHANGE:' || true)
 fi
 
 current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 IFS=. read -r major minor patch <<<"$last"
-next="$major.$minor.$((patch + 1))"
+if [ -z "${breaking:-}" ]; then
+  next="$major.$minor.$((patch + 1))"
+elif [ "$major" = 0 ]; then
+  next="0.$((minor + 1)).0"
+else
+  next="$((major + 1)).0.0"
+fi
 if [ "$(printf '%s\n%s\n' "$next" "$current" | sort -V | tail -1)" = "$current" ]; then
   next=$current
 fi
